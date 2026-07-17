@@ -1,0 +1,31 @@
+{
+  "name": "api-kit",
+  "version": "0.0.1",
+  "description": "api rest como middleware",
+  "keywords": [
+    "api",
+    "rest",
+    "middleware",
+    "express"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "gitbub:acmepy/api-kit"
+  },
+  "license": "MIT",
+  "author": "Hugo",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "iam": "github:acmepy/iam",
+    "seq": "github:acmepy/seq",
+    "yep": "github:acmepy/yep"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^12.11.1"
+  }
+}
