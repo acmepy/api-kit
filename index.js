@@ -1,5 +1,6 @@
 export {
   createApiKit,
+  defineResource,
   BaseModel,
   BaseService,
   BaseRouter,
@@ -19,3 +20,4 @@ export {
   list,
   error,
 } from "./src/index.js";
+

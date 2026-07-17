@@ -2,25 +2,35 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { createApiKit } from "../src/api-kit.js";
+import { createApiKit, defineResource } from "../src/index.js";
 import { getContext } from "../src/index.js";
-import { Seq, SQLiteAdapter, Model, DataTypes } from "seq";
-import yep from "yep";
+import { normalizeModule } from "../src/config/config-normalizer.js";
+import { Seq, SQLiteAdapter } from "seq";
 
-class Cliente extends Model {
-  static define(seq) {
-    return this.init(
-      {
-        id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-        nombre: { type: DataTypes.STRING(100), allowNull: false },
-        email: { type: DataTypes.STRING(150), allowNull: true },
-        activo: { type: DataTypes.BOOLEAN, defaultValue: true },
-      },
-      { seq, modelName: "Cliente", tableName: "clientes", timestamps: true },
-    );
-  }
-}
+const clienteResource = defineResource({
+  modelName: "Cliente",
+  tableName: "clientes",
+  timestamps: true,
+  attributes: {
+    id: { type: "integer", primaryKey: true, autoIncrement: true },
+    nombre: { type: "string", maxLength: 100, allowNull: false, title: "Nombre", max: 100 },
+    email: { type: "string", maxLength: 150, unique: true, allowNull: true, title: "Email", email: true },
+    activo: { type: "boolean", defaultValue: true, title: "Activo" },
+  },
+});
 
+
+const productoResource = defineResource({
+  modelName: "Producto",
+  tableName: "productos",
+  attributes: {
+    id: { type: "integer", primaryKey: true, autoIncrement: true },
+    descripcion: { type: "string", maxLength: 120, allowNull: false, title: "Nombre", max: 120 },
+    precio: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0, title: "Precio", min: 0 },
+    cantidad: { type: "number", precision: 8, scale: 3, title: "Cantidad" },
+    activo: { type: "boolean", defaultValue: true, title: "Activo" },
+  },
+});
 function request(method, path, body) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
@@ -49,7 +59,7 @@ let api;
 
 before(async () => {
   const adapter = new SQLiteAdapter({ database: ":memory:" });
-  const seq = new Seq({ adapter, models: [Cliente] });
+  const seq = new Seq({ adapter, models: [clienteResource.model, productoResource.model] });
   await seq.authenticate();
   await seq.init();
   await seq.sync({ force: true });
@@ -60,32 +70,31 @@ before(async () => {
   api = await createApiKit({
     seq,
     baseDir: process.cwd(),
-    models: { Cliente },
+    basePath: "/api",
     modules: [
       {
         name: "clientes",
-        basePath: "/api/clientes",
-        model: "Cliente",
+        basePath: "/clientes",
+        resource: clienteResource,
         tags: ["Clientes"],
-        schemas: {
-          create: yep.object({
-            nombre: yep.string().label("Nombre").required().max(100),
-            email: yep.string().label("Email").email().nullable(),
-            activo: yep.boolean().label("Activo"),
-          }),
-          update: yep.object({
-            nombre: yep.string().label("Nombre").max(100),
-            email: yep.string().label("Email").email().nullable(),
-            activo: yep.boolean().label("Activo"),
-          }),
-        },
         endpoints: {
-          list: { enabled: true, permission: "clientes.list" },
-          getById: { enabled: true, permission: "clientes.read" },
-          create: { enabled: true, permission: "clientes.create" },
-          update: { enabled: true, permission: "clientes.update" },
-          remove: { enabled: true, permission: "clientes.delete" },
+          list: { permission: "clientes.list" },
+          get: { permission: "clientes.read" },
+          create: { permission: "clientes.create" },
+          update: { permission: "clientes.update" },
+          remove: { permission: "clientes.delete" },
         },
+      },
+      {
+        name: "clientes-sin-schema",
+        basePath: "/clientes-sin-schema",
+        resource: clienteResource,
+        schema: false,
+      },
+      {
+        name: "productos",
+        basePath: "/productos",
+        resource: productoResource,
       },
     ],
   });
@@ -103,7 +112,7 @@ after(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-describe("Etapa 1 - Núcleo", () => {
+describe("Etapa 1 - N�cleo", () => {
   describe("createApiKit()", () => {
     it("returns router", () => {
       assert.ok(api.router);
@@ -111,8 +120,10 @@ describe("Etapa 1 - Núcleo", () => {
 
     it("returns modules map", () => {
       assert.ok(api.modules instanceof Map);
-      assert.equal(api.modules.size, 1);
+      assert.equal(api.modules.size, 3);
       assert.ok(api.modules.has("clientes"));
+      assert.ok(api.modules.has("clientes-sin-schema"));
+      assert.ok(api.modules.has("productos"));
     });
 
     it("returns models map", () => {
@@ -125,6 +136,11 @@ describe("Etapa 1 - Núcleo", () => {
       assert.ok(api.services.has("clientes"));
     });
 
+    it("returns schemas map", () => {
+      assert.ok(api.schemas instanceof Map);
+      assert.equal(api.schemas.get("clientes"), clienteResource.schemas);
+    });
+
     it("returns routes registry", () => {
       assert.ok(api.routes);
       assert.ok(api.routes.size > 0);
@@ -134,6 +150,136 @@ describe("Etapa 1 - Núcleo", () => {
       assert.equal(typeof api.errorHandler, "function");
     });
   });
+
+  describe("defineResource()", () => {
+    it("builds model attributes from the resource definition", () => {
+      assert.equal(clienteResource.attributes.nombre.allowNull, false);
+      assert.equal(clienteResource.attributes.email.allowNull, true);
+      assert.equal(clienteResource.attributes.email.type.options.length, 150);
+    });
+
+    it("builds create and update schemas from the same validations", async () => {
+      const createResult = await clienteResource.schemas.create.validate({ nombre: "Ana", email: null });
+      assert.deepEqual(createResult, { nombre: "Ana", email: null, activo: true });
+
+      const updateResult = await clienteResource.schemas.update.validate({ email: "ana@test.com" });
+      assert.deepEqual(updateResult, { email: "ana@test.com" });
+    });
+
+    it("rejects non-string attribute types", () => {
+      assert.throws(() => {
+        defineResource({
+          modelName: "Legacy",
+          attributes: {
+            nombre: { type: { key: "STRING" } },
+          },
+        });
+      }, /type must be a string/);
+    });  });
+
+
+
+    it("supports declarative attribute shorthand", async () => {
+      const productoResource = defineResource({
+        modelName: "Producto",
+        tableName: "productos",
+        attributes: {
+          id: { type: "integer", primaryKey: true, autoIncrement: true },
+          descripcion: { type: "string", maxLength: 120, allowNull: false, title: "Nombre", max: 120 },
+          precio: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0, title: "Precio", min: 0 },
+          activo: { type: "boolean", defaultValue: true, title: "Activo" },
+        },
+      });
+
+      assert.equal(productoResource.attributes.descripcion.type.options.length, 120);
+      assert.equal(productoResource.attributes.precio.type.options.precision, 12);
+      assert.equal(productoResource.attributes.precio.type.options.scale, 2);
+
+      const valid = await productoResource.schemas.create.validate({ descripcion: "Teclado", precio: 10 });
+      assert.deepEqual(valid, { descripcion: "Teclado", precio: 10, activo: true });
+
+      const invalid = await productoResource.schemas.create.validate({ precio: -1 }, { safe: true });
+      assert.equal(invalid.errors.descripcion, "Nombre es requerido");
+      assert.ok(invalid.errors.precio);
+    });
+  describe("module endpoints", () => {
+    it("creates list/get/create/update/remove by default", () => {
+      const mod = normalizeModule({ name: "items" });
+      assert.deepEqual(Object.keys(mod.endpoints), ["list", "schema", "get", "create", "update", "remove"]);
+      assert.equal(mod.endpoints.list.method, "get");
+      assert.equal(mod.endpoints.schema.enabled, true);
+      assert.equal(mod.endpoints.schema.path, "/schema");
+      assert.equal(mod.endpoints.get.path, "/:id");
+      assert.equal(mod.endpoints.create.method, "post");
+      assert.equal(mod.endpoints.update.method, "put");
+      assert.equal(mod.endpoints.remove.method, "delete");
+    });
+
+    it("joins global basePath with module basePath", () => {
+      const mod = normalizeModule({ name: "items", basePath: "/items" }, { basePath: "/api" });
+      assert.equal(mod.basePath, "/api/items");
+    });
+
+    it("allows disabling schema endpoint", () => {
+      const mod = normalizeModule({ name: "items", schema: false });
+      assert.equal(mod.endpoints.schema.enabled, false);
+      assert.equal(mod.endpoints.schema.method, "get");
+      assert.equal(mod.endpoints.schema.path, "/schema");
+    });
+
+    it("allows disabling default endpoints and adding custom endpoints", () => {
+      const mod = normalizeModule({
+        name: "items",
+        endpoints: {
+          remove: false,
+          restore: { method: "post", path: "/:id/restore", permission: "items.restore" },
+        },
+      });
+
+      assert.equal(mod.endpoints.remove.enabled, false);
+      assert.equal(mod.endpoints.restore.enabled, true);
+      assert.equal(mod.endpoints.restore.method, "post");
+      assert.equal(mod.endpoints.restore.path, "/:id/restore");
+      assert.equal(mod.endpoints.restore.permission, "items.restore");
+    });
+  });
+    it("downloads validation schemas", async () => {
+      const res = await request("GET", "/api/clientes/schema");
+      assert.equal(res.status, 200);
+      assert.equal(res.body.ok, true);
+      assert.equal(res.body.data.create.type, "object");
+      assert.equal(res.body.data.create.properties.nombre.type, "string");
+      assert.equal(res.body.data.create.properties.nombre.maxLength, 100);
+      assert.deepEqual(res.body.data.create.required, ["nombre"]);
+      assert.equal(res.body.data.update.properties.email.type, "string");
+      assert.equal(res.body.data.update.properties.email.nullable, true);
+      assert.equal(res.body.data.update.properties.email.format, "email");
+      assert.equal(res.body.data.update.properties.email.maxLength, 150);
+      assert.equal(res.body.data.create.properties.activo.type, "boolean");
+      assert.equal(res.body.data.create.properties.activo.default, true);
+    });
+
+    it("downloads string and numeric metadata in validation schemas", async () => {
+      const res = await request("GET", "/api/productos/schema");
+      assert.equal(res.status, 200);
+      assert.equal(res.body.ok, true);
+      assert.equal(res.body.data.create.properties.descripcion.title, "Nombre");
+      assert.equal(res.body.data.create.properties.descripcion.maxLength, 120);
+      assert.equal(res.body.data.create.properties.precio.title, "Precio");
+      assert.equal(res.body.data.create.properties.precio.type, "number");
+      assert.equal(res.body.data.create.properties.precio.precision, 12);
+      assert.equal(res.body.data.create.properties.precio.scale, 2);
+      assert.equal(res.body.data.create.properties.cantidad.precision, 8);
+      assert.equal(res.body.data.create.properties.cantidad.scale, 3);
+    });
+
+    it("returns schema disabled when schema endpoint is disabled", async () => {
+      const res = await request("GET", "/api/clientes-sin-schema/schema");
+      assert.equal(res.status, 404);
+      assert.equal(res.body.ok, false);
+      assert.equal(res.body.code, "SCHEMA_DISABLED");
+      assert.equal(res.body.message, "Schema disabled");
+    });
 
   describe("CRUD - list", () => {
     it("returns empty list", async () => {
@@ -154,12 +300,12 @@ describe("Etapa 1 - Núcleo", () => {
   describe("CRUD - create", () => {
     it("creates a record", async () => {
       const res = await request("POST", "/api/clientes", {
-        nombre: "Juan Pérez",
+        nombre: "Juan P�rez",
         email: "juan@test.com",
       });
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
-      assert.equal(res.body.data.nombre, "Juan Pérez");
+      assert.equal(res.body.data.nombre, "Juan P�rez");
       assert.equal(typeof res.body.data.id, "number");
     });
 
@@ -175,12 +321,12 @@ describe("Etapa 1 - Núcleo", () => {
     });
   });
 
-  describe("CRUD - getById", () => {
+  describe("CRUD - get", () => {
     it("returns a record", async () => {
       const res = await request("GET", "/api/clientes/1");
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
-      assert.equal(res.body.data.nombre, "Juan Pérez");
+      assert.equal(res.body.data.nombre, "Juan P�rez");
     });
 
     it("returns 404 for missing record", async () => {
@@ -188,6 +334,7 @@ describe("Etapa 1 - Núcleo", () => {
       assert.equal(res.status, 404);
       assert.equal(res.body.ok, false);
       assert.equal(res.body.code, "NOT_FOUND");
+      assert.equal(res.body.message, "Cliente no encontrado");
     });
   });
 
@@ -280,5 +427,30 @@ describe("Etapa 1 - Núcleo", () => {
     });
   });
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

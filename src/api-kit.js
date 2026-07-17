@@ -9,21 +9,22 @@ import { loadModule } from "./loaders/module-loader.js";
 import { runWithContext } from "./context/request-context.js";
 import { errorHandler } from "./http/error-handler.js";
 
-export async function createApiKit(userConfig = {}) {
+export async function createApiKit(conf = {}) {
   const config = {
-    seq: userConfig.seq,
-    baseDir: userConfig.baseDir || process.cwd(),
-    models: userConfig.models || {},
-    modules: userConfig.modules || [],
+    seq: conf.seq,
+    baseDir: conf.baseDir || process.cwd(),
+    basePath: conf.basePath || "",
+    models: conf.models || {},
+    modules: conf.modules || [],
     paths: {
-      models: userConfig.paths?.models || "./models",
-      services: userConfig.paths?.services || "./services",
-      routers: userConfig.paths?.routers || "./routers",
-      schemas: userConfig.paths?.schemas || "./schemas",
+      models: conf.paths?.models || "./models",
+      services: conf.paths?.services || "./services",
+      routers: conf.paths?.routers || "./routers",
+      schemas: conf.paths?.schemas || "./schemas",
     },
-    iam: userConfig.iam || null,
-    openapi: userConfig.openapi || { enabled: false },
-    sse: userConfig.sse || { enabled: false },
+    iam: conf.iam || null,
+    openapi: conf.openapi || { enabled: false },
+    sse: conf.sse || { enabled: false },
   };
 
   validateConfig(config);
@@ -36,9 +37,16 @@ export async function createApiKit(userConfig = {}) {
   };
 
   const rawModuleConfigs = await loadModules(config.modules, config.baseDir);
-  const moduleConfigs = normalizeModules(rawModuleConfigs);
+  const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath });
 
-  const modelsMap = await loadModels({seq: config.seq, explicitModels: config.models, modelsDir: resolvedPaths.models,moduleConfigs});
+  const explicitModels = { ...config.models };
+  for (const moduleConfig of moduleConfigs) {
+    const resourceModel = moduleConfig.resource?.model;
+    const modelName = resourceModel?.modelName || moduleConfig.resource?.options?.modelName || moduleConfig.resource?.model?.name;
+    if (modelName && !explicitModels[modelName]) explicitModels[modelName] = resourceModel;
+  }
+
+  const modelsMap = await loadModels({seq: config.seq, explicitModels, modelsDir: resolvedPaths.models,moduleConfigs});
 
   const routeRegistry = new RouteRegistry();
   const modules = new Map();
@@ -74,3 +82,5 @@ export async function createApiKit(userConfig = {}) {
   return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: null, close: async () => {},
   };
 }
+
+

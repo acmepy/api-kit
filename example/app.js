@@ -1,30 +1,34 @@
 import express from "express";
-import { createApiKit } from "../src/api-kit.js";
-import { Seq, SQLiteAdapter, Model, DataTypes } from "seq";
-import yep from "yep";
+import { createApiKit, defineResource } from "../src/index.js";
+import { Seq, SQLiteAdapter } from "seq";
 
-class Cliente extends Model {
-  static define(seq) {
-    return this.init(
-      {
-        id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-        nombre: { type: DataTypes.STRING(100), allowNull: false },
-        email: { type: DataTypes.STRING(150), unique:true, allowNull: true },
-        activo: { type: DataTypes.BOOLEAN, defaultValue: true },
-      },
-      {
-        seq,
-        modelName: "Cliente",
-        tableName: "clientes",
-        timestamps: true,
-      },
-    );
-  }
-}
+const clienteResource = defineResource({
+  modelName: "Cliente",
+  tableName: "clientes",
+  timestamps: true,
+  attributes: {
+    id: { type: "integer", primaryKey: true, autoIncrement: true },
+    nombre: { type: "string", maxLength: 100, allowNull: false, title: "Nombre", max: 100 },
+    email: { type: "string", maxLength: 150, unique: true, allowNull: true, title: "Email", email: true },
+    activo: { type: "boolean", defaultValue: true, title: "Activo" },
+  },
+});
+
+const productoResource = defineResource({
+  modelName: "Producto",
+  tableName: "productos",
+  timestamps: true,
+  attributes: {
+    id: { type: "integer", primaryKey: true, autoIncrement: true },
+    descripcion: { type: "string", maxLength:120,  allowNull: false, title:"Nombre", max:120},
+    precio: { type:'decimal', precision:12, scale:2, allowNull: false, defaultValue: 0, title:"Precio", min: 0},
+    activo: {type: 'boolean', defaultValue: true, title:"Activo"}
+  },
+});
 
 async function main() {
   const adapter = new SQLiteAdapter({ database: ":memory:" });
-  const seq = new Seq({ adapter, models: [Cliente] });
+  const seq = new Seq({ adapter, models: [clienteResource.model, productoResource.model] });
 
   await seq.authenticate();
   await seq.init();
@@ -35,34 +39,28 @@ async function main() {
 
   const api = await createApiKit({
     seq,
-    baseDir: process.cwd(),
-    models: { Cliente },
+    //baseDir: process.cwd(),
+    basePath: "/api",
     modules: [
       {
         name: "clientes",
-        basePath: "/api/clientes",
-        model: "Cliente",
-        description: "Gestión de clientes",
+        basePath: "/clientes",
+        resource: clienteResource,
+        description: "Gestion de clientes",
         tags: ["Clientes"],
-        schemas: {
-          create: yep.object({
-            nombre: yep.string().label("Nombre").required().max(100),
-            email: yep.string().label("Email").email().nullable(),
-            activo: yep.boolean().label("Activo"),
-          }),
-          update: yep.object({
-            nombre: yep.string().label("Nombre").max(100),
-            email: yep.string().label("Email").email().nullable(),
-            activo: yep.boolean().label("Activo"),
-          }),
-        },
         endpoints: {
-          list: { enabled: true, permission: "clientes.list" },
-          getById: { enabled: true, permission: "clientes.read" },
-          create: { enabled: true, permission: "clientes.create" },
-          update: { enabled: true, permission: "clientes.update" },
-          remove: { enabled: true, permission: "clientes.delete" },
+          list: { permission: "clientes.list" },
+          get: { permission: "clientes.read" },
+          create: { permission: "clientes.create" },
+          update: { permission: "clientes.update" },
+          remove: { permission: "clientes.delete" },
         },
+      },
+      {
+        name: "productos",
+        basePath: "/productos",
+        resource: productoResource,
+        //schema: false,
       },
     ],
   });
@@ -71,15 +69,16 @@ async function main() {
   app.use(api.errorHandler);
 
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`api-kit demo running on http://localhost:${PORT}`);
-    console.log(`  GET    /api/clientes`);
-    console.log(`  GET    /api/clientes/:id`);
-    console.log(`  POST   /api/clientes`);
-    console.log(`  PUT    /api/clientes/:id`);
-    console.log(`  DELETE /api/clientes/:id`);
-  });
+  app.listen(PORT, () => {console.log(`api-kit demo running on http://localhost:${PORT}`)});
 }
 
 main().catch(console.error);
+
+
+
+
+
+
+
+
 

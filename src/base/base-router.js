@@ -1,6 +1,7 @@
 import express from "express";
 import { ok, list } from "../http/response.js";
 import { getContext } from "../context/request-context.js";
+import { AppError } from "../errors/app-error.js";
 
 export class BaseRouter {
   #service;
@@ -31,7 +32,10 @@ export class BaseRouter {
     const endpoints = this.#config.endpoints || {};
 
     for (const [op, endpoint] of Object.entries(endpoints)) {
-      if (!endpoint.enabled) continue;
+      if (!endpoint.enabled) {
+        if (op === "schema") this.disabledRoute(endpoint.method || "get", endpoint.path || "/schema", "SCHEMA_DISABLED", "Schema disabled");
+        continue;
+      }
 
       const method = endpoint.method || "get";
       const path = endpoint.path || "/";
@@ -50,6 +54,12 @@ export class BaseRouter {
   }
 
   registerCustomRoutes() {}
+
+  disabledRoute(method, path, code, message) {
+    this.#expressRouter[method](path, async (_req, _res, next) => {
+      next(new AppError(message, { status: 404, code }));
+    });
+  }
 
   route(method, path, options = {}) {
     const { service: serviceMethod, permission, summary, description, tags } = options;
@@ -88,3 +98,4 @@ export class BaseRouter {
     });
   }
 }
+

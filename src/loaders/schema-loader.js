@@ -3,7 +3,7 @@ import { importModule, fileExists } from "../utils/import-module.js";
 import { camelCase } from "../utils/naming.js";
 
 export async function loadSchemas({ moduleName, schemasDir, explicitSchemas = {} }) {
-  const schemas = { ...explicitSchemas };
+  const schemas = explicitSchemas;
 
   if (!schemasDir || !await fileExists(schemasDir)) {
     return schemas;
@@ -21,3 +21,4 @@ export async function loadSchemas({ moduleName, schemasDir, explicitSchemas = {}
 
   return schemas;
 }
+

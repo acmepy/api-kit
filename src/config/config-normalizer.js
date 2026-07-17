@@ -1,6 +1,7 @@
 const ENDPOINT_DEFAULTS = {
   list: { enabled: true, method: "get", path: "/", summary: "Listar" },
-  getById: { enabled: true, method: "get", path: "/:id", summary: "Obtener por ID" },
+  schema: { enabled: true, method: "get", path: "/schema", summary: "Schema" },
+  get: { enabled: true, method: "get", path: "/:id", summary: "Obtener por ID" },
   create: { enabled: true, method: "post", path: "/", summary: "Crear" },
   update: { enabled: true, method: "put", path: "/:id", summary: "Actualizar" },
   remove: { enabled: true, method: "delete", path: "/:id", summary: "Eliminar" },
@@ -12,18 +13,28 @@ const MODULE_DEFAULTS = {
   description: "",
 };
 
-export function normalizeModule(config) {
+export function normalizeModule(config, options = {}) {
   const name = config.name;
   if (!name) throw new Error("Module config requires 'name'");
 
-  const normalized = { ...MODULE_DEFAULTS, ...config, name, basePath: config.basePath || `/api/${name}`, endpoints: {}};
+  const moduleBasePath = config.basePath || `/${name}`;
+  const normalized = {
+    ...MODULE_DEFAULTS,
+    ...config,
+    name,
+    basePath: joinPaths(options.basePath, moduleBasePath),
+    endpoints: {},
+  };
 
   for (const [op, defaults] of Object.entries(ENDPOINT_DEFAULTS)) {
     const userEndpoint = config.endpoints?.[op];
-    if (userEndpoint === false || userEndpoint?.enabled === false) {
+    const disabledByModuleOption = op === "schema" && config.schema === false;
+    if (disabledByModuleOption || userEndpoint === false || userEndpoint?.enabled === false) {
       normalized.endpoints[op] = { ...defaults, ...userEndpoint, enabled: false };
+    } else if (userEndpoint !== undefined) {
+      normalized.endpoints[op] = { ...defaults, ...(typeof userEndpoint === "object" ? userEndpoint : {}), enabled: true };
     } else {
-      normalized.endpoints[op] = { ...defaults, ...userEndpoint, enabled: true };
+      normalized.endpoints[op] = { ...defaults };
     }
   }
 
@@ -38,6 +49,23 @@ export function normalizeModule(config) {
   return normalized;
 }
 
-export function normalizeModules(configs) {
-  return configs.map(normalizeModule);
+export function normalizeModules(configs, options = {}) {
+  return configs.map((config) => normalizeModule(config, options));
 }
+
+function joinPaths(...parts) {
+  const clean = parts
+    .filter((part) => part !== undefined && part !== null && part !== "")
+    .map((part) => String(part).trim())
+    .filter(Boolean);
+
+  if (clean.length === 0) return "/";
+
+  const path = clean
+    .map((part) => part.replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean)
+    .join("/");
+
+  return `/${path}`;
+}
+
