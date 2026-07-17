@@ -1,6 +1,7 @@
 import express from "express";
 import { createApiKit } from "../src/api-kit.js";
 import { Seq, SQLiteAdapter, Model, DataTypes } from "seq";
+import yep from "yep";
 
 class Cliente extends Model {
   static define(seq) {
@@ -43,6 +44,18 @@ async function main() {
         model: "Cliente",
         description: "Gestión de clientes",
         tags: ["Clientes"],
+        schemas: {
+          create: yep.object({
+            nombre: yep.string().label("Nombre").required().max(100),
+            email: yep.string().label("Email").email().nullable(),
+            activo: yep.boolean().label("Activo"),
+          }),
+          update: yep.object({
+            nombre: yep.string().label("Nombre").max(100),
+            email: yep.string().label("Email").email().nullable(),
+            activo: yep.boolean().label("Activo"),
+          }),
+        },
         endpoints: {
           list: { enabled: true, permission: "clientes.list" },
           getById: { enabled: true, permission: "clientes.read" },
@@ -69,3 +82,4 @@ async function main() {
 }
 
 main().catch(console.error);
+

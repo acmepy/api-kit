@@ -44,6 +44,7 @@ export async function createApiKit(userConfig = {}) {
   const modules = new Map();
   const services = new Map();
   const models = new Map();
+  const schemas = new Map();
 
   for (const mod of modelsMap) models.set(mod[0], mod[1]);
 
@@ -58,6 +59,7 @@ export async function createApiKit(userConfig = {}) {
 
     modules.set(moduleConfig.name, mod);
     services.set(moduleConfig.name, mod.service);
+    schemas.set(moduleConfig.name, mod.schemas);
     if (mod.model) models.set(moduleConfig.name, mod.model);
   }
 
@@ -69,6 +71,6 @@ export async function createApiKit(userConfig = {}) {
 
   mainRouter.use(errorHandler);
 
-  return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas: new Map(), events: null, close: async () => {},
+  return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: null, close: async () => {},
   };
 }

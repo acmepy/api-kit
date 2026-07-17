@@ -2,8 +2,8 @@ import path from "node:path";
 import { importModule, fileExists } from "../utils/import-module.js";
 import { camelCase } from "../utils/naming.js";
 
-export async function loadSchemas({ moduleName, schemasDir }) {
-  const schemas = {};
+export async function loadSchemas({ moduleName, schemasDir, explicitSchemas = {} }) {
+  const schemas = { ...explicitSchemas };
 
   if (!schemasDir || !await fileExists(schemasDir)) {
     return schemas;

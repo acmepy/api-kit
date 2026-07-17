@@ -1,4 +1,5 @@
 import { NotFoundError } from "../errors/not-found-error.js";
+import { ValidationError } from "../errors/validation-error.js";
 
 export class BaseService {
   #model;
@@ -41,14 +42,16 @@ export class BaseService {
   }
 
   async create({ params, query, body, context, transaction } = {}) {
-    const instance = await this.#model.create(body, { ...(transaction && { transaction })});
+    const data = await this.#validateBody("create", body);
+    const instance = await this.#model.create(data, { ...(transaction && { transaction })});
     return { data: instance.toJSON() };
   }
 
   async update({ params, query, body, context, transaction } = {}) {
     const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }),});
     if (!instance)  throw new NotFoundError(this.#config.resource || "Recurso");
-    await instance.update(body, { ...(transaction && { transaction }) });
+    const data = await this.#validateBody("update", body);
+    await instance.update(data, { ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
@@ -57,6 +60,20 @@ export class BaseService {
     if (!instance) throw new NotFoundError(this.#config.resource || "Recurso");
     await instance.destroy({ ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
+  }
+
+  async #validateBody(operation, body = {}) {
+    const schema = this.#schemas[operation] || this.#schemas.body;
+    if (!schema) return body;
+
+    try {
+      return await schema.validate(body || {});
+    } catch (error) {
+      throw new ValidationError(error.message, {
+        errors: error.errors || null,
+        cause: error,
+      });
+    }
   }
 
   #buildWhere(query) {

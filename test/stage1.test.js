@@ -5,6 +5,7 @@ import express from "express";
 import { createApiKit } from "../src/api-kit.js";
 import { getContext } from "../src/index.js";
 import { Seq, SQLiteAdapter, Model, DataTypes } from "seq";
+import yep from "yep";
 
 class Cliente extends Model {
   static define(seq) {
@@ -66,6 +67,18 @@ before(async () => {
         basePath: "/api/clientes",
         model: "Cliente",
         tags: ["Clientes"],
+        schemas: {
+          create: yep.object({
+            nombre: yep.string().label("Nombre").required().max(100),
+            email: yep.string().label("Email").email().nullable(),
+            activo: yep.boolean().label("Activo"),
+          }),
+          update: yep.object({
+            nombre: yep.string().label("Nombre").max(100),
+            email: yep.string().label("Email").email().nullable(),
+            activo: yep.boolean().label("Activo"),
+          }),
+        },
         endpoints: {
           list: { enabled: true, permission: "clientes.list" },
           getById: { enabled: true, permission: "clientes.read" },
@@ -148,6 +161,17 @@ describe("Etapa 1 - Núcleo", () => {
       assert.equal(res.body.ok, true);
       assert.equal(res.body.data.nombre, "Juan Pérez");
       assert.equal(typeof res.body.data.id, "number");
+    });
+
+    it("validates create body with yep schema", async () => {
+      const res = await request("POST", "/api/clientes", {
+        email: "no-es-email",
+      });
+      assert.equal(res.status, 400);
+      assert.equal(res.body.ok, false);
+      assert.equal(res.body.code, "VALIDATION_ERROR");
+      assert.equal(res.body.errors.nombre, "Nombre es requerido");
+      assert.ok(res.body.errors.email);
     });
   });
 
@@ -256,3 +280,5 @@ describe("Etapa 1 - Núcleo", () => {
     });
   });
 });
+
+
