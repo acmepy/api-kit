@@ -1,6 +1,6 @@
 {
   "name": "api-kit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -17,7 +17,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "dev": "node ./example/app.js"
   },
   "dependencies": {
     "express": "^5.1.0",

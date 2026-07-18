@@ -1,5 +1,30 @@
 import { NotFoundError } from "../errors/not-found-error.js";
 import { ValidationError } from "../errors/validation-error.js";
+import { Op } from "seq";
+
+const FILTER_OPERATORS = {
+  eq: Op.eq,
+  equal: Op.eq,
+  igual: Op.eq,
+  gt: Op.gt,
+  greater: Op.gt,
+  mayor: Op.gt,
+  gte: Op.gte,
+  greaterOrEqual: Op.gte,
+  mayorIgual: Op.gte,
+  lt: Op.lt,
+  less: Op.lt,
+  menor: Op.lt,
+  lte: Op.lte,
+  lessOrEqual: Op.lte,
+  menorIgual: Op.lte,
+  in: Op.in,
+  incluido: Op.in,
+  between: Op.between,
+};
+
+const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
+const RANGE_OPERATORS = new Set([Op.gt, Op.gte, Op.lt, Op.lte, Op.between]);
 
 export class BaseService {
   #model;
@@ -35,11 +60,7 @@ export class BaseService {
     return {data: rows.map((r) => r.toJSON()), pagination: { page, size, total: count, pages }};
   }
 
-  async get(args = {}) {
-    return this.getById(args);
-  }
-
-  async getById({ params, query, body, context, transaction } = {}) {
+  async get({ params, query, body, context, transaction } = {}) {
     const instance = await this.#model.findByPk(params.id, {...(transaction && { transaction })});
     if (!instance) throw new NotFoundError(this.#resourceName());
     return { data: instance.toJSON() };
@@ -166,15 +187,149 @@ export class BaseService {
   #buildWhere(query) {
     if (!query) return {};
     const where = {};
+    const andFilters = [];
     const whitelist = this.#config.filterWhitelist || [];
+    const definitions = this.#filterDefinitions();
 
     for (const [key, value] of Object.entries(query)) {
       if (key === "page" || key === "size") continue;
-      if (whitelist.length > 0 && !whitelist.includes(key)) continue;
-      where[key] = value;
+      const filters = this.#queryFilters(key, value);
+
+      for (const filter of filters) {
+        if (whitelist.length > 0 && !whitelist.includes(filter.field)) continue;
+
+        const definition = definitions[filter.field];
+        if (!definition && Object.keys(definitions).length > 0) {
+          throw new ValidationError(`Filtro "${filter.field}" no está permitido`);
+        }
+
+        const parsedValue = this.#parseFilterValue(filter.field, filter.operator, filter.value, definition);
+        if (filter.operator === Op.eq) {
+          where[filter.field] = parsedValue;
+          continue;
+        }
+
+        andFilters.push({ [filter.field]: { [filter.operator]: parsedValue } });
+      }
     }
 
+    if (andFilters.length > 0) where[Op.and] = andFilters;
     return where;
+  }
+
+  #queryFilters(key, value) {
+    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
+      return Object.entries(value).map(([operatorName, operatorValue]) => {
+        const operator = FILTER_OPERATORS[operatorName];
+        if (!operator) throw new ValidationError(`Operador de filtro "${operatorName}" no está soportado`);
+        return { field: key, operator, value: operatorValue };
+      });
+    }
+
+    return [{ ...this.#parseFilterKey(key), value }];
+  }
+
+  #parseFilterKey(key) {
+    const normalizedKey = String(key);
+    const bracket = normalizedKey.match(/^(.+)\[([^\]]+)\]$/);
+    const dotted = normalizedKey.match(/^(.+)\.([^.]+)$/);
+    const underscored = normalizedKey.match(/^(.+)__([^_]+)$/);
+    const match = bracket || dotted || underscored;
+    const field = match ? match[1] : normalizedKey;
+    const operatorName = match ? match[2] : "eq";
+    const operator = FILTER_OPERATORS[operatorName];
+
+    if (!operator) throw new ValidationError(`Operador de filtro "${operatorName}" no está soportado`);
+    return { field, operator };
+  }
+
+  #parseFilterValue(field, operator, value, definition) {
+    if (operator === Op.in) {
+      const values = this.#splitFilterValues(value);
+      if (values.length === 0) throw new ValidationError(`Filtro "${field}" in requiere al menos un valor`);
+      return values.map((item) => this.#castFilterValue(field, item, definition));
+    }
+
+    if (operator === Op.between) {
+      const values = this.#splitFilterValues(value);
+      if (values.length !== 2) throw new ValidationError(`Filtro "${field}" between requiere dos valores`);
+      this.#assertRangeOperator(field, operator, definition);
+      return values.map((item) => this.#castFilterValue(field, item, definition));
+    }
+
+    this.#assertRangeOperator(field, operator, definition);
+    return this.#castFilterValue(field, value, definition);
+  }
+
+  #splitFilterValues(value) {
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") return value.split(",").map((item) => item.trim());
+    return [value];
+  }
+
+  #assertRangeOperator(field, operator, definition) {
+    if (!RANGE_OPERATORS.has(operator) || !definition) return;
+    const type = this.#filterType(definition);
+    const isComparable = ["integer", "decimal", "number", "date", "string"].includes(type);
+    if (!isComparable) {
+      const operatorName = FILTER_OPERATOR_NAMES.get(operator) || "filtro";
+      throw new ValidationError(`Filtro "${field}" no soporta operador "${operatorName}"`);
+    }
+  }
+
+  #castFilterValue(field, value, definition) {
+    const type = this.#filterType(definition);
+
+    if (value === "" || value === undefined) throw new ValidationError(`Filtro "${field}" tiene un valor inválido`);
+    if (!definition) return value;
+    if (value === null) return null;
+
+    if (type === "integer") {
+      const number = Number(value);
+      if (!Number.isInteger(number)) throw new ValidationError(`Filtro "${field}" debe ser integer`);
+      return number;
+    }
+
+    if (type === "decimal" || type === "number") {
+      const number = Number(value);
+      if (!Number.isFinite(number)) throw new ValidationError(`Filtro "${field}" debe ser number`);
+      return number;
+    }
+
+    if (type === "boolean") {
+      if (value === true || value === false) return value;
+      const normalized = String(value).toLowerCase();
+      if (["true", "1", "yes", "si", "sí"].includes(normalized)) return true;
+      if (["false", "0", "no"].includes(normalized)) return false;
+      throw new ValidationError(`Filtro "${field}" debe ser boolean`);
+    }
+
+    if (type === "date") {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) throw new ValidationError(`Filtro "${field}" debe ser date`);
+      return date;
+    }
+
+    return value;
+  }
+
+  #filterDefinitions() {
+    return this.#config.resource?.definition || this.#model?.resourceDefinition?.attributes || this.#model?.rawAttributes || {};
+  }
+
+  #filterType(definition) {
+    const type = definition?.type;
+    const typeName = typeof type === "string" ? type : type?.key || type?.constructor?.name || "";
+    const normalized = typeName.toLowerCase();
+
+    if (normalized.includes("integer") || normalized === "int") return "integer";
+    if (normalized.includes("decimal")) return "decimal";
+    if (normalized.includes("number")) return "number";
+    if (normalized.includes("boolean") || normalized === "bool") return "boolean";
+    if (normalized.includes("date")) return "date";
+    if (normalized.includes("string")) return "string";
+    if (normalized.includes("object") || normalized.includes("json")) return "object";
+    return "unknown";
   }
 }
 
