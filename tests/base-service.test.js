@@ -14,6 +14,7 @@ describe("BaseService list filters", () => {
       attributes: {
         id: { type: "integer", primaryKey: true, autoIncrement: true },
         name: { type: "string", allowNull: false },
+        email: { type: "string", allowNull: false, unique: true },
         price: { type: "decimal", precision: 12, scale: 2, allowNull: false },
         active: { type: "boolean", defaultValue: true },
       },
@@ -25,9 +26,9 @@ describe("BaseService list filters", () => {
     await seq.init();
     await seq.sync({ force: true });
 
-    await productResource.model.create({ name: "Basic", price: 10, active: true });
-    await productResource.model.create({ name: "Plus", price: 20, active: true });
-    await productResource.model.create({ name: "Legacy", price: 30, active: false });
+    await productResource.model.create({ name: "Basic", email: "basic@test.com", price: 10, active: true });
+    await productResource.model.create({ name: "Plus", email: "plus@test.com", price: 20, active: true });
+    await productResource.model.create({ name: "Legacy", email: "legacy@test.com", price: 30, active: false });
 
     service = new BaseService({
       model: productResource.model,
@@ -41,6 +42,36 @@ describe("BaseService list filters", () => {
 
     assert.equal(result.pagination.total, 2);
     assert.deepEqual(result.data.map((item) => item.name), ["Basic", "Plus"]);
+  });
+
+  it("returns limit and offset pagination metadata", async () => {
+    const result = await service.list({ query: { page: "2", limit: "1" } });
+
+    assert.equal(result.pagination.page, 2);
+    assert.equal(result.pagination.limit, 1);
+    assert.equal(result.pagination.offset, 1);
+    assert.equal(result.pagination.total, 3);
+    assert.equal(result.pagination.pages, 3);
+  });
+
+  it("keeps size as a limit alias", async () => {
+    const result = await service.list({ query: { page: "2", size: "1" } });
+
+    assert.equal(result.pagination.limit, 1);
+    assert.equal(result.pagination.offset, 1);
+  });
+
+  it("adds pagination links when baseUrl is available", async () => {
+    const result = await service.list({
+      query: { page: "2", limit: "1", active: "true" },
+      context: { baseUrl: "http://localhost/api/products?page=2&limit=1&active=true" },
+    });
+
+    assert.deepEqual(result.pagination.links, {
+      self: "http://localhost/api/products?page=2&limit=1&active=true",
+      next: false,
+      prev: "http://localhost/api/products?page=1&limit=1&active=true",
+    });
   });
 
   it("maps greater and less operators", async () => {
@@ -96,6 +127,16 @@ describe("BaseService list filters", () => {
     await assert.rejects(
       () => service.list({ query: { "active[mayor]": "false" } }),
       (error) => error instanceof ValidationError && error.message === 'Filtro "active" no soporta operador "mayor"',
+    );
+  });
+
+  it("maps unique constraint errors to field errors", async () => {
+    await assert.rejects(
+      () => service.create({ body: { name: "Duplicate", email: "basic@test.com", price: 40 } }),
+      (error) =>
+        error instanceof ValidationError &&
+        error.message === "Valor duplicado" &&
+        error.errors?.email === "Ya existe un registro con este valor",
     );
   });
 });

@@ -287,13 +287,26 @@ describe("Etapa 1 - N�cleo", () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
       assert.ok(Array.isArray(res.body.data));
-      assert.deepEqual(res.body.pagination, { page: 1, size: 20, total: 0, pages: 0 });
+      assert.equal(res.body.pagination.page, 1);
+      assert.equal(res.body.pagination.limit, 20);
+      assert.equal(res.body.pagination.size, 20);
+      assert.equal(res.body.pagination.offset, 0);
+      assert.equal(res.body.pagination.total, 0);
+      assert.equal(res.body.pagination.pages, 0);
+      assert.deepEqual(res.body.pagination.links, {
+        self: "http://localhost:3001/api/clientes?page=1&limit=20",
+        next: false,
+        prev: false,
+      });
     });
 
     it("supports page/size", async () => {
       const res = await request("GET", "/api/clientes?page=1&size=10");
       assert.equal(res.status, 200);
       assert.equal(res.body.pagination.size, 10);
+      assert.equal(res.body.pagination.limit, 10);
+      assert.equal(res.body.pagination.offset, 0);
+      assert.equal(res.body.pagination.links.self, "http://localhost:3001/api/clientes?page=1&limit=10");
     });
   });
 

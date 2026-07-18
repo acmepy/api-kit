@@ -4,8 +4,8 @@ export function ok(data, meta = null) {
   return response;
 }
 
-export function list(data, { page, size, total, pages }) {
-  return { ok: true, data, pagination: { page, size, total, pages }};
+export function list(data, pagination) {
+  return { ok: true, data, pagination };
 }
 
 export function error(code, message, { errors = null, txId = null } = {}) {

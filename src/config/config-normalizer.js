@@ -40,12 +40,9 @@ export function normalizeModule(config, options = {}) {
 
   if (config.endpoints) {
     for (const [key, value] of Object.entries(config.endpoints)) {
-      if (!(key in normalized.endpoints)) {
-        normalized.endpoints[key] = { method: "get", path: `/${key}`, enabled: true, ...(typeof value === "object" ? value : {})};
-      }
+      if (!(key in normalized.endpoints)) normalized.endpoints[key] = { method: "get", path: `/${key}`, enabled: true, ...(typeof value === "object" ? value : {})};
     }
   }
-
   return normalized;
 }
 
@@ -58,14 +55,8 @@ function joinPaths(...parts) {
     .filter((part) => part !== undefined && part !== null && part !== "")
     .map((part) => String(part).trim())
     .filter(Boolean);
-
   if (clean.length === 0) return "/";
-
-  const path = clean
-    .map((part) => part.replace(/^\/+|\/+$/g, ""))
-    .filter(Boolean)
-    .join("/");
-
+  const path = clean.map((part) => part.replace(/^\/+|\/+$/g, "")).filter(Boolean).join("/");
   return `/${path}`;
 }
 

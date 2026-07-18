@@ -52,12 +52,15 @@ export class BaseService {
   async list({ params, query, body, context, transaction } = {}) {
     const page = Math.max(1, parseInt(query?.page, 10) || 1);
     const maxSize = this.#config.maxSize || 100;
-    const size = Math.min(maxSize, Math.max(1, parseInt(query?.size, 10) || 20));
-    const [offset, limit ] = [(page - 1) * size, size];
+    const limit = Math.min(maxSize, Math.max(1, parseInt(query?.limit ?? query?.size, 10) || 20));
+    const offset = (page - 1) * limit;
     const where = this.#buildWhere(query);
     const { count, rows } = await this.#model.findAndCountAll({where, limit, offset, order: this.#config.defaultOrder || [],...(transaction && { transaction })});
-    const pages = Math.ceil(count / size);
-    return {data: rows.map((r) => r.toJSON()), pagination: { page, size, total: count, pages }};
+    const pages = Math.ceil(count / limit);
+    return {
+      data: rows.map((r) => r.toJSON()),
+      pagination: this.#buildPagination({ page, limit, offset, total: count, pages, baseUrl: context?.baseUrl }),
+    };
   }
 
   async get({ params, query, body, context, transaction } = {}) {
@@ -76,23 +79,35 @@ export class BaseService {
 
   async create({ params, query, body, context, transaction } = {}) {
     const data = await this.#validateBody("create", body);
-    const instance = await this.#model.create(data, { ...(transaction && { transaction })});
-    return { data: instance.toJSON() };
+    try {
+      const instance = await this.#model.create(data, { ...(transaction && { transaction })});
+      return { data: instance.toJSON() };
+    } catch (error) {
+      throw this.#normalizePersistenceError(error);
+    }
   }
 
   async update({ params, query, body, context, transaction } = {}) {
     const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }),});
     if (!instance)  throw new NotFoundError(this.#resourceName());
     const data = await this.#validateBody("update", body);
-    await instance.update(data, { ...(transaction && { transaction }) });
-    return { data: instance.toJSON() };
+    try {
+      await instance.update(data, { ...(transaction && { transaction }) });
+      return { data: instance.toJSON() };
+    } catch (error) {
+      throw this.#normalizePersistenceError(error);
+    }
   }
 
   async remove({ params, query, body, context, transaction } = {}) {
     const instance = await this.#model.findByPk(params.id, {...(transaction && { transaction })});
     if (!instance) throw new NotFoundError(this.#resourceName());
-    await instance.destroy({ ...(transaction && { transaction }) });
-    return { data: instance.toJSON() };
+    try {
+      await instance.destroy({ ...(transaction && { transaction }) });
+      return { data: instance.toJSON() };
+    } catch (error) {
+      throw this.#normalizePersistenceError(error);
+    }
   }
 
   #toJsonSchema(schema, operation) {
@@ -184,6 +199,93 @@ export class BaseService {
     }
   }
 
+  #normalizePersistenceError(error) {
+    const uniqueError = this.#uniqueConstraintError(error);
+    if (uniqueError) return uniqueError;
+
+    const details = error?.details;
+    if (error?.name === "ValidationError" && details?.field) {
+      return new ValidationError(error.message, {
+        errors: { [details.field]: error.message },
+        cause: error,
+      });
+    }
+
+    if (error?.name === "ValidationError" && Array.isArray(details?.columns)) {
+      return new ValidationError(error.message, {
+        errors: Object.fromEntries(details.columns.map((column) => [this.#attributeName(column), error.message])),
+        cause: error,
+      });
+    }
+
+    return error;
+  }
+
+  #uniqueConstraintError(error) {
+    const fields = this.#uniqueErrorFields(error);
+    if (fields.length === 0) return null;
+
+    return new ValidationError("Valor duplicado", {
+      errors: Object.fromEntries(fields.map((field) => [field, "Ya existe un registro con este valor"])),
+      cause: error,
+    });
+  }
+
+  #uniqueErrorFields(error) {
+    const details = error?.details;
+    if (Array.isArray(details?.columns) && details.columns.length > 0) {
+      return details.columns.map((column) => this.#attributeName(column));
+    }
+
+    const message = error?.message || "";
+    if (!this.#isUniqueConstraintError(error, message)) return [];
+
+    const sqliteColumns = message.match(/UNIQUE constraint failed:\s*(.+)$/i)?.[1];
+    if (!sqliteColumns) return [];
+
+    return sqliteColumns
+      .split(",")
+      .map((column) => column.trim().split(".").pop())
+      .filter(Boolean)
+      .map((column) => this.#attributeName(column));
+  }
+
+  #isUniqueConstraintError(error, message) {
+    if (error?.code === "SEQ_VALIDATION_UNIQUE") return true;
+    if (error?.code === "SQLITE_CONSTRAINT_UNIQUE") return true;
+    if (error?.code === "SQLITE_CONSTRAINT" && /UNIQUE constraint failed/i.test(message)) return true;
+    return /Duplicate value for unique constraint|UNIQUE constraint failed/i.test(message);
+  }
+
+  #attributeName(columnName) {
+    const definitions = this.#filterDefinitions();
+    for (const [attribute, definition] of Object.entries(definitions)) {
+      if ((definition?.field || attribute) === columnName) return attribute;
+    }
+    return columnName;
+  }
+
+  #buildPagination({ page, limit, offset, total, pages, baseUrl }) {
+    const pagination = { page, limit, size: limit, offset, total, pages };
+    if (!baseUrl) return pagination;
+
+    pagination.links = {
+      self: this.#paginationLink(baseUrl, page, limit),
+      next: page < pages ? this.#paginationLink(baseUrl, page + 1, limit) : false,
+      prev: page > 1 ? this.#paginationLink(baseUrl, page - 1, limit) : false,
+    };
+
+    return pagination;
+  }
+
+  #paginationLink(baseUrl, page, limit) {
+    const url = new URL(baseUrl);
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.delete("size");
+    return url.toString();
+  }
+
   #buildWhere(query) {
     if (!query) return {};
     const where = {};
@@ -192,7 +294,7 @@ export class BaseService {
     const definitions = this.#filterDefinitions();
 
     for (const [key, value] of Object.entries(query)) {
-      if (key === "page" || key === "size") continue;
+      if (key === "page" || key === "size" || key === "limit") continue;
       const filters = this.#queryFilters(key, value);
 
       for (const filter of filters) {
