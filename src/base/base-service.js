@@ -91,8 +91,9 @@ export class BaseService {
     const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }),});
     if (!instance)  throw new NotFoundError(this.#resourceName());
     const data = await this.#validateBody("update", body);
+    const auditOld = instance.toJSON();
     try {
-      await instance.update(data, { ...(transaction && { transaction }) });
+      await instance.update(data, { auditOld, ...(transaction && { transaction }) });
       return { data: instance.toJSON() };
     } catch (error) {
       throw this.#normalizePersistenceError(error);
@@ -102,8 +103,9 @@ export class BaseService {
   async remove({ params, query, body, context, transaction } = {}) {
     const instance = await this.#model.findByPk(params.id, {...(transaction && { transaction })});
     if (!instance) throw new NotFoundError(this.#resourceName());
+    const auditOld = instance.toJSON();
     try {
-      await instance.destroy({ ...(transaction && { transaction }) });
+      await instance.destroy({ auditOld, ...(transaction && { transaction }) });
       return { data: instance.toJSON() };
     } catch (error) {
       throw this.#normalizePersistenceError(error);

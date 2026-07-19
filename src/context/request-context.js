@@ -5,7 +5,13 @@ const storage = new AsyncLocalStorage();
 
 export function runWithContext(req, res, next) {
   const txId = req.headers["x-transaction-id"] || crypto.randomUUID();
-  const context = { txId };
+  const context = {
+    txId,
+    audit: {
+      clientIp: req.ip || req.socket?.remoteAddress || "",
+      userId: req.user?.id || req.headers["x-user-id"] || req.headers["x-usuario-id"] || null,
+    },
+  };
   storage.run(context, () => {next()});
 }
 

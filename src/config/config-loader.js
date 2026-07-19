@@ -25,10 +25,10 @@ export async function loadModules(input, baseDir) {
 
 function normalizeModuleInput(input) {
   if (!isResourceDefinition(input)) return input;
-  const { name, basePath, description, tags, endpoints, schema, auth, filterWhitelist, defaultOrder, maxSize, ...definition } = input;
+  const { name, basePath, description, tags, endpoints, schema, auth, audit, filterWhitelist, defaultOrder, maxSize, ...definition } = input;
   const resource = defineResource(definition);
   const moduleName = name || definition.tableName || definition.modelName?.toLowerCase();
-  return { name: moduleName, basePath, description, tags, endpoints, schema, auth, filterWhitelist, defaultOrder, maxSize, resource};
+  return { name: moduleName, basePath, description, tags, endpoints, schema, auth, audit, filterWhitelist, defaultOrder, maxSize, resource};
 }
 
 function isResourceDefinition(input) {

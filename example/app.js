@@ -13,6 +13,7 @@ async function main() {
     seq,
     basePath: "/api",
     modules: "./example/modules.js",
+    audit:true
   });
 
   await seq.authenticate();
