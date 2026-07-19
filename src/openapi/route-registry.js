@@ -14,9 +14,7 @@ export class RouteRegistry {
 
   findBy(filter) {
     return this.#routes.values().filter((d) => {
-      for (const [k, v] of Object.entries(filter)) {
-        if (d[k] !== v) return false;
-      }
+      for (const [k, v] of Object.entries(filter))  if (d[k] !== v) return false;
       return true;
     });
   }

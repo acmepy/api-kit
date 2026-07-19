@@ -1,26 +1,8 @@
 import yep from "yep";
 import { Model, DataTypes } from "seq";
 
-const MODEL_OPTION_KEYS = new Set([
-  "modelName",
-  "tableName",
-  "timestamps",
-  "createdAt",
-  "updatedAt",
-  "alias",
-  "hooks",
-]);
-
-const ATTRIBUTE_OPTION_KEYS = new Set([
-  "type",
-  "primaryKey",
-  "autoIncrement",
-  "allowNull",
-  "defaultValue",
-  "unique",
-  "field",
-  "references",
-]);
+const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks"]);
+const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references"]);
 
 export function defineResource(definition = {}) {
   const { attributes = {}, schemas = {}, model: CustomModel = null } = definition;
@@ -38,20 +20,12 @@ export function defineResource(definition = {}) {
   ResourceModel.resourceSchemas = generatedSchemas;
   ResourceModel.resourceDefinition = definition;
 
-  return {
-    model: ResourceModel,
-    schemas: generatedSchemas,
-    attributes: modelAttributes,
-    definition: normalizedAttributes,
-    options: modelOptions,
-  };
+  return { model: ResourceModel, schemas: generatedSchemas, attributes: modelAttributes, definition: normalizedAttributes, options: modelOptions};
 }
 
 function pickModelOptions(definition) {
   const options = {};
-  for (const key of MODEL_OPTION_KEYS) {
-    if (definition[key] !== undefined) options[key] = definition[key];
-  }
+  for (const key of MODEL_OPTION_KEYS)  if (definition[key] !== undefined) options[key] = definition[key];
   return options;
 }
 
@@ -59,20 +33,14 @@ function normalizeAttributes(attributes) {
   const normalized = {};
 
   for (const [name, definition] of Object.entries(attributes)) {
-    normalized[name] = {
-      ...definition,
-      type: normalizeDataType(definition, name),
-    };
+    normalized[name] = { ...definition, type: normalizeDataType(definition, name)};
   }
 
   return normalized;
 }
 
 function normalizeDataType(definition, name) {
-  if (typeof definition.type !== "string") {
-    throw new Error(`Attribute "${name}" type must be a string`);
-  }
-
+  if (typeof definition.type !== "string") throw new Error(`Attribute "${name}" type must be a string`);
   const type = definition.type.toLowerCase();
   if (type === "integer" || type === "int") return DataTypes.INTEGER;
   if (type === "string") return DataTypes.STRING(definition.maxLength);
@@ -95,15 +63,11 @@ function numberScale(definition) {
 
 function buildModelAttributes(attributes) {
   const modelAttributes = {};
-
   for (const [name, definition] of Object.entries(attributes)) {
     const attribute = {};
-    for (const key of ATTRIBUTE_OPTION_KEYS) {
-      if (definition[key] !== undefined) attribute[key] = definition[key];
-    }
+    for (const key of ATTRIBUTE_OPTION_KEYS)  if (definition[key] !== undefined) attribute[key] = definition[key];
     modelAttributes[name] = attribute;
   }
-
   return modelAttributes;
 }
 
@@ -117,13 +81,11 @@ function buildSchemas(attributes, explicitSchemas) {
 
 function buildShape(attributes, operation) {
   const shape = {};
-
   for (const [name, definition] of Object.entries(attributes)) {
     if (!shouldIncludeInSchema(definition, operation)) continue;
     const schema = resolveValidation(definition, operation);
     if (schema) shape[name] = schema;
   }
-
   return shape;
 }
 
@@ -138,25 +100,14 @@ function shouldIncludeInSchema(definition, operation) {
 function resolveValidation(definition, operation) {
   const schema = applyDeclarativeRules(inferValidation(definition), definition);
   if (!schema || typeof schema.validate !== "function") return null;
-
-  if (operation === "create" && definition.allowNull === false && typeof schema.required === "function") {
-    schema.required();
-  }
-
-  if (definition.allowNull === true && typeof schema.nullable === "function") {
-    schema.nullable();
-  }
-
-  if (operation === "create" && definition.defaultValue !== undefined && typeof schema.default === "function") {
-    schema.default(definition.defaultValue);
-  }
-
+  if (operation === "create" && definition.allowNull === false && typeof schema.required === "function") schema.required();
+  if (definition.allowNull === true && typeof schema.nullable === "function") schema.nullable();
+  if (operation === "create" && definition.defaultValue !== undefined && typeof schema.default === "function") schema.default(definition.defaultValue);
   return schema;
 }
 
 function applyDeclarativeRules(schema, definition) {
   if (!schema) return schema;
-
   if (definition.title && typeof schema.title === "function") schema.title(definition.title);
   if (definition.min !== undefined && typeof schema.min === "function") schema.min(definition.min);
   if (definition.max !== undefined && typeof schema.max === "function") schema.max(definition.max);
@@ -165,14 +116,12 @@ function applyDeclarativeRules(schema, definition) {
   if (definition.regex && typeof schema.regex === "function") schema.regex(definition.regex);
   if (definition.matches && typeof schema.matches === "function") schema.matches(definition.matches);
   if (definition.email === true && typeof schema.email === "function") schema.email();
-
   return schema;
 }
 
 function inferValidation(definition) {
   const typeName = definition.type?.key || definition.type?.constructor?.name || "";
   const normalized = typeName.toLowerCase();
-
   if (normalized.includes("string")) return yep.string();
   if (normalized.includes("integer")) return yep.integer();
   if (normalized.includes("decimal") || normalized.includes("number")) return yep.number();

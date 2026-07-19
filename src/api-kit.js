@@ -47,6 +47,7 @@ export async function createApiKit(conf = {}) {
   }
 
   const modelsMap = await loadModels({seq: config.seq, explicitModels, modelsDir: resolvedPaths.models,moduleConfigs});
+  registerSeqModels(config.seq, modelsMap.values());
 
   const routeRegistry = new RouteRegistry();
   const modules = new Map();
@@ -83,4 +84,12 @@ export async function createApiKit(conf = {}) {
   };
 }
 
+function registerSeqModels(seq, modelClasses) {
+  if (!seq || !Array.isArray(seq._modelClasses)) return;
+
+  for (const modelClass of new Set(modelClasses)) {
+    if (!modelClass || seq._modelClasses.includes(modelClass)) continue;
+    seq._modelClasses.push(modelClass);
+  }
+}
 

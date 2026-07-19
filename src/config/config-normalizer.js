@@ -7,24 +7,14 @@ const ENDPOINT_DEFAULTS = {
   remove: { enabled: true, method: "delete", path: "/:id", summary: "Eliminar" },
 };
 
-const MODULE_DEFAULTS = {
-  auth: { required: false, strategies: [] },
-  tags: [],
-  description: "",
-};
+const MODULE_DEFAULTS = { auth: { required: false, strategies: [] }, tags: [], description: "" };
 
 export function normalizeModule(config, options = {}) {
   const name = config.name;
   if (!name) throw new Error("Module config requires 'name'");
 
   const moduleBasePath = config.basePath || `/${name}`;
-  const normalized = {
-    ...MODULE_DEFAULTS,
-    ...config,
-    name,
-    basePath: joinPaths(options.basePath, moduleBasePath),
-    endpoints: {},
-  };
+  const normalized = { ...MODULE_DEFAULTS, ...config, name, basePath: joinPaths(options.basePath, moduleBasePath), endpoints: {}};
 
   for (const [op, defaults] of Object.entries(ENDPOINT_DEFAULTS)) {
     const userEndpoint = config.endpoints?.[op];
