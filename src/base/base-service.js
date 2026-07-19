@@ -188,6 +188,7 @@ export class BaseService {
   async #validateBody(operation, body = {}) {
     const schema = this.#schemas[operation] || this.#schemas.body;
     if (!schema) return body;
+    this.#validateBodyFields(schema, body || {});
 
     try {
       return await schema.validate(body || {});
@@ -196,6 +197,23 @@ export class BaseService {
         errors: error.errors || null,
         cause: error,
       });
+    }
+  }
+
+  #validateBodyFields(schema, body) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) return;
+    if (!schema.shapeDefinition || typeof schema.shapeDefinition !== "object") return;
+
+    const allowed = new Set(Object.keys(schema.shapeDefinition));
+    const errors = {};
+
+    for (const field of Object.keys(body)) {
+      if (!allowed.has(field)) errors[field] = "Campo no permitido";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      const fields = Object.keys(errors).join(", ");
+      throw new ValidationError(`Datos inválidos, campo ${fields} no permitido`, { errors });
     }
   }
 

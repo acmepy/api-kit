@@ -109,6 +109,26 @@ describe("BaseService list filters", () => {
     assert.equal(result.data[0].name, "Plus");
   });
 
+  it("updates boolean false values", async () => {
+    const result = await service.update({
+      params: { id: 1 },
+      body: { name: "Basic updated", active: false },
+    });
+
+    assert.equal(result.data.name, "Basic updated");
+    assert.equal(result.data.active, false);
+  });
+
+  it("rejects unknown body fields instead of ignoring them", async () => {
+    await assert.rejects(
+      () => service.update({ params: { id: 1 }, body: { name: "Basic updated", activo: false } }),
+      (error) =>
+        error instanceof ValidationError &&
+        error.message === "Datos inválidos, campo activo no permitido" &&
+        error.errors?.activo === "Campo no permitido",
+    );
+  });
+
   it("rejects invalid typed filter values", async () => {
     await assert.rejects(
       () => service.list({ query: { "price[mayor]": "x" } }),

@@ -355,10 +355,12 @@ describe("Etapa 1 - N�cleo", () => {
     it("updates a record", async () => {
       const res = await request("PUT", "/api/clientes/1", {
         nombre: "Juan Actualizado",
+        activo: false,
       });
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
       assert.equal(res.body.data.nombre, "Juan Actualizado");
+      assert.equal(res.body.data.activo, false);
     });
   });
 
