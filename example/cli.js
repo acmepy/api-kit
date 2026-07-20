@@ -28,22 +28,14 @@ async function main() {
   }
 
   if (command === "create-cliente") {
-    await createCliente(baseUrl, {
-      nombre: options.nombre || positionals[0] || `Cliente ${Date.now()}`,
-      email: options.email || positionals[1] || null,
-      activo: parseBooleanOption(options.activo, true),
-    });
+    await createCliente(baseUrl, {nombre: options.nombre || positionals[0] || `Cliente ${Date.now()}`, email: options.email || positionals[1] || null, activo: parseBooleanOption(options.activo, true)});
     return;
   }
 
   if (command === "update-cliente") {
     const id = options.id || positionals[0];
     if (!id) throw new Error("Falta el id del cliente.");
-    await updateCliente(baseUrl, id, {
-      nombre: options.nombre || positionals[1],
-      email: options.email,
-      activo: parseBooleanOption(options.activo),
-    });
+    await updateCliente(baseUrl, id, {nombre: options.nombre || positionals[1], email: options.email, activo: parseBooleanOption(options.activo)});
     return;
   }
 
@@ -71,7 +63,6 @@ async function printChanges(baseUrl, since) {
 async function listenSse(baseUrl) {
   const response = await fetch(`${baseUrl}/sse`, { headers: { Accept: "text/event-stream" } });
   if (!response.ok) throw new Error(`SSE fallo con HTTP ${response.status}`);
-
   console.log(`Escuchando ${baseUrl}/sse. Presiona Ctrl+C para salir.`);
 
   const reader = response.body.getReader();
@@ -95,67 +86,39 @@ async function listenSse(baseUrl) {
 }
 
 async function createCliente(baseUrl, body) {
-  const response = await requestJson(`${baseUrl}/clientes`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  const response = await requestJson(`${baseUrl}/clientes`, {method: "POST", body: JSON.stringify(body)});
   console.log(JSON.stringify(response.data, null, 2));
 }
 
 async function updateCliente(baseUrl, id, fields) {
   const body = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
-  const response = await requestJson(`${baseUrl}/clientes/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
+  const response = await requestJson(`${baseUrl}/clientes/${id}`, {method: "PUT", body: JSON.stringify(body)});
   console.log(JSON.stringify(response.data, null, 2));
 }
 
 async function runDemo(baseUrl) {
-  const created = await requestJson(`${baseUrl}/clientes`, {
-    method: "POST",
-    body: JSON.stringify({ nombre: `Demo ${Date.now()}`, email: null, activo: true }),
-  });
+  const created = await requestJson(`${baseUrl}/clientes`, {method: "POST", body: JSON.stringify({ nombre: `Demo ${Date.now()}`, email: null, activo: true })});
   console.log("create:");
   console.log(JSON.stringify(created.data, null, 2));
 
-  const updated = await requestJson(`${baseUrl}/clientes/${created.data.id}`, {
-    method: "PUT",
-    body: JSON.stringify({ activo: false }),
-  });
+  const updated = await requestJson(`${baseUrl}/clientes/${created.data.id}`, {method: "PUT", body: JSON.stringify({ activo: false })});
   console.log("update:");
   console.log(JSON.stringify(updated.data, null, 2));
 }
 
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Accept: "application/json",
-      ...(options.body && { "Content-Type": "application/json" }),
-      ...options.headers,
-    },
-  });
+  const response = await fetch(url, {...options, headers: {Accept: "application/json", ...(options.body && { "Content-Type": "application/json" }), ...options.headers, }});
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
-
-  if (!response.ok || body?.ok === false) {
-    throw new Error(body?.message || `HTTP ${response.status}`);
-  }
-
+  if (!response.ok || body?.ok === false) throw new Error(body?.message || `HTTP ${response.status}`);
   return body;
 }
 
 function parseSseEvent(rawEvent) {
   const lines = rawEvent.split("\n").filter((line) => line && !line.startsWith(":"));
   if (lines.length === 0) return null;
-
   const type = lines.find((line) => line.startsWith("event: "))?.slice(7) || "message";
-  const data = lines
-    .filter((line) => line.startsWith("data: "))
-    .map((line) => line.slice(6))
-    .join("\n");
-
+  const data = lines.filter((line) => line.startsWith("data: ")).map((line) => line.slice(6)).join("\n");
   if (!data) return null;
   return { event: type, data: JSON.parse(data) };
 }
