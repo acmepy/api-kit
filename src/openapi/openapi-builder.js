@@ -4,9 +4,7 @@ export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config
 
   for (const mod of modules.values()) {
     const moduleSchemas = schemaComponents(mod);
-    for (const [name, schema] of Object.entries(moduleSchemas)) {
-      schemas[componentName(mod.name, name)] = schema;
-    }
+    for (const [name, schema] of Object.entries(moduleSchemas)) schemas[componentName(mod.name, name)] = schema;
   }
 
   for (const route of routes.getAll()) {
@@ -33,9 +31,7 @@ export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config
 function normalizeServers(servers) {
   if (!servers) return [{ url: "http://localhost:3000" }];
   if (typeof servers === "string") return [{ url: servers }];
-  if (Array.isArray(servers)) {
-    return servers.map((server) => (typeof server === "string" ? { url: server } : server));
-  }
+  if (Array.isArray(servers)) return servers.map((server) => (typeof server === "string" ? { url: server } : server));
   return [servers];
 }
 
@@ -52,14 +48,7 @@ function operationFor(route, modules) {
 
   const bodySchemaName = requestBodySchemaName(route);
   if (bodySchemaName && mod?.schemas?.[bodySchemaName]) {
-    operation.requestBody = {
-      required: bodySchemaName === "create",
-      content: {
-        "application/json": {
-          schema: { $ref: `#/components/schemas/${componentName(route.module, bodySchemaName)}` },
-        },
-      },
-    };
+    operation.requestBody = {required: bodySchemaName === "create", content: {"application/json": {schema: { $ref: `#/components/schemas/${componentName(route.module, bodySchemaName)}`}}}};
   }
 
   return Object.fromEntries(Object.entries(operation).filter(([, value]) => value !== undefined));
@@ -69,14 +58,7 @@ function parametersFor(route) {
   const parameters = [];
   const matches = route.openApiPath.matchAll(/\{([^}]+)\}/g);
 
-  for (const match of matches) {
-    parameters.push({
-      name: match[1],
-      in: "path",
-      required: true,
-      schema: { type: "string" },
-    });
-  }
+  for (const match of matches) parameters.push({name: match[1], in: "path", required: true, schema: { type: "string" }});
 
   if (route.serviceMethod === "list") {
     parameters.push(
@@ -85,11 +67,13 @@ function parametersFor(route) {
     );
   }
 
+  if (route.serviceMethod === "changes") parameters.push({name: "since", in: "query", required: true, schema: { type: "string", format: "date-time" }});
+
   return parameters;
 }
 
 function responsesFor(route) {
-  if (route.serviceMethod === "list") {
+  if (route.serviceMethod === "list" || route.serviceMethod === "changes") {
     return {
       200: {
         description: "OK",

@@ -1,6 +1,7 @@
 import path from "node:path";
 import express from "express";
 import { readFile } from "node:fs/promises";
+import { Op } from "seq";
 import { validateConfig } from "./config/config-validator.js";
 import { loadModules } from "./config/config-loader.js";
 import { normalizeModules } from "./config/config-normalizer.js";
@@ -11,6 +12,8 @@ import { loadModule } from "./loaders/module-loader.js";
 import { runWithContext } from "./context/request-context.js";
 import { getContext } from "./context/request-context.js";
 import { errorHandler } from "./http/error-handler.js";
+import { ok } from "./http/response.js";
+import { ValidationError } from "./errors/validation-error.js";
 
 export async function createApiKit(conf = {}) {
   const config = {
@@ -26,7 +29,7 @@ export async function createApiKit(conf = {}) {
       schemas: conf.paths?.schemas || "./schemas",
     },
     iam: conf.iam || null,
-    audit: conf.audit || false,
+    audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
     sse: conf.sse || { enabled: false },
   };
@@ -84,6 +87,7 @@ export async function createApiKit(conf = {}) {
   mainRouter.use(runWithContext);
 
   for (const mod of modules.values()) mainRouter.use(mod.mount());
+  installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config });
   if (openapi) {
     mainRouter.get(joinPaths(config.basePath, openapi.path || "/openapi.json"), (_req, res) => {
       res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi }));
@@ -94,6 +98,61 @@ export async function createApiKit(conf = {}) {
 
   return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: null, close: async () => {},
   };
+}
+
+function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config }) {
+  if (!config.audit) return;
+
+  const path = config.audit.changesPath;
+  if (!path) return;
+
+  const AuditModel = findAuditModel(modules, models);
+  if (!AuditModel) return;
+
+  const fullPath = joinPaths(config.basePath, path);
+  routeRegistry.register({
+    module: "audit",
+    operationId: "audit.changes",
+    method: "get",
+    expressPath: fullPath,
+    openApiPath: fullPath,
+    serviceMethod: "changes",
+    auth: { required: false, strategies: [] },
+    permissions: [],
+    summary: "Cambios desde una fecha",
+    description: "",
+    tags: ["audit"],
+    deprecated: false,
+  });
+
+  mainRouter.get(fullPath, async (req, res, next) => {
+    try {
+      const since = parseSince(req.query?.since);
+      const sinceField = auditSinceField(AuditModel);
+      const rows = await AuditModel.findAll({where: { [sinceField]: { [Op.gte]: since } }, order: [["id", "ASC"]],});
+      res.json(ok(rows.map((row) => row.toJSON())));
+    } catch (error) {
+      next(error);
+    }
+  });
+}
+
+function findAuditModel(modules, models) {
+  for (const mod of modules.values()) {
+    if (isAuditTableName(mod.config?.name) || isAuditTableName(mod.config?.resource?.options?.tableName)) return mod.model;
+  }
+  return models.get("audit") || null;
+}
+
+function parseSince(value) {
+  if (!value) throw new ValidationError("Parametro since requerido", { errors: { since: "Requerido" } });
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) throw new ValidationError("Parametro since invalido", { errors: { since: "Fecha invalida" } });
+  return date;
+}
+
+function auditSinceField(AuditModel) {
+  return AuditModel?.options?.createdAt || "createdAt";
 }
 
 function registerSeqModels(seq, modelClasses) {
@@ -236,17 +295,15 @@ function normalizeOpenApiConfig(openapi) {
   return openapi;
 }
 
+function normalizeAuditConfig(audit) {
+  if (!audit) return false;
+  if (audit === true) return { changesPath: "/changes" };
+  return { changesPath: "/changes", ...audit };
+}
+
 function joinPaths(...parts) {
-  const clean = parts
-    .filter((part) => part !== undefined && part !== null && part !== "")
-    .map((part) => String(part).trim())
-    .filter(Boolean);
-
-  const joined = clean
-    .map((part) => part.replace(/^\/+|\/+$/g, ""))
-    .filter(Boolean)
-    .join("/");
-
+  const clean = parts.filter((part) => part !== undefined && part !== null && part !== "").map((part) => String(part).trim()).filter(Boolean);
+  const joined = clean.map((part) => part.replace(/^\/+|\/+$/g, "")).filter(Boolean).join("/");
   return `/${joined}`;
 }
 
