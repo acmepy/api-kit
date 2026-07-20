@@ -52,7 +52,7 @@ export class BaseService {
   async list({ params, query, body, context, transaction } = {}) {
     const page = Math.max(1, parseInt(query?.page, 10) || 1);
     const maxSize = this.#config.maxSize || 100;
-    const limit = Math.min(maxSize, Math.max(1, parseInt(query?.limit ?? query?.size, 10) || 20));
+    const limit = Math.min(maxSize, Math.max(1, parseInt(query?.limit, 10) || 20));
     const offset = (page - 1) * limit;
     const where = this.#buildWhere(query);
     const { count, rows } = await this.#model.findAndCountAll({where, limit, offset, order: this.#config.defaultOrder || [],...(transaction && { transaction })});
@@ -286,7 +286,7 @@ export class BaseService {
   }
 
   #buildPagination({ page, limit, offset, total, pages, baseUrl }) {
-    const pagination = { page, limit, size: limit, offset, total, pages };
+    const pagination = { page, limit, offset, total, pages };
     if (!baseUrl) return pagination;
 
     pagination.links = {
@@ -302,7 +302,6 @@ export class BaseService {
     const url = new URL(baseUrl);
     url.searchParams.set("page", String(page));
     url.searchParams.set("limit", String(limit));
-    url.searchParams.delete("size");
     return url.toString();
   }
 
@@ -314,7 +313,7 @@ export class BaseService {
     const definitions = this.#filterDefinitions();
 
     for (const [key, value] of Object.entries(query)) {
-      if (key === "page" || key === "size" || key === "limit") continue;
+      if (key === "page" || key === "limit") continue;
       const filters = this.#queryFilters(key, value);
 
       for (const filter of filters) {

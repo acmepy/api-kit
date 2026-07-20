@@ -13,7 +13,8 @@ async function main() {
     seq,
     basePath: "/api",
     modules: "./example/modules.js",
-    audit:true
+    audit:true,
+    openapi: {},
   });
 
   await seq.authenticate();
@@ -28,8 +29,6 @@ async function main() {
 }
 
 main().catch(console.error);
-
-
 
 
 

@@ -3,9 +3,10 @@ export class RouteRegistry {
 
   register(descriptor) {
     const expressPath = descriptor.expressPath.replace(/\/+$/, "") || "/";
+    const openApiPath = descriptor.openApiPath?.replace(/\/+$/, "") || "/";
     const key = `${descriptor.method}:${expressPath}`;
     if (this.#routes.has(key)) throw new Error(`Duplicate route: ${descriptor.method.toUpperCase()} ${expressPath}`);
-    this.#routes.set(key, { ...descriptor, expressPath });
+    this.#routes.set(key, { ...descriptor, expressPath, openApiPath });
   }
 
   getAll() {

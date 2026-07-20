@@ -54,13 +54,6 @@ describe("BaseService list filters", () => {
     assert.equal(result.pagination.pages, 3);
   });
 
-  it("keeps size as a limit alias", async () => {
-    const result = await service.list({ query: { page: "2", size: "1" } });
-
-    assert.equal(result.pagination.limit, 1);
-    assert.equal(result.pagination.offset, 1);
-  });
-
   it("adds pagination links when baseUrl is available", async () => {
     const result = await service.list({
       query: { page: "2", limit: "1", active: "true" },

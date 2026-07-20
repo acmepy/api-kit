@@ -2,6 +2,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
+import packageInfo from "../package.json" with { type: "json" };
 import { createApiKit, defineResource } from "../src/index.js";
 import { getContext } from "../src/index.js";
 import { normalizeModule } from "../src/config/config-normalizer.js";
@@ -71,6 +72,7 @@ before(async () => {
     seq,
     baseDir: process.cwd(),
     basePath: "/api",
+    openapi: {},
     modules: [
       {
         name: "clientes",
@@ -281,6 +283,20 @@ describe("Etapa 1 - N�cleo", () => {
       assert.equal(res.body.message, "Schema disabled");
     });
 
+    it("downloads OpenAPI document for Postman import", async () => {
+      const res = await request("GET", "/api/openapi.json");
+      assert.equal(res.status, 200);
+      assert.equal(res.body.openapi, "3.0.3");
+      assert.equal(res.body.info.version, packageInfo.version);
+      assert.deepEqual(res.body.servers, [{ url: "http://localhost:3000" }]);
+      assert.ok(res.body.paths["/api/clientes"]);
+      assert.ok(res.body.paths["/api/clientes/{id}"]);
+      assert.ok(res.body.paths["/api/clientes"].get);
+      assert.ok(res.body.paths["/api/clientes"].post);
+      assert.equal(res.body.paths["/api/clientes"].post.requestBody.content["application/json"].schema.$ref, "#/components/schemas/clientes_create");
+      assert.ok(res.body.components.schemas.clientes_create);
+    });
+
   describe("CRUD - list", () => {
     it("returns empty list", async () => {
       const res = await request("GET", "/api/clientes");
@@ -289,7 +305,6 @@ describe("Etapa 1 - N�cleo", () => {
       assert.ok(Array.isArray(res.body.data));
       assert.equal(res.body.pagination.page, 1);
       assert.equal(res.body.pagination.limit, 20);
-      assert.equal(res.body.pagination.size, 20);
       assert.equal(res.body.pagination.offset, 0);
       assert.equal(res.body.pagination.total, 0);
       assert.equal(res.body.pagination.pages, 0);
@@ -300,10 +315,9 @@ describe("Etapa 1 - N�cleo", () => {
       });
     });
 
-    it("supports page/size", async () => {
-      const res = await request("GET", "/api/clientes?page=1&size=10");
+    it("supports page/limit", async () => {
+      const res = await request("GET", "/api/clientes?page=1&limit=10");
       assert.equal(res.status, 200);
-      assert.equal(res.body.pagination.size, 10);
       assert.equal(res.body.pagination.limit, 10);
       assert.equal(res.body.pagination.offset, 0);
       assert.equal(res.body.pagination.links.self, "http://localhost:3001/api/clientes?page=1&limit=10");

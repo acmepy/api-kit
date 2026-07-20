@@ -1,9 +1,11 @@
 import path from "node:path";
 import express from "express";
+import { readFile } from "node:fs/promises";
 import { validateConfig } from "./config/config-validator.js";
 import { loadModules } from "./config/config-loader.js";
 import { normalizeModules } from "./config/config-normalizer.js";
 import { RouteRegistry } from "./openapi/route-registry.js";
+import { buildOpenApiDocument } from "./openapi/openapi-builder.js";
 import { loadModels } from "./loaders/model-loader.js";
 import { loadModule } from "./loaders/module-loader.js";
 import { runWithContext } from "./context/request-context.js";
@@ -25,7 +27,7 @@ export async function createApiKit(conf = {}) {
     },
     iam: conf.iam || null,
     audit: conf.audit || false,
-    openapi: conf.openapi || { enabled: false },
+    openapi: conf.openapi ?? null,
     sse: conf.sse || { enabled: false },
   };
 
@@ -76,10 +78,17 @@ export async function createApiKit(conf = {}) {
   }
 
   const mainRouter = express.Router();
+  const packageInfo = await loadPackageInfo(config.baseDir);
+  const openapi = normalizeOpenApiConfig(config.openapi);
 
   mainRouter.use(runWithContext);
 
   for (const mod of modules.values()) mainRouter.use(mod.mount());
+  if (openapi) {
+    mainRouter.get(joinPaths(config.basePath, openapi.path || "/openapi.json"), (_req, res) => {
+      res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi }));
+    });
+  }
 
   mainRouter.use(errorHandler);
 
@@ -211,5 +220,33 @@ function isAuditTableName(name) {
 function jsonSafe(value) {
   if (!value || typeof value !== "object") return {};
   return JSON.parse(JSON.stringify(value));
+}
+
+async function loadPackageInfo(baseDir) {
+  try {
+    return JSON.parse(await readFile(path.resolve(baseDir, "package.json"), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function normalizeOpenApiConfig(openapi) {
+  if (!openapi) return null;
+  if (openapi === true) return {};
+  return openapi;
+}
+
+function joinPaths(...parts) {
+  const clean = parts
+    .filter((part) => part !== undefined && part !== null && part !== "")
+    .map((part) => String(part).trim())
+    .filter(Boolean);
+
+  const joined = clean
+    .map((part) => part.replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean)
+    .join("/");
+
+  return `/${joined}`;
 }
 
