@@ -106,6 +106,39 @@ describe("audit", () => {
       await close(server);
     }
   });
+
+  it("streams audit changes over sse", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+    const stream = openSse(server, "/api/sse");
+
+    try {
+      await stream.connected;
+      await api.services.get("clientes").create({ body: { nombre: "Sofia" } });
+
+      const event = await stream.nextEvent;
+      assert.equal(event.event, "audit");
+      assert.equal(event.data.action, "create");
+      assert.equal(event.data.tableName, "clientes");
+      assert.equal(event.data.new.nombre, "Sofia");
+    } finally {
+      stream.close();
+      await api.close();
+      await close(server);
+    }
+  });
 });
 
 function listen(app) {
@@ -135,4 +168,53 @@ function request(server, method, path) {
     req.on("error", reject);
     req.end();
   });
+}
+
+function openSse(server, path) {
+  const { port } = server.address();
+  let req;
+  let connectedResolve;
+  let eventResolve;
+  let eventReject;
+  let buffer = "";
+
+  const connected = new Promise((resolve) => {
+    connectedResolve = resolve;
+  });
+  const nextEvent = new Promise((resolve, reject) => {
+    eventResolve = resolve;
+    eventReject = reject;
+  });
+
+  req = http.request({ hostname: "localhost", port, path, method: "GET", headers: { Accept: "text/event-stream" } }, (res) => {
+    assert.equal(res.statusCode, 200);
+    connectedResolve();
+    res.setEncoding("utf8");
+    res.on("data", (chunk) => {
+      buffer += chunk;
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
+
+      for (const rawEvent of events) {
+        const parsed = parseSseEvent(rawEvent);
+        if (parsed) eventResolve(parsed);
+      }
+    });
+  });
+  req.on("error", eventReject);
+  req.end();
+
+  return {
+    connected,
+    nextEvent,
+    close: () => req.destroy(),
+  };
+}
+
+function parseSseEvent(rawEvent) {
+  const lines = rawEvent.split("\n");
+  const event = lines.find((line) => line.startsWith("event: "))?.slice(7);
+  const data = lines.find((line) => line.startsWith("data: "))?.slice(6);
+  if (!event || !data) return null;
+  return { event, data: JSON.parse(data) };
 }

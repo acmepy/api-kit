@@ -73,6 +73,19 @@ function parametersFor(route) {
 }
 
 function responsesFor(route) {
+  if (route.serviceMethod === "sse") {
+    return {
+      200: {
+        description: "Event stream",
+        content: {
+          "text/event-stream": {
+            schema: { type: "string" },
+          },
+        },
+      },
+    };
+  }
+
   if (route.serviceMethod === "list" || route.serviceMethod === "changes") {
     return {
       200: {

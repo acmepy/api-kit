@@ -1,6 +1,7 @@
 import path from "node:path";
 import express from "express";
 import { readFile } from "node:fs/promises";
+import { EventEmitter } from "node:events";
 import { Op } from "seq";
 import { validateConfig } from "./config/config-validator.js";
 import { loadModules } from "./config/config-loader.js";
@@ -16,6 +17,7 @@ import { ok } from "./http/response.js";
 import { ValidationError } from "./errors/validation-error.js";
 
 export async function createApiKit(conf = {}) {
+  const auditEvents = new EventEmitter();
   const config = {
     seq: conf.seq,
     baseDir: conf.baseDir || process.cwd(),
@@ -33,6 +35,7 @@ export async function createApiKit(conf = {}) {
     openapi: conf.openapi ?? null,
     sse: conf.sse || { enabled: false },
   };
+  if (config.audit) config.audit.events = auditEvents;
 
   validateConfig(config);
 
@@ -88,6 +91,7 @@ export async function createApiKit(conf = {}) {
 
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config });
+  installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config });
   if (openapi) {
     mainRouter.get(joinPaths(config.basePath, openapi.path || "/openapi.json"), (_req, res) => {
       res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi }));
@@ -96,15 +100,51 @@ export async function createApiKit(conf = {}) {
 
   mainRouter.use(errorHandler);
 
-  return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: null, close: async () => {},
+  return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: auditEvents, close: async () => { auditEvents.removeAllListeners(); },
   };
 }
 
 function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config }) {
-  if (!config.audit) return;
+  installAuditRoute({ mainRouter, routeRegistry, modules, models, config }, {
+    path: config.audit?.changesPath,
+    operationId: "audit.changes",
+    serviceMethod: "changes",
+    summary: "Cambios desde una fecha",
+    handler: ({ AuditModel }) => async (req, res) => {
+      const since = parseSince(req.query?.since);
+      const sinceField = auditSinceField(AuditModel);
+      const rows = await AuditModel.findAll({where: { [sinceField]: { [Op.gte]: since } }, order: [["id", "ASC"]],});
+      res.json(ok(rows.map((row) => row.toJSON())));
+    },
+  });
+}
 
-  const path = config.audit.changesPath;
-  if (!path) return;
+function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config }) {
+  installAuditRoute({ mainRouter, routeRegistry, modules, models, config }, {
+    path: config.audit?.ssePath,
+    operationId: "audit.sse",
+    serviceMethod: "sse",
+    summary: "Cambios en vivo",
+    handler: ({ config }) => (req, res) => {
+      res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
+      res.write(": connected\n\n");
+
+      const sendChange = (change) => res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`);
+      config.audit.events.on("change", sendChange);
+
+      const heartbeat = setInterval(() => {res.write(": heartbeat\n\n")}, 30000);
+      heartbeat.unref?.();
+
+      req.on("close", () => {
+        clearInterval(heartbeat);
+        config.audit.events.off("change", sendChange);
+      });
+    },
+  });
+}
+
+function installAuditRoute({ mainRouter, routeRegistry, modules, models, config }, { path, operationId, serviceMethod, summary, handler }) {
+  if (!config.audit || !path) return;
 
   const AuditModel = findAuditModel(modules, models);
   if (!AuditModel) return;
@@ -112,28 +152,22 @@ function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, 
   const fullPath = joinPaths(config.basePath, path);
   routeRegistry.register({
     module: "audit",
-    operationId: "audit.changes",
+    operationId,
     method: "get",
     expressPath: fullPath,
     openApiPath: fullPath,
-    serviceMethod: "changes",
+    serviceMethod,
     auth: { required: false, strategies: [] },
     permissions: [],
-    summary: "Cambios desde una fecha",
+    summary,
     description: "",
     tags: ["audit"],
     deprecated: false,
   });
 
-  mainRouter.get(fullPath, async (req, res, next) => {
-    try {
-      const since = parseSince(req.query?.since);
-      const sinceField = auditSinceField(AuditModel);
-      const rows = await AuditModel.findAll({where: { [sinceField]: { [Op.gte]: since } }, order: [["id", "ASC"]],});
-      res.json(ok(rows.map((row) => row.toJSON())));
-    } catch (error) {
-      next(error);
-    }
+  const routeHandler = handler({ AuditModel, config });
+  mainRouter.get(fullPath, (req, res, next) => {
+    Promise.resolve(routeHandler(req, res, next)).catch(next);
   });
 }
 
@@ -186,24 +220,24 @@ function installAuditHooks(moduleConfigs, auditConfig) {
       if (isModelInstance(payload)) previousData.set(payload, snapshot(payload));
     });
     appendHook(hooks, "afterCreate", async function auditCreate(payload) {
-      await writeAudit(AuditModel, this, "create", payload, {}, snapshot(payload));
+      await writeAudit(AuditModel, auditConfig, this, "create", payload, {}, snapshot(payload));
     });
     appendHook(hooks, "afterUpdate", async function auditUpdate(payload, options = {}) {
       if (Array.isArray(payload)) {
-        for (const model of payload) await writeAudit(AuditModel, this, "bulk-update", model, options.where || {}, snapshot(model));
+        for (const model of payload) await writeAudit(AuditModel, auditConfig, this, "bulk-update", model, options.where || {}, snapshot(model));
         return;
       }
-      await writeAudit(AuditModel, this, "update", payload, options.auditOld || previousData.get(payload) || {}, snapshot(payload));
+      await writeAudit(AuditModel, auditConfig, this, "update", payload, options.auditOld || previousData.get(payload) || {}, snapshot(payload));
     });
     appendHook(hooks, "afterDestroy", async function auditDestroy(payload, options = {}) {
       if (isModelInstance(payload)) {
-        await writeAudit(AuditModel, this, "delete", payload, options.auditOld || previousData.get(payload) || snapshot(payload), {});
+        await writeAudit(AuditModel, auditConfig, this, "delete", payload, options.auditOld || previousData.get(payload) || snapshot(payload), {});
         return;
       }
-      await writeAudit(AuditModel, this, "bulk-delete", null, options.where || {}, {});
+      await writeAudit(AuditModel, auditConfig, this, "bulk-delete", null, options.where || {}, {});
     });
     appendHook(hooks, "afterBulkCreate", async function auditBulkCreate(models) {
-      for (const model of models || []) await writeAudit(AuditModel, this, "bulk-create", model, {}, snapshot(model));
+      for (const model of models || []) await writeAudit(AuditModel, auditConfig, this, "bulk-create", model, {}, snapshot(model));
     });
 
     resource.options.hooks = hooks;
@@ -221,13 +255,13 @@ function appendHook(hooks, name, hook) {
   }
 }
 
-async function writeAudit(AuditModel, ModelClass, action, model, oldData, newData) {
+async function writeAudit(AuditModel, auditConfig, ModelClass, action, model, oldData, newData) {
   const tableName = tableNameFor(ModelClass);
   if (!tableName || isAuditTableName(tableName)) return;
 
   const ctx = getContext() || {};
   const audit = ctx.audit || {};
-  await AuditModel.create(
+  const auditRow = await AuditModel.create(
     {
       txId: ctx.txId || "",
       clientIp: audit.clientIp || audit.ip || "",
@@ -240,6 +274,7 @@ async function writeAudit(AuditModel, ModelClass, action, model, oldData, newDat
     },
     { hooks: false },
   );
+  auditConfig?.events?.emit("change", auditRow.toJSON());
 }
 
 function isModelInstance(value) {
@@ -297,8 +332,8 @@ function normalizeOpenApiConfig(openapi) {
 
 function normalizeAuditConfig(audit) {
   if (!audit) return false;
-  if (audit === true) return { changesPath: "/changes" };
-  return { changesPath: "/changes", ...audit };
+  if (audit === true) return { changesPath: "/changes", ssePath: "/sse" };
+  return { changesPath: "/changes", ssePath: "/sse", ...audit };
 }
 
 function joinPaths(...parts) {
@@ -306,4 +341,3 @@ function joinPaths(...parts) {
   const joined = clean.map((part) => part.replace(/^\/+|\/+$/g, "")).filter(Boolean).join("/");
   return `/${joined}`;
 }
-
