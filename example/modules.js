@@ -27,6 +27,7 @@ export const modules = [
     tableName: "audit",
     timestamps: true,
     audit: false,
+    endpoints: {schema: false, create: false, update: false, remove: false},
     attributes: {
       id: { type: "integer", primaryKey: true, autoIncrement: true },
       txId: { type: "string", maxLength: 50, allowNull: false },
