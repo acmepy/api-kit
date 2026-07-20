@@ -3,8 +3,11 @@ import express from "express";
 import { readFile } from "node:fs/promises";
 import { EventEmitter } from "node:events";
 import { Op } from "seq";
+import { RBAC } from "iam";
+import { SeqAdapter } from "iam/adapters";
+import { Auth, signJwt, verifyJwt } from "iam/express";
 import { validateConfig } from "./config/config-validator.js";
-import { loadModules } from "./config/config-loader.js";
+import { loadModuleBundle } from "./config/config-loader.js";
 import { normalizeModules } from "./config/config-normalizer.js";
 import { RouteRegistry } from "./openapi/route-registry.js";
 import { buildOpenApiDocument } from "./openapi/openapi-builder.js";
@@ -15,6 +18,8 @@ import { getContext } from "./context/request-context.js";
 import { errorHandler } from "./http/error-handler.js";
 import { ok } from "./http/response.js";
 import { ValidationError } from "./errors/validation-error.js";
+import { AuthRequiredError } from "./errors/auth-required-error.js";
+import { ForbiddenError } from "./errors/forbidden-error.js";
 
 export async function createApiKit(conf = {}) {
   const auditEvents = new EventEmitter();
@@ -30,7 +35,7 @@ export async function createApiKit(conf = {}) {
       routers: conf.paths?.routers || "./routers",
       schemas: conf.paths?.schemas || "./schemas",
     },
-    iam: conf.iam || null,
+    auth: conf.auth,
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
     sse: conf.sse || { enabled: false },
@@ -46,8 +51,14 @@ export async function createApiKit(conf = {}) {
     schemas: path.resolve(config.baseDir, config.paths.schemas),
   };
 
-  const rawModuleConfigs = await loadModules(config.modules, config.baseDir);
-  const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath });
+  const moduleBundle = await loadModuleBundle(config.modules, config.baseDir);
+  config.auth = normalizeGlobalAuth(mergeAuthConfig(moduleBundle.auth, config.auth));
+  const authBackend = normalizeAuthBackendConfig(config.auth);
+  const authContext = authBackend ? createAuthContext(config, authBackend) : null;
+  const authorize = createAuthorizer(authContext);
+
+  const rawModuleConfigs = moduleBundle.modules;
+  const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
   installAuditHooks(moduleConfigs, config.audit);
 
   const explicitModels = { ...config.models };
@@ -69,13 +80,7 @@ export async function createApiKit(conf = {}) {
   for (const mod of modelsMap) models.set(mod[0], mod[1]);
 
   for (const moduleConfig of moduleConfigs) {
-    const mod = await loadModule({
-      moduleConfig,
-      seq: config.seq,
-      modelsMap,
-      routeRegistry,
-      paths: resolvedPaths,
-    });
+    const mod = await loadModule({moduleConfig, seq: config.seq, modelsMap, routeRegistry, paths: resolvedPaths, authorize});
 
     modules.set(moduleConfig.name, mod);
     services.set(moduleConfig.name, mod.service);
@@ -89,9 +94,10 @@ export async function createApiKit(conf = {}) {
 
   mainRouter.use(runWithContext);
 
+  installAuthRoutes({ mainRouter, routeRegistry, config, authContext, authorize });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
-  installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config });
-  installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config });
+  installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize });
+  installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize });
   if (openapi) {
     mainRouter.get(joinPaths(config.basePath, openapi.path || "/openapi.json"), (_req, res) => {
       res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi }));
@@ -100,12 +106,12 @@ export async function createApiKit(conf = {}) {
 
   mainRouter.use(errorHandler);
 
-  return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: auditEvents, close: async () => { auditEvents.removeAllListeners(); },
+  return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: auditEvents, auth: authContext, close: async () => { auditEvents.removeAllListeners(); },
   };
 }
 
-function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config }) {
-  installAuditRoute({ mainRouter, routeRegistry, modules, models, config }, {
+function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize }) {
+  installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize }, {
     path: config.audit?.changesPath,
     operationId: "audit.changes",
     serviceMethod: "changes",
@@ -119,8 +125,8 @@ function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, 
   });
 }
 
-function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config }) {
-  installAuditRoute({ mainRouter, routeRegistry, modules, models, config }, {
+function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize }) {
+  installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize }, {
     path: config.audit?.ssePath,
     operationId: "audit.sse",
     serviceMethod: "sse",
@@ -143,13 +149,15 @@ function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, conf
   });
 }
 
-function installAuditRoute({ mainRouter, routeRegistry, modules, models, config }, { path, operationId, serviceMethod, summary, handler }) {
+function installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize }, { path, operationId, serviceMethod, summary, handler }) {
   if (!config.audit || !path) return;
 
   const AuditModel = findAuditModel(modules, models);
   if (!AuditModel) return;
 
   const fullPath = joinPaths(config.basePath, path);
+  const auth = config.auth || { required: false, strategies: [] };
+  const permission = auth.required ? operationId : null;
   routeRegistry.register({
     module: "audit",
     operationId,
@@ -157,8 +165,8 @@ function installAuditRoute({ mainRouter, routeRegistry, modules, models, config 
     expressPath: fullPath,
     openApiPath: fullPath,
     serviceMethod,
-    auth: { required: false, strategies: [] },
-    permissions: [],
+    auth,
+    permissions: permission ? [permission] : [],
     summary,
     description: "",
     tags: ["audit"],
@@ -166,9 +174,213 @@ function installAuditRoute({ mainRouter, routeRegistry, modules, models, config 
   });
 
   const routeHandler = handler({ AuditModel, config });
-  mainRouter.get(fullPath, (req, res, next) => {
+  const handlers = [];
+  if (authorize) handlers.push(authorize({ auth, permissions: permission ? [permission] : [] }));
+  handlers.push((req, res, next) => {
     Promise.resolve(routeHandler(req, res, next)).catch(next);
   });
+  mainRouter.get(fullPath, ...handlers);
+}
+
+function installAuthRoutes({ mainRouter, routeRegistry, config, authContext, authorize }) {
+  if (!authContext) return;
+
+  const loginPath = joinPaths(config.basePath, authContext.loginPath);
+  const logoutPath = joinPaths(config.basePath, authContext.logoutPath);
+
+  routeRegistry.register({
+    module: "auth",
+    operationId: "auth.login",
+    method: "post",
+    expressPath: loginPath,
+    openApiPath: loginPath,
+    serviceMethod: "login",
+    auth: { required: false, strategies: [] },
+    permissions: [],
+    summary: "Login",
+    description: "",
+    tags: ["auth"],
+    deprecated: false,
+  });
+
+  routeRegistry.register({
+    module: "auth",
+    operationId: "auth.logout",
+    method: "post",
+    expressPath: logoutPath,
+    openApiPath: logoutPath,
+    serviceMethod: "logout",
+    auth: { required: true, strategies: ["bearer", "basic"] },
+    permissions: [],
+    summary: "Logout",
+    description: "",
+    tags: ["auth"],
+    deprecated: false,
+  });
+
+  mainRouter.post(loginPath, async (req, res, next) => {
+    try {
+      const { username, password } = req.body || {};
+      const expiresAt = expiresAtFor(authContext.tokenExpiresIn);
+      const session = await authContext.auth.login({ username, password, options: { expiresAt } });
+      const token = await signJwt({ sessionId: session.id }, authContext.secret);
+      await authContext.adapter.updateSession?.(session.id, { token, options: { ...session.options, expiresAt } });
+      res.json(ok({ user: session.user, token, session: { id: session.id, expiresAt } }));
+    } catch (error) {
+      next(normalizeAuthError(error));
+    }
+  });
+
+  mainRouter.post(logoutPath, authorize({ auth: { required: true, strategies: ["bearer", "basic"] }, permissions: [] }), async (req, res, next) => {
+    try {
+      if (req.session?.id) await authContext.auth.logout(req.session.id);
+      res.json(ok(true));
+    } catch (error) {
+      next(normalizeAuthError(error));
+    }
+  });
+}
+
+function createAuthContext(config, authBackend) {
+  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models });
+  const rbac = new RBAC({ adapter });
+  const auth = new Auth({ adapter, rbac });
+  return {
+    ...authBackend,
+    adapter,
+    auth,
+    rbac,
+    models: adapter.models || authBackend.models || null,
+  };
+}
+
+function createAuthorizer(authContext) {
+  return ({ auth = { required: false }, permissions = [] } = {}) => async (req, _res, next) => {
+    try {
+      if (!auth?.required) return next();
+      if (!authContext) throw new AuthRequiredError("Auth no configurado");
+
+      const session = await authenticateRequest(req, authContext, auth.strategies);
+      req.session = session;
+      req.user = session.user;
+      setAuthContext(session);
+
+      for (const permission of permissions || []) {
+        if (!permission) continue;
+        const allowed = await authContext.rbac.can(session.user.id, permission);
+        if (!allowed) throw new ForbiddenError("No tiene permisos para realizar esta accion");
+      }
+
+      return next();
+    } catch (error) {
+      next(normalizeAuthError(error));
+    }
+  };
+}
+
+async function authenticateRequest(req, authContext, strategies = ["bearer", "basic"]) {
+  const header = req.headers?.authorization || "";
+  const allowed = normalizeStrategies(strategies);
+
+  if (header.startsWith("Bearer ") && allowed.includes("bearer")) {
+    const token = header.slice("Bearer ".length).trim();
+    if (!token) throw new AuthRequiredError("Token requerido");
+    const payload = await verifyJwt(token, authContext.secret);
+    const session = await authContext.auth.getSession(payload.sessionId || payload.id);
+    await assertSessionNotExpired(session, authContext);
+    return session;
+  }
+
+  if (header.startsWith("Basic ") && allowed.includes("basic")) {
+    return authenticateBasic(header, authContext);
+  }
+
+  throw new AuthRequiredError("Autenticacion requerida");
+}
+
+async function authenticateBasic(header, authContext) {
+  const encoded = header.slice("Basic ".length).trim();
+  const decoded = Buffer.from(encoded, "base64").toString("utf8");
+  const separator = decoded.indexOf(":");
+  if (separator === -1) throw new AuthRequiredError("Credenciales invalidas");
+
+  const username = decoded.slice(0, separator);
+  const password = decoded.slice(separator + 1);
+  const user = await authContext.adapter.findUserByUsername(username);
+  await authContext.auth.validateUser(user);
+  await authContext.auth.validatePassword(user, password);
+  return authContext.auth.createTemporarySession(user, {});
+}
+
+async function assertSessionNotExpired(session, authContext) {
+  const expiresAt = session?.options?.expiresAt;
+  if (!expiresAt) return;
+  if (new Date(expiresAt).getTime() > Date.now()) return;
+  if (session?.id) await authContext.auth.logout(session.id);
+  throw new AuthRequiredError("Sesion expirada");
+}
+
+function setAuthContext(session) {
+  const ctx = getContext();
+  if (!ctx) return;
+  ctx.user = session.user;
+  ctx.session = session;
+  ctx.audit = { ...(ctx.audit || {}), userId: session.user?.id || null };
+}
+
+function normalizeAuthBackendConfig(auth) {
+  if (!auth?.required) return null;
+  return {
+    loginPath: "/login",
+    logoutPath: "/logout",
+    secret: process.env.IAM_SECRET || "api-kit-dev-secret",
+    tokenExpiresIn: auth?.tokenExpiresIn || "1h",
+    adapter: auth?.adapter,
+    models: auth?.models,
+    ...auth,
+  };
+}
+
+function normalizeGlobalAuth(auth) {
+  if (!auth) return { required: false, strategies: [] };
+  if (auth === true) return { required: true, strategies: ["bearer", "basic"], tokenExpiresIn: "1h" };
+  const strategies = auth.strategies || auth.strategy || ["bearer", "basic"];
+  return { ...auth, required: auth.required ?? true, strategies: Array.isArray(strategies) ? strategies : [strategies] };
+}
+
+function mergeAuthConfig(base, override) {
+  if (override === undefined) return base;
+  if (override === false || override === null) return override;
+  if (base && typeof base === "object" && override && typeof override === "object") return { ...base, ...override };
+  return override;
+}
+
+function normalizeStrategies(strategies = []) {
+  return strategies.map((strategy) => (strategy === "jwt" ? "bearer" : strategy));
+}
+
+function expiresAtFor(expiresIn) {
+  return new Date(Date.now() + parseDuration(expiresIn)).toISOString();
+}
+
+function parseDuration(value) {
+  if (typeof value === "number") return value * 1000;
+  const match = String(value || "1h").trim().match(/^(\d+)\s*(ms|s|m|h|d)?$/i);
+  if (!match) return 60 * 60 * 1000;
+  const amount = Number(match[1]);
+  const unit = (match[2] || "s").toLowerCase();
+  const multipliers = { ms: 1, s: 1000, m: 60000, h: 3600000, d: 86400000 };
+  return amount * multipliers[unit];
+}
+
+function normalizeAuthError(error) {
+  if (error instanceof AuthRequiredError || error instanceof ForbiddenError || error instanceof ValidationError) return error;
+  const code = error?.code;
+  if (code === "FORBIDDEN" || error?.status === 403) return new ForbiddenError(error.message, { cause: error });
+  if (error?.status === 401 || String(code || "").includes("AUTH") || String(code || "").includes("TOKEN") || String(code || "").includes("SESSION")) {
+    return new AuthRequiredError(error.message, { cause: error });
+  }
+  return error;
 }
 
 function findAuditModel(modules, models) {

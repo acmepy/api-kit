@@ -9,10 +9,11 @@ export class BaseRouter {
   #routeRegistry;
   #expressRouter;
 
-  constructor({ service, config, routeRegistry }) {
+  constructor({ service, config, routeRegistry, authorize }) {
     this.#service = service;
     this.#config = config;
     this.#routeRegistry = routeRegistry;
+    this.authorize = authorize;
     this.#expressRouter = express.Router();
   }
 
@@ -44,6 +45,7 @@ export class BaseRouter {
       this.route(method, path, {
         service: serviceMethod,
         permission: endpoint.permission,
+        auth: endpoint.auth,
         summary: endpoint.summary,
         description: endpoint.description,
         tags: endpoint.tags || this.#config.tags,
@@ -62,7 +64,7 @@ export class BaseRouter {
   }
 
   route(method, path, options = {}) {
-    const { service: serviceMethod, permission, summary, description, tags } = options;
+    const { service: serviceMethod, permission, auth, summary, description, tags } = options;
 
     const expressPath = path;
     const openApiPath = path.replace(/:([^/]+)/g, "{$1}");
@@ -74,7 +76,7 @@ export class BaseRouter {
       expressPath: `${this.#config.basePath}${expressPath}`,
       openApiPath: `${this.#config.basePath}${openApiPath}`,
       serviceMethod,
-      auth: this.#config.auth,
+      auth: auth || this.#config.auth,
       permissions: permission ? [permission] : [],
       summary: summary || "",
       description: description || "",
@@ -84,7 +86,10 @@ export class BaseRouter {
 
     this.#routeRegistry.register(descriptor);
 
-    this.#expressRouter[method](expressPath, async (req, res, next) => {
+    const handlers = [];
+    if (this.authorize) handlers.push(this.authorize({ auth: auth || this.#config.auth, permissions: permission ? [permission] : [] }));
+
+    handlers.push(async (req, res, next) => {
       try {
         const context = { ...getContext(), baseUrl: `${req.protocol}://${req.get("host")}${req.originalUrl}` };
         const args = { params: req.params, query: req.query, body: req.body, context, transaction: null};
@@ -96,6 +101,8 @@ export class BaseRouter {
         next(err);
       }
     });
+
+    this.#expressRouter[method](expressPath, ...handlers);
   }
 }
 

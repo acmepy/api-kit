@@ -1,6 +1,7 @@
 export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {} }) {
   const paths = {};
   const schemas = {};
+  const securitySchemes = securitySchemesFor(routes.getAll());
 
   for (const mod of modules.values()) {
     const moduleSchemas = schemaComponents(mod);
@@ -22,9 +23,12 @@ export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config
     },
     servers: normalizeServers(config.servers || config.server),
     paths,
-    components: {
-      schemas,
-    },
+    components: Object.fromEntries(
+      Object.entries({
+        schemas,
+        ...(Object.keys(securitySchemes).length > 0 ? { securitySchemes } : {}),
+      }).filter(([, value]) => value && Object.keys(value).length > 0),
+    ),
   };
 }
 
@@ -44,14 +48,34 @@ function operationFor(route, modules) {
     tags: route.tags?.length ? route.tags : [route.module],
     parameters: parametersFor(route),
     responses: responsesFor(route),
+    security: securityFor(route),
+    ...(route.permissions?.length ? { "x-permissions": route.permissions } : {}),
   };
 
-  const bodySchemaName = requestBodySchemaName(route);
-  if (bodySchemaName && mod?.schemas?.[bodySchemaName]) {
-    operation.requestBody = {required: bodySchemaName === "create", content: {"application/json": {schema: { $ref: `#/components/schemas/${componentName(route.module, bodySchemaName)}`}}}};
-  }
+  operation.requestBody = requestBodyFor(route, mod);
 
   return Object.fromEntries(Object.entries(operation).filter(([, value]) => value !== undefined));
+}
+
+function securitySchemesFor(routes) {
+  const strategies = new Set(routes.flatMap((route) => route.auth?.required ? normalizeStrategies(route.auth.strategies) : []));
+  const schemes = {};
+  if (strategies.has("bearer")) schemes.bearerAuth = {type: "http", scheme: "bearer", bearerFormat: "JWT"};
+  if (strategies.has("basic")) schemes.basicAuth = {type: "http", scheme: "basic"};
+  return schemes;
+}
+
+function securityFor(route) {
+  if (!route.auth?.required) return undefined;
+  const strategies = normalizeStrategies(route.auth.strategies);
+  const security = [];
+  if (strategies.includes("bearer")) security.push({ bearerAuth: [] });
+  if (strategies.includes("basic")) security.push({ basicAuth: [] });
+  return security.length > 0 ? security : undefined;
+}
+
+function normalizeStrategies(strategies = []) {
+  return strategies.map((strategy) => (strategy === "jwt" ? "bearer" : strategy));
 }
 
 function parametersFor(route) {
@@ -73,57 +97,45 @@ function parametersFor(route) {
 }
 
 function responsesFor(route) {
+  const authResponses = route.auth?.required ? {
+    401: { description: "Authentication required" },
+    403: { description: "Forbidden" },
+  } : {};
+
   if (route.serviceMethod === "sse") {
     return {
-      200: {
-        description: "Event stream",
-        content: {
-          "text/event-stream": {
-            schema: { type: "string" },
-          },
-        },
-      },
+      200: {description: "Event stream",content: {"text/event-stream": {schema: { type: "string" }}}}, 
+      ...authResponses,
     };
   }
 
   if (route.serviceMethod === "list" || route.serviceMethod === "changes") {
     return {
-      200: {
-        description: "OK",
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              properties: {
-                ok: { type: "boolean" },
-                data: { type: "array", items: { type: "object" } },
-                pagination: { type: "object" },
-              },
-            },
-          },
-        },
-      },
+      200: {description: "OK", content: {"application/json": {schema: {type: "object", properties: { ok: { type: "boolean" }, data: { type: "array", items: { type: "object" } }, pagination: { type: "object" }}}}}},
+      ...authResponses,
     };
   }
 
   return {
-    200: {
-      description: "OK",
-      content: {
-        "application/json": {
-          schema: {
-            type: "object",
-            properties: {
-              ok: { type: "boolean" },
-              data: { type: "object" },
-            },
-          },
-        },
-      },
-    },
+    200: {description: "OK", content: {"application/json": {schema: {type: "object", properties: { ok: { type: "boolean" }, data: { type: "object" }}}}}},
     400: { description: "Validation error" },
+    ...authResponses,
     404: { description: "Not found" },
   };
+}
+
+function requestBodyFor(route, mod) {
+  if (route.operationId === "auth.login") {
+    return {
+      required: true,
+      content: {"application/json": {schema: {type: "object",required: ["username", "password"], properties: {username: { type: "string" }, password: { type: "string", format: "password" }}}}
+      },
+    };
+  }
+
+  const bodySchemaName = requestBodySchemaName(route);
+  if (!bodySchemaName || !mod?.schemas?.[bodySchemaName]) return undefined;
+  return {required: bodySchemaName === "create", content: {"application/json": {schema: { $ref: `#/components/schemas/${componentName(route.module, bodySchemaName)}`}}}};
 }
 
 function requestBodySchemaName(route) {

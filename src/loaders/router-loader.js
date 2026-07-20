@@ -3,20 +3,20 @@ import { importModule, fileExists } from "../utils/import-module.js";
 import { camelCase } from "../utils/naming.js";
 import { BaseRouter } from "../base/base-router.js";
 
-export async function loadRouter({ moduleName, service, config, routeRegistry, routersDir }) {
+export async function loadRouter({ moduleName, service, config, routeRegistry, routersDir, authorize }) {
   if (routersDir) {
     const filePath = path.join(routersDir, `${camelCase(moduleName)}.router.js`);
     if (await fileExists(filePath)) {
       const RouterClass = await importModule(filePath);
       if (typeof RouterClass === "function") {
-        const router = new RouterClass({ service, config, routeRegistry });
+        const router = new RouterClass({ service, config, routeRegistry, authorize });
         router.build();
         return router;
       }
     }
   }
 
-  const router = new BaseRouter({ service, config, routeRegistry });
+  const router = new BaseRouter({ service, config, routeRegistry, authorize });
   router.build();
   return router;
 }

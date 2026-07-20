@@ -14,20 +14,27 @@ npm run dev
 En otra terminal escucha eventos SSE:
 
 ```bash
-node example/cli.js sse
+node example/cli.js sse --basic admin:1234
 ```
 
 En una tercera terminal genera cambios:
 
 ```bash
-node example/cli.js create-cliente "Ana"
-node example/cli.js demo
+node example/cli.js create-cliente "Ana" --basic admin:1234
+node example/cli.js demo --basic admin:1234
 ```
 
 Tambien puedes consultar los cambios desde una fecha:
 
 ```bash
-node example/cli.js changes 2026-07-20T00:00:00.000Z
+node example/cli.js changes 2026-07-20T00:00:00.000Z --basic admin:1234
+```
+
+Para probar Bearer token:
+
+```bash
+node example/cli.js login admin 1234
+node example/cli.js changes 2026-07-20T00:00:00.000Z --token <token>
 ```
 
 Si el servidor esta en otra URL:

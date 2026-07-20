@@ -1,26 +1,58 @@
 import path from "node:path";
-import { importModule, fileExists } from "../utils/import-module.js";
+import { importModuleNamespace, fileExists } from "../utils/import-module.js";
 import { defineResource } from "../define-resource.js";
 
 export async function loadModules(input, baseDir) {
-  if (!input) return [];
+  return (await loadModuleBundle(input, baseDir)).modules;
+}
+
+export async function loadModuleBundle(input, baseDir) {
+  const bundle = { modules: [], auth: undefined };
+  if (!input) return bundle;
   const items = Array.isArray(input) ? input : [input];
-  const results = [];
   for (const item of items) {
     if (typeof item === "object" && !Array.isArray(item)) {
-      results.push(normalizeModuleInput(item));
+      appendBundleItem(bundle, item);
       continue;
     }
     if (typeof item === "string") {
       const resolved = path.resolve(baseDir, item);
       if (await fileExists(resolved)) {
-        const mod = await importModule(resolved);
-        const arr = Array.isArray(mod) ? mod : mod.modules || [mod];
-        results.push(...arr.map((entry) => normalizeModuleInput(entry)));
+        const mod = await loadModuleFile(resolved);
+        appendBundleItem(bundle, mod);
       }
     }
   }
-  return results;
+  return bundle;
+}
+
+async function loadModuleFile(resolved) {
+  const mod = await importModuleNamespace(resolved);
+  const hasBundleExports = mod.modules !== undefined || mod.auth !== undefined;
+  if (!hasBundleExports) return mod.default || mod;
+
+  const defaults = mod.default && typeof mod.default === "object" && !Array.isArray(mod.default) ? mod.default : {};
+  return {
+    ...defaults,
+    modules: mod.modules || defaults.modules || mod.default,
+    auth: mod.auth ?? defaults.auth,
+  };
+}
+
+function appendBundleItem(bundle, item) {
+  if (isModuleBundle(item)) {
+    if (item.auth !== undefined) bundle.auth = item.auth;
+    const modules = Array.isArray(item.modules) ? item.modules : [item.modules].filter(Boolean);
+    bundle.modules.push(...modules.map((entry) => normalizeModuleInput(entry)));
+    return;
+  }
+
+  const modules = Array.isArray(item) ? item : [item];
+  bundle.modules.push(...modules.map((entry) => normalizeModuleInput(entry)));
+}
+
+function isModuleBundle(input) {
+  return input && typeof input === "object" && !Array.isArray(input) && Array.isArray(input.modules);
 }
 
 function normalizeModuleInput(input) {

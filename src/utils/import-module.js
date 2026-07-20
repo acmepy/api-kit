@@ -8,6 +8,12 @@ export async function importModule(filePath) {
   return mod.default || mod;
 }
 
+export async function importModuleNamespace(filePath) {
+  const absolute = path.resolve(filePath);
+  const url = pathToFileURL(absolute).href;
+  return import(url);
+}
+
 export async function fileExists(filePath) {
   const { access } = await import("node:fs/promises");
   try {

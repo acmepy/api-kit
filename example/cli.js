@@ -18,50 +18,55 @@ async function main() {
   }
 
   if (command === "changes" || command === "change") {
-    await printChanges(baseUrl, options.since || positionals[0] || new Date(Date.now() - 60000).toISOString());
+    await printChanges(baseUrl, options.since || positionals[0] || new Date(Date.now() - 60000).toISOString(), authHeaders(options));
     return;
   }
 
   if (command === "sse") {
-    await listenSse(baseUrl);
+    await listenSse(baseUrl, authHeaders(options));
+    return;
+  }
+
+  if (command === "login") {
+    await login(baseUrl, { username: options.username || positionals[0] || "admin", password: options.password || positionals[1] || "1234" });
     return;
   }
 
   if (command === "create-cliente") {
-    await createCliente(baseUrl, {nombre: options.nombre || positionals[0] || `Cliente ${Date.now()}`, email: options.email || positionals[1] || null, activo: parseBooleanOption(options.activo, true)});
+    await createCliente(baseUrl, {nombre: options.nombre || positionals[0] || `Cliente ${Date.now()}`, email: options.email || positionals[1] || null, activo: parseBooleanOption(options.activo, true)}, authHeaders(options));
     return;
   }
 
   if (command === "update-cliente") {
     const id = options.id || positionals[0];
     if (!id) throw new Error("Falta el id del cliente.");
-    await updateCliente(baseUrl, id, {nombre: options.nombre || positionals[1], email: options.email, activo: parseBooleanOption(options.activo)});
+    await updateCliente(baseUrl, id, {nombre: options.nombre || positionals[1], email: options.email, activo: parseBooleanOption(options.activo)}, authHeaders(options));
     return;
   }
 
   if (command === "delete-cliente") {
     const id = options.id || positionals[0];
     if (!id) throw new Error("Falta el id del cliente.");
-    await requestJson(`${baseUrl}/clientes/${id}`, { method: "DELETE" });
+    await requestJson(`${baseUrl}/clientes/${id}`, { method: "DELETE", headers: authHeaders(options) });
     console.log(`Cliente ${id} eliminado.`);
     return;
   }
 
   if (command === "demo") {
-    await runDemo(baseUrl);
+    await runDemo(baseUrl, authHeaders(options));
     return;
   }
 
   throw new Error(`Comando no soportado: ${command}`);
 }
 
-async function printChanges(baseUrl, since) {
-  const response = await requestJson(`${baseUrl}/changes?since=${encodeURIComponent(since)}`);
+async function printChanges(baseUrl, since, headers) {
+  const response = await requestJson(`${baseUrl}/changes?since=${encodeURIComponent(since)}`, { headers });
   console.log(JSON.stringify(response.data || [], null, 2));
 }
 
-async function listenSse(baseUrl) {
-  const response = await fetch(`${baseUrl}/sse`, { headers: { Accept: "text/event-stream" } });
+async function listenSse(baseUrl, headers) {
+  const response = await fetch(`${baseUrl}/sse`, { headers: { Accept: "text/event-stream", ...headers } });
   if (!response.ok) throw new Error(`SSE fallo con HTTP ${response.status}`);
   console.log(`Escuchando ${baseUrl}/sse. Presiona Ctrl+C para salir.`);
 
@@ -85,23 +90,28 @@ async function listenSse(baseUrl) {
   }
 }
 
-async function createCliente(baseUrl, body) {
-  const response = await requestJson(`${baseUrl}/clientes`, {method: "POST", body: JSON.stringify(body)});
+async function login(baseUrl, body) {
+  const response = await requestJson(`${baseUrl}/login`, {method: "POST", body: JSON.stringify(body)});
   console.log(JSON.stringify(response.data, null, 2));
 }
 
-async function updateCliente(baseUrl, id, fields) {
+async function createCliente(baseUrl, body, headers) {
+  const response = await requestJson(`${baseUrl}/clientes`, {method: "POST", body: JSON.stringify(body), headers});
+  console.log(JSON.stringify(response.data, null, 2));
+}
+
+async function updateCliente(baseUrl, id, fields, headers) {
   const body = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
-  const response = await requestJson(`${baseUrl}/clientes/${id}`, {method: "PUT", body: JSON.stringify(body)});
+  const response = await requestJson(`${baseUrl}/clientes/${id}`, {method: "PUT", body: JSON.stringify(body), headers});
   console.log(JSON.stringify(response.data, null, 2));
 }
 
-async function runDemo(baseUrl) {
-  const created = await requestJson(`${baseUrl}/clientes`, {method: "POST", body: JSON.stringify({ nombre: `Demo ${Date.now()}`, email: null, activo: true })});
+async function runDemo(baseUrl, headers) {
+  const created = await requestJson(`${baseUrl}/clientes`, {method: "POST", body: JSON.stringify({ nombre: `Demo ${Date.now()}`, email: null, activo: true }), headers});
   console.log("create:");
   console.log(JSON.stringify(created.data, null, 2));
 
-  const updated = await requestJson(`${baseUrl}/clientes/${created.data.id}`, {method: "PUT", body: JSON.stringify({ activo: false })});
+  const updated = await requestJson(`${baseUrl}/clientes/${created.data.id}`, {method: "PUT", body: JSON.stringify({ activo: false }), headers});
   console.log("update:");
   console.log(JSON.stringify(updated.data, null, 2));
 }
@@ -154,11 +164,18 @@ function parseBooleanOption(value, fallback) {
   return fallback;
 }
 
+function authHeaders(options) {
+  if (options.token) return { Authorization: `Bearer ${options.token}` };
+  if (options.basic) return { Authorization: `Basic ${Buffer.from(options.basic).toString("base64")}` };
+  return {};
+}
+
 function printHelp() {
   console.log(`Uso:
   node example/app.js
 
   node example/cli.js sse
+  node example/cli.js login [username] [password]
   node example/cli.js changes [since]
   node example/cli.js create-cliente [nombre] [email]
   node example/cli.js update-cliente <id> --nombre "Nuevo nombre"
@@ -171,5 +188,7 @@ Opciones:
   --nombre Ana
   --email ana@example.com
   --activo true|false
+  --token eyJ...
+  --basic admin:1234
 `);
 }

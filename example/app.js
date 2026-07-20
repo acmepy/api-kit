@@ -13,13 +13,15 @@ async function main() {
     seq,
     basePath: "/api",
     modules: "./example/modules.js",
+    auth: { secret: process.env.IAM_SECRET || "dev-secret" },
     audit:true,
-    openapi: {},
+    openapi: true,
   });
 
   await seq.authenticate();
   await seq.init();
   await seq.sync();
+  await seedIam(api);
 
   app.use(api.router);
   app.use(api.errorHandler);
@@ -30,7 +32,23 @@ async function main() {
 
 main().catch(console.error);
 
+async function seedIam(api) {
+  const models = api.auth?.models;
+  if (!models) return;
 
+  const existing = await models.User.findByPk("admin");
+  if (existing) return;
+
+  const user = await models.User.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
+  const role = await models.Role.create({ role: "admin", active: true });
+  await models.UserRole.create({ userId: user.getDataValue("id"), roleId: role.getDataValue("id"), active: true });
+
+  const permissions = new Set(api.routes.getAll().flatMap((route) => route.permissions || []));
+  for (const permissionName of permissions) {
+    const permission = await models.Permission.create({ permission: permissionName, active: true });
+    await models.RolePermission.create({ roleId: role.getDataValue("id"), permissionId: permission.getDataValue("id"), active: true });
+  }
+}
 
 
 
