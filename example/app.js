@@ -39,17 +39,23 @@ async function seedIam(api) {
   const existing = await models.User.findByPk("admin");
   if (existing) return;
 
-  const user = await models.User.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
-  const role = await models.Role.create({ role: "admin", active: true });
-  await models.UserRole.create({ userId: user.getDataValue("id"), roleId: role.getDataValue("id"), active: true });
-
-  const permissions = new Set(api.routes.getAll().flatMap((route) => route.permissions || []));
-  for (const permissionName of permissions) {
+  const permissions = new Map();
+  for (const permissionName of new Set(api.routes.getAll().flatMap((route) => route.permissions || []))) {
     const permission = await models.Permission.create({ permission: permissionName, active: true });
-    await models.RolePermission.create({ roleId: role.getDataValue("id"), permissionId: permission.getDataValue("id"), active: true });
+    permissions.set(permissionName, permission);
+  }
+
+  for (const d of ["admin", "basic"]){
+    const user = await models.User.create({ id: d, password: "1234", name: d[0].toLocaleUpperCase()+d.substring(1), email: "admin@example.com", active: true });
+    const role = await models.Role.create({ role: d, active: true });
+    await models.UserRole.create({userId: user.getDataValue("id"), roleId: role.getDataValue("id"), active: true});
+
+    for (const [permissionName, permission] of permissions) {
+      if(d !== "admin" && permissionName!="clientes.list" && permissionName.indexOf("clientes")>=0) continue;
+      await models.RolePermission.create({ roleId: role.getDataValue("id"), permissionId: permission.getDataValue("id"), active: true });
+    }
   }
 }
-
 
 
 

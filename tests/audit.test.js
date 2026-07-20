@@ -107,6 +107,47 @@ describe("audit", () => {
     }
   });
 
+  it("filters audit changes by the user's list permission on the changed resource", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      audit: true,
+      auth: { required: true, secret: "test-secret" },
+      modules,
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+    await seedAuditAuth(api.auth.models, { viewer: ["audit.changes", "clientes.list"], writer: ["audit.changes", "clientes.create"] });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const since = new Date(Date.now() - 1000).toISOString();
+      const cliente = await api.services.get("clientes").create({ body: { nombre: "Ana" } });
+      await api.services.get("clientes").remove({ params: { id: cliente.data.id } });
+
+      const viewer = await request(server, "GET", `/api/changes?since=${encodeURIComponent(since)}`, { basic: ["viewer", "1234"] });
+      assert.equal(viewer.status, 200);
+      assert.deepEqual(viewer.body.data.map((change) => change.action), ["create", "delete"]);
+
+      const writer = await request(server, "GET", `/api/changes?since=${encodeURIComponent(since)}`, { basic: ["writer", "1234"] });
+      assert.equal(writer.status, 200);
+      assert.deepEqual(writer.body.data, []);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("streams audit changes over sse", async () => {
     const adapter = new SQLiteAdapter({ database: ":memory:" });
     const seq = new Seq({ adapter, logging: false });
@@ -151,10 +192,33 @@ function close(server) {
   return new Promise((resolve) => server.close(resolve));
 }
 
-function request(server, method, path) {
+async function seedAuditAuth(models, users) {
+  const permissionModels = new Map();
+  const permissionNames = new Set(Object.values(users).flat());
+
+  for (const permissionName of permissionNames) {
+    const permission = await models.Permission.create({ permission: permissionName, active: true });
+    permissionModels.set(permissionName, permission);
+  }
+
+  for (const [userId, permissions] of Object.entries(users)) {
+    const user = await models.User.create({ id: userId, password: "1234", name: userId, email: `${userId}@example.com`, active: true });
+    const role = await models.Role.create({ role: userId, active: true });
+    await models.UserRole.create({ userId: user.getDataValue("id"), roleId: role.getDataValue("id"), active: true });
+
+    for (const permissionName of permissions) {
+      const permission = permissionModels.get(permissionName);
+      await models.RolePermission.create({ roleId: role.getDataValue("id"), permissionId: permission.getDataValue("id"), active: true });
+    }
+  }
+}
+
+function request(server, method, path, options = {}) {
   const { port } = server.address();
+  const headers = {};
+  if (options.basic) headers.Authorization = `Basic ${Buffer.from(options.basic.join(":")).toString("base64")}`;
   return new Promise((resolve, reject) => {
-    const req = http.request({ hostname: "localhost", port, path, method }, (res) => {
+    const req = http.request({ hostname: "localhost", port, path, method, headers }, (res) => {
       let raw = "";
       res.on("data", (chunk) => (raw += chunk));
       res.on("end", () => {

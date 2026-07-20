@@ -96,8 +96,8 @@ export async function createApiKit(conf = {}) {
 
   installAuthRoutes({ mainRouter, routeRegistry, config, authContext, authorize });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
-  installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize });
-  installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize });
+  installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
+  installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   if (openapi) {
     mainRouter.get(joinPaths(config.basePath, openapi.path || "/openapi.json"), (_req, res) => {
       res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi }));
@@ -110,32 +110,41 @@ export async function createApiKit(conf = {}) {
   };
 }
 
-function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize }) {
-  installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize }, {
+function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {
+  installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }, {
     path: config.audit?.changesPath,
     operationId: "audit.changes",
     serviceMethod: "changes",
     summary: "Cambios desde una fecha",
-    handler: ({ AuditModel }) => async (req, res) => {
+    handler: ({ AuditModel, modules, routeRegistry, authContext }) => async (req, res) => {
       const since = parseSince(req.query?.since);
       const sinceField = auditSinceField(AuditModel);
       const rows = await AuditModel.findAll({where: { [sinceField]: { [Op.gte]: since } }, order: [["id", "ASC"]],});
-      res.json(ok(rows.map((row) => row.toJSON())));
+      const visible = [];
+      for (const row of rows) {
+        const change = row.toJSON();
+        if (await canViewAuditChange(change, { req, modules, routeRegistry, authContext })) visible.push(change);
+      }
+      res.json(ok(visible));
     },
   });
 }
 
-function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize }) {
-  installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize }, {
+function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {
+  installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }, {
     path: config.audit?.ssePath,
     operationId: "audit.sse",
     serviceMethod: "sse",
     summary: "Cambios en vivo",
-    handler: ({ config }) => (req, res) => {
+    handler: ({ config, modules, routeRegistry, authContext }) => (req, res) => {
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
 
-      const sendChange = (change) => res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`);
+      const sendChange = (change) => {
+        Promise.resolve(canViewAuditChange(change, { req, modules, routeRegistry, authContext }))
+          .then((allowed) => { if (allowed) res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`); })
+          .catch(() => {});
+      };
       config.audit.events.on("change", sendChange);
 
       const heartbeat = setInterval(() => {res.write(": heartbeat\n\n")}, 30000);
@@ -149,7 +158,7 @@ function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, conf
   });
 }
 
-function installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize }, { path, operationId, serviceMethod, summary, handler }) {
+function installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }, { path, operationId, serviceMethod, summary, handler }) {
   if (!config.audit || !path) return;
 
   const AuditModel = findAuditModel(modules, models);
@@ -173,13 +182,59 @@ function installAuditRoute({ mainRouter, routeRegistry, modules, models, config,
     deprecated: false,
   });
 
-  const routeHandler = handler({ AuditModel, config });
+  const routeHandler = handler({ AuditModel, config, modules, routeRegistry, authContext });
   const handlers = [];
   if (authorize) handlers.push(authorize({ auth, permissions: permission ? [permission] : [] }));
   handlers.push((req, res, next) => {
     Promise.resolve(routeHandler(req, res, next)).catch(next);
   });
   mainRouter.get(fullPath, ...handlers);
+}
+
+async function canViewAuditChange(change, { req, modules, routeRegistry, authContext }) {
+  if (!authContext) return true;
+
+  const route = routeForAuditChange(change, { modules, routeRegistry });
+  if (!route) return false;
+  if (!route.auth?.required) return true;
+
+  const userId = req.session?.user?.id;
+  if (!userId) return false;
+
+  const permissions = route.permissions || [];
+  for (const permission of permissions) {
+    if (!permission) continue;
+    if (!(await authContext.rbac.can(userId, permission))) return false;
+  }
+
+  return true;
+}
+
+function routeForAuditChange(change, { modules, routeRegistry }) {
+  const mod = moduleForAuditChange(change, modules);
+  if (!mod) return null;
+
+  return routeRegistry.getAll().find((route) => route.module === mod.config.name && route.serviceMethod === "list") || null;
+}
+
+function moduleForAuditChange(change, modules) {
+  const tableName = String(change?.tableName || "").toLowerCase();
+  if (!tableName) return null;
+
+  for (const mod of modules.values()) {
+    const names = [
+      mod.config?.name,
+      mod.config?.resource?.options?.tableName,
+      mod.model?._resolvedTableName,
+      mod.model?.tableName,
+      mod.model?.modelName,
+      mod.model?.name,
+    ].filter(Boolean).map((name) => String(name).toLowerCase());
+
+    if (names.includes(tableName)) return mod;
+  }
+
+  return null;
 }
 
 function installAuthRoutes({ mainRouter, routeRegistry, config, authContext, authorize }) {
