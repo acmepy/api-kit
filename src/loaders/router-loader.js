@@ -5,7 +5,7 @@ import { BaseRouter } from "../base/base-router.js";
 
 export async function loadRouter({ moduleName, service, config, routeRegistry, routersDir, authorize }) {
   if (routersDir) {
-    const filePath = path.join(routersDir, `${camelCase(moduleName)}.router.js`);
+    const filePath = path.join(routersDir, `${camelCase(moduleName)}.js`);
     if (await fileExists(filePath)) {
       const RouterClass = await importModule(filePath);
       if (typeof RouterClass === "function") {

@@ -13,8 +13,12 @@ export const modules = [
     modelName: "Cliente",
     tableName: "clientes",
     timestamps: true,
+    endpoints: {
+      ruc: { method: "get", path: "/ruc/:ruc", permission: "clientes.list", summary: "Buscar por RUC" },
+    },
     attributes: {
       id: { type: "integer", primaryKey: true, autoIncrement: true },
+      ruc:{type:"string", unique:true, maxLength:20},
       nombre: { type: "string", maxLength: 100, allowNull: false, title: "Nombre", max: 100 },
       email: { type: "string", maxLength: 150, unique: true, allowNull: true, title: "Email", email: true },
       activo: { type: "boolean", defaultValue: true, title: "Activo" },

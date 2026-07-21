@@ -5,7 +5,7 @@ import { BaseService } from "../base/base-service.js";
 
 export async function loadService({ moduleName, model, schemas, config, servicesDir }) {
   if (servicesDir) {
-    const filePath = path.join(servicesDir, `${camelCase(moduleName)}.service.js`);
+    const filePath = path.join(servicesDir, `${camelCase(moduleName)}.js`);
     if (await fileExists(filePath)) {
       const ServiceClass = await importModule(filePath);
       if (typeof ServiceClass === "function") return new ServiceClass({ model, schemas, config });

@@ -13,6 +13,9 @@ async function main() {
     seq,
     basePath: "/api",
     modules: "./example/modules.js",
+    paths: {
+      services: "./example/services",
+    },
     auth: { secret: process.env.IAM_SECRET || "dev-secret" },
     audit:true,
     openapi: true,
@@ -56,7 +59,6 @@ async function seedIam(api) {
     }
   }
 }
-
 
 
 

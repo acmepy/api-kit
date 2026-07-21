@@ -31,25 +31,15 @@ export class BaseRouter {
 
   build() {
     const endpoints = this.#config.endpoints || {};
-
     for (const [op, endpoint] of Object.entries(endpoints)) {
       if (!endpoint.enabled) {
         if (op === "schema") this.disabledRoute(endpoint.method || "get", endpoint.path || "/schema", "SCHEMA_DISABLED", "Schema disabled");
         continue;
       }
-
       const method = endpoint.method || "get";
       const path = endpoint.path || "/";
       const serviceMethod = op;
-
-      this.route(method, path, {
-        service: serviceMethod,
-        permission: endpoint.permission,
-        auth: endpoint.auth,
-        summary: endpoint.summary,
-        description: endpoint.description,
-        tags: endpoint.tags || this.#config.tags,
-      });
+      this.route(method, path, {service: serviceMethod,permission: endpoint.permission, auth: endpoint.auth, summary: endpoint.summary, description: endpoint.description, tags: endpoint.tags || this.#config.tags});
     }
 
     this.registerCustomRoutes();
