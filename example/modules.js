@@ -6,6 +6,10 @@ export const auth = {
 
 export const modules = [
   {
+    mountPath: "/admin",
+    path: "./example/public/admin",
+  },
+  {
     modelName: "Cliente",
     tableName: "clientes",
     timestamps: true,
@@ -47,5 +51,3 @@ export const modules = [
     },
   },
 ];
-
-export default modules;

@@ -41,6 +41,7 @@ export async function createApiKit(conf = {}) {
     compression: conf.compression ?? false,
     rateLimit: conf.rateLimit ?? false,
     text: conf.text ?? false,
+    staticFiles: normalizeStaticFiles(conf.staticFiles),
     trustProxy: conf.trustProxy ?? false,
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
@@ -58,6 +59,7 @@ export async function createApiKit(conf = {}) {
   };
 
   const moduleBundle = await loadModuleBundle(config.modules, config.baseDir);
+  config.staticFiles.push(...normalizeStaticFiles(moduleBundle.staticFiles));
   config.auth = normalizeGlobalAuth(mergeAuthConfig(moduleBundle.auth, config.auth));
   const authBackend = normalizeAuthBackendConfig(config.auth);
   const authContext = authBackend ? createAuthContext(config, authBackend) : null;
@@ -110,6 +112,7 @@ export async function createApiKit(conf = {}) {
       res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi }));
     });
   }
+  installStaticFiles(mainRouter, config);
 
   mainRouter.use(errorHandler);
 
@@ -164,6 +167,53 @@ function normalizeTextOptions(value) {
   const defaults = { type: "text/plain", limit: "10mb" };
   if (value === true) return defaults;
   return { ...defaults, ...value };
+}
+
+function installStaticFiles(router, config) {
+  for (const staticConfig of config.staticFiles) {
+    const normalized = normalizeStaticFileConfig(staticConfig, config.baseDir);
+    if (!normalized) continue;
+
+    router.use(normalized.mountPath, express.static(normalized.root, normalized.options));
+    if (!normalized.spa) continue;
+
+    router.get(new RegExp(`^${escapeRegExp(normalized.mountPath)}(?:/.*)?$`), (req, res, next) => {
+      if (/\.[^/]+$/.test(req.path)) return next();
+      res.sendFile(path.join(normalized.root, normalized.index));
+    });
+  }
+}
+
+function normalizeStaticFiles(input) {
+  if (!input) return [];
+  return Array.isArray(input) ? input : [input];
+}
+
+function normalizeStaticFileConfig(config, baseDir) {
+  if (!config) return null;
+  const value = typeof config === "string" ? { appName: config } : config;
+  const mountPath = normalizeMountPath(value.mountPath || value.pathPrefix || (value.appName ? `/${value.appName}` : null));
+  const rootInput = value.root || value.dir || value.directory || value.path || (value.appName ? `./public/${value.appName}` : null);
+  if (!mountPath || !rootInput) return null;
+
+  return {
+    mountPath,
+    root: path.resolve(baseDir, rootInput),
+    spa: value.spa ?? true,
+    index: value.index || "index.html",
+    options: { redirect: false, ...value.options },
+  };
+}
+
+function normalizeMountPath(value) {
+  if (!value) return null;
+  const clean = String(value).trim();
+  if (!clean) return null;
+  return clean.startsWith("/") ? clean.replace(/\/+$/g, "") || "/" : `/${clean.replace(/\/+$/g, "")}`;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {

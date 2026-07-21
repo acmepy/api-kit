@@ -133,6 +133,80 @@ describe("http middleware", () => {
       await close(server);
     }
   });
+
+  it("can serve static app files with spa fallback from modules config", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      modules: {
+        modules: [{ mountPath: "/admin", path: "./tests/fixtures/vue-app" }],
+      },
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const index = await request(server, "GET", "/admin");
+      assert.equal(index.status, 200);
+      assert.match(index.raw, /Vue shell/);
+
+      const route = await request(server, "GET", "/admin/users/42");
+      assert.equal(route.status, 200);
+      assert.match(route.raw, /Vue shell/);
+
+      const asset = await request(server, "GET", "/admin/app.js");
+      assert.equal(asset.status, 200);
+      assert.match(asset.raw, /vue asset/);
+
+      const missingAsset = await request(server, "GET", "/admin/missing.js");
+      assert.equal(missingAsset.status, 404);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("can merge static app module entries from multiple module files", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      modules: ["./tests/fixtures/static-bundle-a.js", "./tests/fixtures/static-bundle-b.js"],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const admin = await request(server, "GET", "/admin/users");
+      assert.equal(admin.status, 200);
+      assert.match(admin.raw, /Vue shell/);
+
+      const portal = await request(server, "GET", "/portal/dashboard");
+      assert.equal(portal.status, 200);
+      assert.match(portal.raw, /Portal shell/);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
 });
 
 function listen(app) {
