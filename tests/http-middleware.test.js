@@ -88,6 +88,51 @@ describe("http middleware", () => {
       await close(server);
     }
   });
+
+  it("can parse text/plain bodies while coexisting with express json", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      text: true,
+      modules: [],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    api.router.post("/api/echo", (req, res) => {
+      res.json({ type: typeof req.body, body: req.body });
+    });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const text = await request(server, "POST", "/api/echo", {
+        headers: { "Content-Type": "text/plain" },
+        body: "hola texto",
+      });
+      assert.equal(text.status, 200);
+      assert.deepEqual(text.body, { type: "string", body: "hola texto" });
+
+      const json = await request(server, "POST", "/api/echo", {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hola: "json" }),
+      });
+      assert.equal(json.status, 200);
+      assert.deepEqual(json.body, { type: "object", body: { hola: "json" } });
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
 });
 
 function listen(app) {
@@ -102,13 +147,23 @@ function close(server) {
 
 function request(server, method, path, options = {}) {
   const { port } = server.address();
+  const headers = { ...(options.headers || {}) };
+  if (options.body !== undefined) headers["Content-Length"] = Buffer.byteLength(options.body);
 
   return new Promise((resolve, reject) => {
-    const req = http.request({ hostname: "localhost", port, path, method, headers: options.headers || {} }, (res) => {
-      res.resume();
-      res.on("end", () => resolve({ status: res.statusCode, headers: res.headers }));
+    const req = http.request({ hostname: "localhost", port, path, method, headers }, (res) => {
+      let raw = "";
+      res.on("data", (chunk) => (raw += chunk));
+      res.on("end", () => {
+        let body = null;
+        try {
+          body = JSON.parse(raw);
+        } catch {}
+        resolve({ status: res.statusCode, headers: res.headers, body, raw });
+      });
     });
     req.on("error", reject);
+    if (options.body !== undefined) req.write(options.body);
     req.end();
   });
 }

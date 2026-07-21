@@ -40,6 +40,7 @@ export async function createApiKit(conf = {}) {
     helmet: conf.helmet ?? false,
     compression: conf.compression ?? false,
     rateLimit: conf.rateLimit ?? false,
+    text: conf.text ?? false,
     trustProxy: conf.trustProxy ?? false,
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
@@ -147,12 +148,22 @@ async function installHttpMiddleware(router, config) {
     const { rateLimit } = await import("express-rate-limit");
     router.use(rateLimit(rateLimitOptions === true ? undefined : rateLimitOptions));
   }
+
+  const textOptions = normalizeTextOptions(config.text);
+  if (textOptions) router.use(express.text(textOptions));
 }
 
 function normalizeMiddlewareOptions(value) {
   if (!value) return false;
   if (value === true) return true;
   return value;
+}
+
+function normalizeTextOptions(value) {
+  if (!value) return false;
+  const defaults = { type: "text/plain", limit: "10mb" };
+  if (value === true) return defaults;
+  return { ...defaults, ...value };
 }
 
 function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {
