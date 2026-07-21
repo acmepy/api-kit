@@ -107,11 +107,7 @@ export async function createApiKit(conf = {}) {
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
-  if (openapi) {
-    mainRouter.get(joinPaths(config.basePath, openapi.path || "/openapi.json"), (_req, res) => {
-      res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi }));
-    });
-  }
+  installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize });
   installStaticFiles(mainRouter, config);
 
   mainRouter.use(errorHandler);
@@ -216,6 +212,29 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize }) {
+  if (!openapi) return;
+
+  const fullPath = joinPaths(config.basePath, openapi.path || "/openapi.json");
+  const auth = normalizeRouteAuth(openapi.auth);
+  const permissions = openapi.permission ? [openapi.permission] : [];
+
+  routeRegistry.register({ module: "openapi", operationId: "openapi.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "openapi", auth, permissions, summary: "OpenAPI document", description: "", tags: ["openapi"], deprecated: false});
+
+  const handlers = [];
+  if (authorize) handlers.push(authorize({ auth, permissions }));
+  handlers.push((_req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi}))});
+
+  mainRouter.get(fullPath, ...handlers);
+}
+
+function normalizeRouteAuth(auth) {
+  if (!auth) return { required: false, strategies: [] };
+  if (auth === true) return { required: true, strategies: ["bearer", "basic"] };
+  const strategies = auth.strategies || auth.strategy || ["bearer", "basic"];
+  return { ...auth, required: auth.required ?? true, strategies: Array.isArray(strategies) ? strategies : [strategies] };
+}
+
 function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {
   installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }, {
     path: config.audit?.changesPath,
@@ -273,27 +292,12 @@ function installAuditRoute({ mainRouter, routeRegistry, modules, models, config,
   const fullPath = joinPaths(config.basePath, path);
   const auth = config.auth || { required: false, strategies: [] };
   const permission = auth.required ? operationId : null;
-  routeRegistry.register({
-    module: "audit",
-    operationId,
-    method: "get",
-    expressPath: fullPath,
-    openApiPath: fullPath,
-    serviceMethod,
-    auth,
-    permissions: permission ? [permission] : [],
-    summary,
-    description: "",
-    tags: ["audit"],
-    deprecated: false,
-  });
+  routeRegistry.register({ module: "audit", operationId, method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod, auth, permissions: permission ? [permission] : [], summary, description: "", tags: ["audit"], deprecated: false});
 
   const routeHandler = handler({ AuditModel, config, modules, routeRegistry, authContext });
   const handlers = [];
   if (authorize) handlers.push(authorize({ auth, permissions: permission ? [permission] : [] }));
-  handlers.push((req, res, next) => {
-    Promise.resolve(routeHandler(req, res, next)).catch(next);
-  });
+  handlers.push((req, res, next) => { Promise.resolve(routeHandler(req, res, next)).catch(next);});
   mainRouter.get(fullPath, ...handlers);
 }
 
@@ -328,15 +332,7 @@ function moduleForAuditChange(change, modules) {
   if (!tableName) return null;
 
   for (const mod of modules.values()) {
-    const names = [
-      mod.config?.name,
-      mod.config?.resource?.options?.tableName,
-      mod.model?._resolvedTableName,
-      mod.model?.tableName,
-      mod.model?.modelName,
-      mod.model?.name,
-    ].filter(Boolean).map((name) => String(name).toLowerCase());
-
+    const names = [mod.config?.name, mod.config?.resource?.options?.tableName, mod.model?._resolvedTableName, mod.model?.tableName, mod.model?.modelName, mod.model?.name, ].filter(Boolean).map((name) => String(name).toLowerCase());
     if (names.includes(tableName)) return mod;
   }
 
@@ -349,35 +345,8 @@ function installAuthRoutes({ mainRouter, routeRegistry, config, authContext, aut
   const loginPath = joinPaths(config.basePath, authContext.loginPath);
   const logoutPath = joinPaths(config.basePath, authContext.logoutPath);
 
-  routeRegistry.register({
-    module: "auth",
-    operationId: "auth.login",
-    method: "post",
-    expressPath: loginPath,
-    openApiPath: loginPath,
-    serviceMethod: "login",
-    auth: { required: false, strategies: [] },
-    permissions: [],
-    summary: "Login",
-    description: "",
-    tags: ["auth"],
-    deprecated: false,
-  });
-
-  routeRegistry.register({
-    module: "auth",
-    operationId: "auth.logout",
-    method: "post",
-    expressPath: logoutPath,
-    openApiPath: logoutPath,
-    serviceMethod: "logout",
-    auth: { required: true, strategies: ["bearer", "basic"] },
-    permissions: [],
-    summary: "Logout",
-    description: "",
-    tags: ["auth"],
-    deprecated: false,
-  });
+  routeRegistry.register({module: "auth", operationId: "auth.login", method: "post", expressPath: loginPath, openApiPath: loginPath, serviceMethod: "login", auth: { required: false, strategies: [] }, permissions: [], summary: "Login", description: "", tags: ["auth"], deprecated: false});
+  routeRegistry.register({module: "auth", operationId: "auth.logout", method: "post", expressPath: logoutPath, openApiPath: logoutPath, serviceMethod: "logout", auth: { required: true, strategies: ["bearer", "basic"] }, permissions: [], summary: "Logout", description: "", tags: ["auth"], deprecated: false});
 
   mainRouter.post(loginPath, async (req, res, next) => {
     try {
@@ -406,13 +375,7 @@ function createAuthContext(config, authBackend) {
   const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models });
   const rbac = new RBAC({ adapter });
   const auth = new Auth({ adapter, rbac });
-  return {
-    ...authBackend,
-    adapter,
-    auth,
-    rbac,
-    models: adapter.models || authBackend.models || null,
-  };
+  return { ...authBackend, adapter, auth, rbac, models: adapter.models || authBackend.models || null};
 }
 
 function createAuthorizer(authContext) {
@@ -451,11 +414,7 @@ async function authenticateRequest(req, authContext, strategies = ["bearer", "ba
     await assertSessionNotExpired(session, authContext);
     return session;
   }
-
-  if (header.startsWith("Basic ") && allowed.includes("basic")) {
-    return authenticateBasic(header, authContext);
-  }
-
+  if (header.startsWith("Basic ") && allowed.includes("basic")) return authenticateBasic(header, authContext);
   throw new AuthRequiredError("Autenticacion requerida");
 }
 
@@ -491,15 +450,7 @@ function setAuthContext(session) {
 
 function normalizeAuthBackendConfig(auth) {
   if (!auth?.required) return null;
-  return {
-    loginPath: "/login",
-    logoutPath: "/logout",
-    secret: process.env.IAM_SECRET || "api-kit-dev-secret",
-    tokenExpiresIn: auth?.tokenExpiresIn || "1h",
-    adapter: auth?.adapter,
-    models: auth?.models,
-    ...auth,
-  };
+  return {loginPath: "/login", logoutPath: "/logout", secret: process.env.IAM_SECRET || "api-kit-dev-secret", tokenExpiresIn: auth?.tokenExpiresIn || "1h", adapter: auth?.adapter, models: auth?.models, ...auth};
 }
 
 function normalizeGlobalAuth(auth) {
@@ -538,9 +489,7 @@ function normalizeAuthError(error) {
   if (error instanceof AuthRequiredError || error instanceof ForbiddenError || error instanceof ValidationError) return error;
   const code = error?.code;
   if (code === "FORBIDDEN" || error?.status === 403) return new ForbiddenError(error.message, { cause: error });
-  if (error?.status === 401 || String(code || "").includes("AUTH") || String(code || "").includes("TOKEN") || String(code || "").includes("SESSION")) {
-    return new AuthRequiredError(error.message, { cause: error });
-  }
+  if (error?.status === 401 || String(code || "").includes("AUTH") || String(code || "").includes("TOKEN") || String(code || "").includes("SESSION")) return new AuthRequiredError(error.message, { cause: error });
   return error;
 }
 
