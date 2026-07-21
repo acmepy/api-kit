@@ -39,6 +39,8 @@ export async function createApiKit(conf = {}) {
     cors: conf.cors ?? false,
     helmet: conf.helmet ?? false,
     compression: conf.compression ?? false,
+    rateLimit: conf.rateLimit ?? false,
+    trustProxy: conf.trustProxy ?? false,
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
     sse: conf.sse || { enabled: false },
@@ -115,6 +117,13 @@ export async function createApiKit(conf = {}) {
 }
 
 async function installHttpMiddleware(router, config) {
+  if (config.trustProxy !== false && config.trustProxy !== undefined) {
+    router.use((req, _res, next) => {
+      req.app.set("trust proxy", config.trustProxy);
+      next();
+    });
+  }
+
   const corsOptions = normalizeMiddlewareOptions(config.cors);
   if (corsOptions) {
     const { default: cors } = await import("cors");
@@ -131,6 +140,12 @@ async function installHttpMiddleware(router, config) {
   if (compressionOptions) {
     const { default: compression } = await import("compression");
     router.use(compression(compressionOptions === true ? undefined : compressionOptions));
+  }
+
+  const rateLimitOptions = normalizeMiddlewareOptions(config.rateLimit);
+  if (rateLimitOptions) {
+    const { rateLimit } = await import("express-rate-limit");
+    router.use(rateLimit(rateLimitOptions === true ? undefined : rateLimitOptions));
   }
 }
 

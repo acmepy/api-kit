@@ -46,6 +46,48 @@ describe("http middleware", () => {
       await close(server);
     }
   });
+
+  it("can enable rate limit and trust proxy from createApiKit options", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      openapi: {},
+      trustProxy: 1,
+      rateLimit: {
+        windowMs: 60_000,
+        limit: 1,
+        standardHeaders: true,
+        legacyHeaders: false,
+      },
+      modules: [],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      assert.equal(app.get("trust proxy"), false);
+      const first = await request(server, "GET", "/api/openapi.json", { headers: { "X-Forwarded-For": "203.0.113.10" } });
+      const second = await request(server, "GET", "/api/openapi.json", { headers: { "X-Forwarded-For": "203.0.113.10" } });
+
+      assert.equal(first.status, 200);
+      assert.equal(second.status, 429);
+      assert.equal(app.get("trust proxy"), 1);
+      assert.ok(second.headers["retry-after"]);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
 });
 
 function listen(app) {

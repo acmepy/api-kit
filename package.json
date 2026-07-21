@@ -1,6 +1,6 @@
 {
   "name": "api-kit",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -29,6 +29,7 @@
   "peerDependencies": {
     "compression": "^1.8.1",
     "cors": "^2.8.6",
+    "express-rate-limit": "^8.6.0",
     "helmet": "^8.3.0"
   },
   "peerDependenciesMeta": {
@@ -36,6 +37,9 @@
       "optional": true
     },
     "cors": {
+      "optional": true
+    },
+    "express-rate-limit": {
       "optional": true
     },
     "helmet": {
@@ -46,6 +50,7 @@
     "better-sqlite3": "^12.11.1",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
+    "express-rate-limit": "^8.6.0",
     "helmet": "^8.3.0"
   },
   "allowScripts": {
