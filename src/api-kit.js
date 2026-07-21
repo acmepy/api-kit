@@ -36,6 +36,9 @@ export async function createApiKit(conf = {}) {
       schemas: conf.paths?.schemas || "./schemas",
     },
     auth: conf.auth,
+    cors: conf.cors ?? false,
+    helmet: conf.helmet ?? false,
+    compression: conf.compression ?? false,
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
     sse: conf.sse || { enabled: false },
@@ -92,6 +95,7 @@ export async function createApiKit(conf = {}) {
   const packageInfo = await loadPackageInfo(config.baseDir);
   const openapi = normalizeOpenApiConfig(config.openapi);
 
+  await installHttpMiddleware(mainRouter, config);
   mainRouter.use(runWithContext);
 
   installAuthRoutes({ mainRouter, routeRegistry, config, authContext, authorize });
@@ -108,6 +112,32 @@ export async function createApiKit(conf = {}) {
 
   return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: auditEvents, auth: authContext, close: async () => { auditEvents.removeAllListeners(); },
   };
+}
+
+async function installHttpMiddleware(router, config) {
+  const corsOptions = normalizeMiddlewareOptions(config.cors);
+  if (corsOptions) {
+    const { default: cors } = await import("cors");
+    router.use(cors(corsOptions === true ? undefined : corsOptions));
+  }
+
+  const helmetOptions = normalizeMiddlewareOptions(config.helmet);
+  if (helmetOptions) {
+    const { default: helmet } = await import("helmet");
+    router.use(helmet(helmetOptions === true ? undefined : helmetOptions));
+  }
+
+  const compressionOptions = normalizeMiddlewareOptions(config.compression);
+  if (compressionOptions) {
+    const { default: compression } = await import("compression");
+    router.use(compression(compressionOptions === true ? undefined : compressionOptions));
+  }
+}
+
+function normalizeMiddlewareOptions(value) {
+  if (!value) return false;
+  if (value === true) return true;
+  return value;
 }
 
 function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {

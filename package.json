@@ -1,6 +1,6 @@
 {
   "name": "api-kit",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -26,8 +26,27 @@
     "seq": "github:acmepy/seq",
     "yep": "github:acmepy/yep"
   },
+  "peerDependencies": {
+    "compression": "^1.8.1",
+    "cors": "^2.8.6",
+    "helmet": "^8.3.0"
+  },
+  "peerDependenciesMeta": {
+    "compression": {
+      "optional": true
+    },
+    "cors": {
+      "optional": true
+    },
+    "helmet": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "better-sqlite3": "^12.11.1"
+    "better-sqlite3": "^12.11.1",
+    "compression": "^1.8.1",
+    "cors": "^2.8.6",
+    "helmet": "^8.3.0"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true
