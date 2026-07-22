@@ -22,7 +22,6 @@ async function main() {
   });
 
   await seq.authenticate();
-  await seq.init();
   await seq.sync();
   await seedIam(api);
 
