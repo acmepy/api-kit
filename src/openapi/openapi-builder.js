@@ -116,6 +116,22 @@ function responsesFor(route) {
     };
   }
 
+  if (route.serviceMethod === "installList") {
+    return {
+      200: {description: "HTML installer", content: {"text/html": {schema: { type: "string" }}}},
+      ...authResponses,
+    };
+  }
+
+  if (route.serviceMethod === "install") {
+    return {
+      200: {description: "OK", content: {"application/json": {schema: {type: "object", properties: { ok: { type: "boolean" }, data: { type: "object" }}}}}},
+      ...authResponses,
+      404: { description: "Not found" },
+      500: { description: "Install failed" },
+    };
+  }
+
   return {
     200: {description: "OK", content: {"application/json": {schema: {type: "object", properties: { ok: { type: "boolean" }, data: { type: "object" }}}}}},
     400: { description: "Validation error" },
@@ -130,6 +146,13 @@ function requestBodyFor(route, mod) {
       required: true,
       content: {"application/json": {schema: {type: "object",required: ["username", "password"], properties: {username: { type: "string" }, password: { type: "string", format: "password" }}}}
       },
+    };
+  }
+
+  if (route.operationId === "install.run") {
+    return {
+      required: false,
+      content: {"application/json": {schema: {type: "object", properties: { token: { type: "string" } }}}},
     };
   }
 

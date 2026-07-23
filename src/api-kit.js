@@ -13,6 +13,7 @@ import { RouteRegistry } from "./openapi/route-registry.js";
 import { buildOpenApiDocument } from "./openapi/openapi-builder.js";
 import { loadModels } from "./loaders/model-loader.js";
 import { loadModule } from "./loaders/module-loader.js";
+import { installApp, normalizeInstallableApps, renderInstallHtml } from "./install/install.services.js";
 import { runWithContext } from "./context/request-context.js";
 import { getContext } from "./context/request-context.js";
 import { errorHandler } from "./http/error-handler.js";
@@ -60,6 +61,7 @@ export async function createApiKit(conf = {}) {
 
   const moduleBundle = await loadModuleBundle(config.modules, config.baseDir);
   config.staticModules.push(...moduleBundle.staticModules);
+  config.installableApps = normalizeInstallableApps(config.staticModules, config.baseDir);
   config.auth = normalizeGlobalAuth(mergeAuthConfig(moduleBundle.auth, config.auth));
   const authBackend = normalizeAuthBackendConfig(config.auth);
   const authContext = authBackend ? createAuthContext(config, authBackend) : null;
@@ -107,6 +109,7 @@ export async function createApiKit(conf = {}) {
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
+  installFrontendInstallRoutes({ mainRouter, routeRegistry, config, authorize });
   installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize });
   installStaticFiles(mainRouter, config);
 
@@ -178,6 +181,33 @@ function installStaticFiles(router, config) {
       res.sendFile(path.join(normalized.root, normalized.index));
     });
   }
+}
+
+function installFrontendInstallRoutes({ mainRouter, routeRegistry, config, authorize }) {
+  const apps = config.installableApps || [];
+  if (apps.length === 0) return;
+
+  const auth = config.auth || { required: false, strategies: [] };
+  const handlers = [];
+  if (authorize) handlers.push(authorize({ auth, permissions: [] }));
+
+  routeRegistry.register({ module: "install", operationId: "install.list", method: "get", expressPath: "/install", openApiPath: "/install", serviceMethod: "installList", auth, permissions: [], summary: "Instalador de frontends", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions: [], summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
+
+  mainRouter.get("/install", ...handlers, (_req, res) => {
+    res.type("html").send(renderInstallHtml(apps));
+  });
+
+  mainRouter.get("/install/", ...handlers, (_req, res) => {
+    res.type("html").send(renderInstallHtml(apps));
+  });
+
+  mainRouter.post("/install/:app", ...handlers, async (req, res) => {
+    const app = apps.find((item) => item.app === req.params.app);
+    if (!app) return res.status(404).json({ ok: false, code: "NOT_FOUND", message: "Frontend no encontrado" });
+    const data = await installApp(app, { token: req.body?.token });
+    res.json(ok(data));
+  });
 }
 
 function normalizeStaticFileConfig(config, baseDir) {
