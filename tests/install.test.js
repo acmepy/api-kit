@@ -101,6 +101,7 @@ describe("installable static modules", () => {
     assert.match(html, /<script src="\/install\/app\.js"><\/script>/);
     assert.doesNotMatch(html, /<script>\s*document/);
     assert.match(script, /POST/);
+    assert.match(script, /window\.location\.protocol \+ "\/\/" \+ window\.location\.host/);
     assert.match(script, /data\.status/);
     assert.match(script, /data\.tag/);
     assert.match(script, /data\.error/);
@@ -142,7 +143,7 @@ describe("install routes", () => {
       assert.match(html.raw, /data-install="portal"/);
       assert.match(html.raw, /<script src="\/install\/app\.js"><\/script>/);
       assert.equal(script.status, 200);
-      assert.match(script.raw, /fetch\("\/install\/"/);
+      assert.match(script.raw, /new URL\("\/install\/" \+ encodeURIComponent\(app\), window\.location\.protocol \+ "\/\/" \+ window\.location\.host\)/);
       assert.ok(openapi.body.paths["/install/{app}"].post);
       assert.ok(openapi.body.paths["/install/app.js"].get);
     } finally {

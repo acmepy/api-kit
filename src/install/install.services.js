@@ -83,7 +83,8 @@ export function renderInstallScript() {
   set("tag", "");
   set("error", "");
   try {
-    const response = await fetch("/install/" + encodeURIComponent(app), {
+    const url = new URL("/install/" + encodeURIComponent(app), window.location.protocol + "//" + window.location.host);
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: "{}"
