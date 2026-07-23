@@ -3,7 +3,13 @@ import { createApiKit } from "../src/index.js";
 import { Seq, SQLiteAdapter } from "seq";
 
 async function main() {
-  const adapter = new SQLiteAdapter({ database: ":memory:" });
+  const adapter = new SQLiteAdapter({
+    database: ":memory:",
+    naming: {
+      tables: "snake_case",
+      columns: "snake_case",
+    },
+  });
   const seq = new Seq({ adapter });
 
   const app = express();
@@ -58,6 +64,5 @@ async function seedIam(api) {
     }
   }
 }
-
 
 
