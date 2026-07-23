@@ -407,7 +407,8 @@ function createAuthorizer(authContext) {
   return ({ auth = { required: false }, permissions = [] } = {}) => async (req, _res, next) => {
     try {
       if (!auth?.required) return next();
-      if (!authContext) throw new AuthRequiredError("Auth no configurado");
+      const authHeaders = challengeHeadersFor(auth);
+      if (!authContext) throw new AuthRequiredError("Auth no configurado", { headers: authHeaders });
 
       const session = await authenticateRequest(req, authContext, auth.strategies);
       req.session = session;
@@ -422,7 +423,7 @@ function createAuthorizer(authContext) {
 
       return next();
     } catch (error) {
-      next(normalizeAuthError(error));
+      next(normalizeAuthError(error, auth));
     }
   };
 }
@@ -510,12 +511,23 @@ function parseDuration(value) {
   return amount * multipliers[unit];
 }
 
-function normalizeAuthError(error) {
-  if (error instanceof AuthRequiredError || error instanceof ForbiddenError || error instanceof ValidationError) return error;
+function normalizeAuthError(error, auth = null) {
+  const headers = challengeHeadersFor(auth);
+  if (error instanceof AuthRequiredError) {
+    if (headers && !error.headers) error.headers = headers;
+    return error;
+  }
+  if (error instanceof ForbiddenError || error instanceof ValidationError) return error;
   const code = error?.code;
   if (code === "FORBIDDEN" || error?.status === 403) return new ForbiddenError(error.message, { cause: error });
-  if (error?.status === 401 || String(code || "").includes("AUTH") || String(code || "").includes("TOKEN") || String(code || "").includes("SESSION")) return new AuthRequiredError(error.message, { cause: error });
+  if (error?.status === 401 || String(code || "").includes("AUTH") || String(code || "").includes("TOKEN") || String(code || "").includes("SESSION")) return new AuthRequiredError(error.message, { cause: error, headers });
   return error;
+}
+
+function challengeHeadersFor(auth) {
+  const strategies = normalizeStrategies(auth?.strategies || []);
+  if (!strategies.includes("basic")) return null;
+  return { "WWW-Authenticate": 'Basic realm="api-kit", charset="UTF-8"' };
 }
 
 function findAuditModel(modules, models) {

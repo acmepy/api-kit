@@ -45,6 +45,7 @@ describe("auth", () => {
       const denied = await request(server, "GET", "/api/clientes");
       assert.equal(denied.status, 401);
       assert.equal(denied.body.ok, false);
+      assert.equal(denied.headers["www-authenticate"], 'Basic realm="api-kit", charset="UTF-8"');
 
       const login = await request(server, "POST", "/api/login", {
         body: { username: "admin", password: "1234" },
@@ -104,6 +105,38 @@ describe("auth", () => {
       await close(server);
     }
   });
+
+  it("does not send basic auth challenge for bearer-only routes", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      auth: { required: true, strategies: ["bearer"], secret: "test-secret" },
+      modules,
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const denied = await request(server, "GET", "/api/clientes");
+
+      assert.equal(denied.status, 401);
+      assert.equal(denied.headers["www-authenticate"], undefined);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
 });
 
 async function seedIam(models, permissions) {
@@ -149,7 +182,7 @@ function request(server, method, path, options = {}) {
         try {
           parsed = JSON.parse(raw);
         } catch {}
-        resolve({ status: res.statusCode, body: parsed, raw });
+        resolve({ status: res.statusCode, headers: res.headers, body: parsed, raw });
       });
     });
     req.on("error", reject);

@@ -10,6 +10,9 @@ export function errorHandler(err, req, res, _next) {
   if (err instanceof AppError) {
     const body = err.toJSON();
     if (txId) body.txId = txId;
+    if (err.headers) {
+      for (const [name, value] of Object.entries(err.headers)) res.setHeader(name, value);
+    }
     return res.status(err.status).json(body);
   }
 
