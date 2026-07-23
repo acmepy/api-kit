@@ -61,6 +61,7 @@ describe("installable static modules", () => {
 
     assert.equal(result.status, "skipped");
     assert.equal(result.tag, "v1.2.0");
+    assert.equal(result.target, "public/portal");
     assert.equal(calls.length, 1);
   });
 
@@ -85,6 +86,7 @@ describe("installable static modules", () => {
 
     assert.equal(result.status, "updated");
     assert.equal(result.tag, "v1.2.0");
+    assert.equal(result.target, "public/portal");
     assert.match(index, /updated/);
     assert.equal(pkg.name, "sifen-portal");
     assert.equal(pkg.apiKitInstall.repo, "acmepy/sifen-portal");
@@ -172,6 +174,7 @@ describe("install routes", () => {
       assert.equal(installed.status, 200);
       assert.equal(installed.body.data.status, "skipped");
       assert.equal(installed.body.data.tag, "v1.2.0");
+      assert.equal(installed.body.data.target, "public/portal");
     } finally {
       globalThis.fetch = previousFetch;
       await api.close();

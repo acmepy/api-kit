@@ -124,6 +124,7 @@ function normalizeInstallableApp(staticModule, baseDir) {
     version: stringValue(staticModule.version) || "latest",
     dist: stringValue(staticModule.dist) || "www",
     target,
+    targetLabel: relativePath(baseDir, target),
     publicRoot,
   };
 }
@@ -234,7 +235,7 @@ function removeDir(dir) {
 }
 
 function installResult(app, tag, status) {
-  return { mountPath: app.mountPath, app: app.app, repo: app.repo, tag, target: app.target, status };
+  return { mountPath: app.mountPath, app: app.app, repo: app.repo, tag, target: app.targetLabel, status };
 }
 
 function appIdForMountPath(mountPath) {
@@ -266,6 +267,10 @@ function assertInside(target, root, message) {
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+}
+
+function relativePath(from, to) {
+  return path.relative(from, to).replace(/\\/g, "/");
 }
 
 function stringValue(value) {
