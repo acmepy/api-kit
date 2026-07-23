@@ -41,7 +41,7 @@ export async function createApiKit(conf = {}) {
     compression: conf.compression ?? false,
     rateLimit: conf.rateLimit ?? false,
     text: conf.text ?? false,
-    staticFiles: normalizeStaticFiles(conf.staticFiles),
+    staticModules: [],
     trustProxy: conf.trustProxy ?? false,
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
@@ -59,7 +59,7 @@ export async function createApiKit(conf = {}) {
   };
 
   const moduleBundle = await loadModuleBundle(config.modules, config.baseDir);
-  config.staticFiles.push(...normalizeStaticFiles(moduleBundle.staticFiles));
+  config.staticModules.push(...moduleBundle.staticModules);
   config.auth = normalizeGlobalAuth(mergeAuthConfig(moduleBundle.auth, config.auth));
   const authBackend = normalizeAuthBackendConfig(config.auth);
   const authContext = authBackend ? createAuthContext(config, authBackend) : null;
@@ -166,7 +166,7 @@ function normalizeTextOptions(value) {
 }
 
 function installStaticFiles(router, config) {
-  for (const staticConfig of config.staticFiles) {
+  for (const staticConfig of config.staticModules) {
     const normalized = normalizeStaticFileConfig(staticConfig, config.baseDir);
     if (!normalized) continue;
 
@@ -178,11 +178,6 @@ function installStaticFiles(router, config) {
       res.sendFile(path.join(normalized.root, normalized.index));
     });
   }
-}
-
-function normalizeStaticFiles(input) {
-  if (!input) return [];
-  return Array.isArray(input) ? input : [input];
 }
 
 function normalizeStaticFileConfig(config, baseDir) {

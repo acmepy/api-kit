@@ -207,6 +207,64 @@ describe("http middleware", () => {
       await close(server);
     }
   });
+
+  it("ignores staticFiles passed directly to createApiKit", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      modules: [],
+      staticFiles: { mountPath: "/legacy", path: "./tests/fixtures/vue-app" },
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const asset = await request(server, "GET", "/legacy/app.js");
+      assert.equal(asset.status, 404);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("ignores staticFiles and static exports from module bundles", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      modules: "./tests/fixtures/legacy-static-bundle.js",
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const staticFilesAsset = await request(server, "GET", "/legacy-static-files/app.js");
+      const staticAsset = await request(server, "GET", "/legacy-static/dashboard");
+
+      assert.equal(staticFilesAsset.status, 404);
+      assert.equal(staticAsset.status, 404);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
 });
 
 function listen(app) {
