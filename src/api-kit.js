@@ -13,7 +13,7 @@ import { RouteRegistry } from "./openapi/route-registry.js";
 import { buildOpenApiDocument } from "./openapi/openapi-builder.js";
 import { loadModels } from "./loaders/model-loader.js";
 import { loadModule } from "./loaders/module-loader.js";
-import { installApp, normalizeInstallableApps, renderInstallHtml } from "./install/install.services.js";
+import { installApp, normalizeInstallableApps, renderInstallHtml, renderInstallScript } from "./install/install.services.js";
 import { runWithContext } from "./context/request-context.js";
 import { getContext } from "./context/request-context.js";
 import { errorHandler } from "./http/error-handler.js";
@@ -192,6 +192,7 @@ function installFrontendInstallRoutes({ mainRouter, routeRegistry, config, autho
   if (authorize) handlers.push(authorize({ auth, permissions: [] }));
 
   routeRegistry.register({ module: "install", operationId: "install.list", method: "get", expressPath: "/install", openApiPath: "/install", serviceMethod: "installList", auth, permissions: [], summary: "Instalador de frontends", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.script", method: "get", expressPath: "/install/app.js", openApiPath: "/install/app.js", serviceMethod: "installScript", auth, permissions: [], summary: "Script del instalador", description: "", tags: ["install"], deprecated: false });
   routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions: [], summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
 
   mainRouter.get("/install", ...handlers, (_req, res) => {
@@ -200,6 +201,10 @@ function installFrontendInstallRoutes({ mainRouter, routeRegistry, config, autho
 
   mainRouter.get("/install/", ...handlers, (_req, res) => {
     res.type("html").send(renderInstallHtml(apps));
+  });
+
+  mainRouter.get("/install/app.js", ...handlers, (_req, res) => {
+    res.type("application/javascript").send(renderInstallScript());
   });
 
   mainRouter.post("/install/:app", ...handlers, async (req, res) => {

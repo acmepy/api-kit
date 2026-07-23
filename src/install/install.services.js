@@ -65,43 +65,45 @@ export function renderInstallHtml(apps) {
       </thead>
       <tbody>${rows}</tbody>
     </table>
-    <script>
-      document.addEventListener("click", async (event) => {
-        const button = event.target.closest("[data-install]");
-        if (!button) return;
-        const app = button.dataset.install;
-        const row = document.querySelector('[data-app="' + CSS.escape(app) + '"]');
-        const set = (field, value) => row.querySelector('[data-field="' + field + '"]').textContent = value || "";
-        button.disabled = true;
-        row.className = "";
-        set("status", "updating");
-        set("tag", "");
-        set("error", "");
-        try {
-          const basePath = window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/";
-          const response = await fetch(basePath + encodeURIComponent(app), {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Accept": "application/json" },
-            body: "{}"
-          });
-          const payload = await response.json().catch(() => null);
-          const data = payload && payload.data ? payload.data : {};
-          if (!response.ok || !payload || payload.ok === false) throw new Error((payload && payload.message) || data.error || "Error");
-          row.className = data.status || "";
-          set("status", data.status);
-          set("tag", data.tag);
-          set("error", data.error);
-        } catch (error) {
-          row.className = "failed";
-          set("status", "failed");
-          set("error", error.message);
-        } finally {
-          button.disabled = false;
-        }
-      });
-    </script>
+    <script src="/install/app.js"></script>
   </body>
 </html>`;
+}
+
+export function renderInstallScript() {
+  return `document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-install]");
+  if (!button) return;
+  const app = button.dataset.install;
+  const row = document.querySelector('[data-app="' + CSS.escape(app) + '"]');
+  const set = (field, value) => row.querySelector('[data-field="' + field + '"]').textContent = value || "";
+  button.disabled = true;
+  row.className = "";
+  set("status", "updating");
+  set("tag", "");
+  set("error", "");
+  try {
+    const response = await fetch("/install/" + encodeURIComponent(app), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: "{}"
+    });
+    const payload = await response.json().catch(() => null);
+    const data = payload && payload.data ? payload.data : {};
+    if (!response.ok || !payload || payload.ok === false) throw new Error((payload && payload.message) || data.error || "Error");
+    row.className = data.status || "";
+    set("status", data.status);
+    set("tag", data.tag);
+    set("error", data.error);
+  } catch (error) {
+    row.className = "failed";
+    set("status", "failed");
+    set("error", error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+`;
 }
 
 function normalizeInstallableApp(staticModule, baseDir) {

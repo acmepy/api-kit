@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import AdmZip from "adm-zip";
 import { Seq, SQLiteAdapter } from "seq";
 import { createApiKit } from "../src/index.js";
-import { installApp, normalizeInstallableApps, renderInstallHtml } from "../src/install/install.services.js";
+import { installApp, normalizeInstallableApps, renderInstallHtml, renderInstallScript } from "../src/install/install.services.js";
 
 describe("installable static modules", () => {
   it("detects apps by repo and applies defaults", async () => {
@@ -95,12 +95,15 @@ describe("installable static modules", () => {
 
   it("renders html that posts and displays status, tag, and errors", async () => {
     const html = renderInstallHtml([{ app: "portal", mountPath: "/portal", repo: "acmepy/sifen-portal", version: "latest" }]);
+    const script = renderInstallScript();
 
     assert.match(html, /data-install="portal"/);
-    assert.match(html, /POST/);
-    assert.match(html, /data\.status/);
-    assert.match(html, /data\.tag/);
-    assert.match(html, /data\.error/);
+    assert.match(html, /<script src="\/install\/app\.js"><\/script>/);
+    assert.doesNotMatch(html, /<script>\s*document/);
+    assert.match(script, /POST/);
+    assert.match(script, /data\.status/);
+    assert.match(script, /data\.tag/);
+    assert.match(script, /data\.error/);
   });
 });
 
@@ -131,12 +134,17 @@ describe("install routes", () => {
 
     try {
       const html = await request(server, "GET", "/install/");
+      const script = await request(server, "GET", "/install/app.js");
       const openapi = await request(server, "GET", "/api/openapi.json");
 
       assert.equal(html.status, 200);
       assert.match(html.raw, /acmepy\/sifen-portal/);
       assert.match(html.raw, /data-install="portal"/);
+      assert.match(html.raw, /<script src="\/install\/app\.js"><\/script>/);
+      assert.equal(script.status, 200);
+      assert.match(script.raw, /fetch\("\/install\/"/);
       assert.ok(openapi.body.paths["/install/{app}"].post);
+      assert.ok(openapi.body.paths["/install/app.js"].get);
     } finally {
       await api.close();
       await close(server);

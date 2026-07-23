@@ -123,6 +123,13 @@ function responsesFor(route) {
     };
   }
 
+  if (route.serviceMethod === "installScript") {
+    return {
+      200: {description: "Installer script", content: {"application/javascript": {schema: { type: "string" }}}},
+      ...authResponses,
+    };
+  }
+
   if (route.serviceMethod === "install") {
     return {
       200: {description: "OK", content: {"application/json": {schema: {type: "object", properties: { ok: { type: "boolean" }, data: { type: "object" }}}}}},
