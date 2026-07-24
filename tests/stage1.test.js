@@ -334,6 +334,14 @@ describe("Etapa 1 - N�cleo", () => {
       assert.ok(res.body.paths["/api/clientes/{id}"]);
       assert.ok(res.body.paths["/api/clientes"].get);
       assert.ok(res.body.paths["/api/clientes"].post);
+      assert.deepEqual(res.body.paths["/api/clientes"].get.tags, ["clientes"]);
+      assert.deepEqual(res.body.paths["/api/clientes"].post.tags, ["clientes"]);
+      assert.deepEqual(res.body.paths["/api/clientes/{id}"].get.tags, ["clientes"]);
+      assert.deepEqual(res.body.paths["/api/clientes/schema"].get.tags, ["clientes"]);
+      assert.equal(res.body.paths["/api/clientes"].get.operationId, "clientes_list");
+      assert.equal(res.body.paths["/api/clientes/{id}"].get.operationId, "clientes_get");
+      assert.equal(res.body.paths["/api/clientes/schema"].get.operationId, "clientes_schema");
+      assert.notDeepEqual(res.body.paths["/api/clientes"].get.tags, ["Clientes"]);
       assert.equal(res.body.paths["/api/clientes"].post.requestBody.content["application/json"].schema.$ref, "#/components/schemas/clientes_create");
       assert.ok(res.body.components.schemas.clientes_create);
     });

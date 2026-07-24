@@ -42,10 +42,10 @@ function normalizeServers(servers) {
 function operationFor(route, modules) {
   const mod = modules.get(route.module);
   const operation = {
-    operationId: route.operationId,
+    operationId: openApiOperationId(route),
     summary: route.summary || undefined,
     description: route.description || undefined,
-    tags: route.tags?.length ? route.tags : [route.module],
+    tags: [openApiTag(route)],
     parameters: parametersFor(route),
     responses: responsesFor(route),
     security: securityFor(route),
@@ -55,6 +55,18 @@ function operationFor(route, modules) {
   operation.requestBody = requestBodyFor(route, mod);
 
   return Object.fromEntries(Object.entries(operation).filter(([, value]) => value !== undefined));
+}
+
+function openApiOperationId(route) {
+  return sanitizeOperationId(route.operationId || `${route.module}.${route.serviceMethod}`);
+}
+
+function sanitizeOperationId(operationId) {
+  return String(operationId).replace(/[^a-zA-Z0-9_-]+/g, "_");
+}
+
+function openApiTag(route) {
+  return String(route.module);
 }
 
 function securitySchemesFor(routes) {
