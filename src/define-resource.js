@@ -2,7 +2,21 @@ import yep from "yep";
 import { Model, DataTypes } from "seq";
 
 const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks"]);
-const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references"]);
+const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
+const STRING_TYPE_NORMALIZERS = {
+  integer: () => DataTypes.INTEGER,
+  int: () => DataTypes.INTEGER,
+  string: (definition) => DataTypes.STRING(definition.maxLength),
+  decimal: (definition) => DataTypes.DECIMAL(numberPrecision(definition), numberScale(definition)),
+  number: (definition) => DataTypes.NUMBER(numberPrecision(definition), numberScale(definition)),
+  boolean: () => DataTypes.BOOLEAN,
+  bool: () => DataTypes.BOOLEAN,
+  date: () => DataTypes.DATE,
+  object: () => DataTypes.OBJECT,
+  json: () => DataTypes.JSON,
+  array: (definition) => DataTypes.ARRAY(normalizeNestedDataType(definition.itemType ?? definition.items ?? definition.of)),
+  virtual: (definition) => DataTypes.VIRTUAL(normalizeNestedDataType(definition.returnType), definition.fields),
+};
 
 export function defineResource(definition = {}) {
   const { attributes = {}, schemas = {}, model: CustomModel = null } = definition;
@@ -40,17 +54,37 @@ function normalizeAttributes(attributes) {
 }
 
 function normalizeDataType(definition, name) {
-  if (typeof definition.type !== "string") throw new Error(`Attribute "${name}" type must be a string`);
-  const type = definition.type.toLowerCase();
-  if (type === "integer" || type === "int") return DataTypes.INTEGER;
-  if (type === "string") return DataTypes.STRING(definition.maxLength);
-  if (type === "decimal") return DataTypes.DECIMAL(numberPrecision(definition), numberScale(definition));
-  if (type === "number") return DataTypes.NUMBER(numberPrecision(definition), numberScale(definition));
-  if (type === "boolean" || type === "bool") return DataTypes.BOOLEAN;
-  if (type === "date") return DataTypes.DATE;
-  if (type === "object") return DataTypes.OBJECT;
-  if (type === "json") return DataTypes.JSON;
+  if (isSeqDataTypeFactory(definition.type)) return definition.type._defaultType();
+  if (isSeqDataType(definition.type)) return definition.type;
+  if (typeof definition.type !== "string") throw new Error(`Attribute "${name}" type must be a string or seq DataType`);
+
+  const type = normalizeTypeName(definition.type);
+  const normalize = STRING_TYPE_NORMALIZERS[type];
+  if (normalize) return normalize(definition);
   throw new Error(`Attribute "${name}" type "${definition.type}" is not supported`);
+}
+
+function normalizeNestedDataType(type) {
+  if (type === undefined || type === null) return undefined;
+  if (isSeqDataTypeFactory(type)) return type._defaultType();
+  if (isSeqDataType(type)) return type;
+  if (typeof type === "string") {
+    const normalize = STRING_TYPE_NORMALIZERS[normalizeTypeName(type)];
+    if (normalize) return normalize({ type });
+  }
+  return type;
+}
+
+function normalizeTypeName(type) {
+  return type.trim().toLowerCase();
+}
+
+function isSeqDataTypeFactory(type) {
+  return typeof type === "function" && typeof type._defaultType === "function";
+}
+
+function isSeqDataType(type) {
+  return type && typeof type === "object" && typeof type.key === "string" && typeof type.validate === "function";
 }
 
 function numberPrecision(definition) {
@@ -90,11 +124,16 @@ function buildShape(attributes, operation) {
 }
 
 function shouldIncludeInSchema(definition, operation) {
+  if (isVirtualDataType(definition.type)) return false;
   if (definition.schema === false) return false;
   if (operation === "create" && definition.create === false) return false;
   if (operation === "update" && definition.update === false) return false;
   if (definition.primaryKey && definition.autoIncrement) return false;
   return true;
+}
+
+function isVirtualDataType(type) {
+  return type?.key === "VIRTUAL" || type?.constructor?.name === "VirtualType";
 }
 
 function resolveValidation(definition, operation) {

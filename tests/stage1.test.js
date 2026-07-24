@@ -6,7 +6,7 @@ import packageInfo from "../package.json" with { type: "json" };
 import { createApiKit, defineResource } from "../src/index.js";
 import { getContext } from "../src/index.js";
 import { normalizeModule } from "../src/config/config-normalizer.js";
-import { Seq, SQLiteAdapter } from "seq";
+import { Seq, SQLiteAdapter, DataTypes } from "seq";
 
 const clienteResource = defineResource({
   modelName: "Cliente",
@@ -176,7 +176,45 @@ describe("Etapa 1 - N�cleo", () => {
             nombre: { type: { key: "STRING" } },
           },
         });
-      }, /type must be a string/);
+      }, /type must be a string or seq DataType/);
+    });
+
+    it("supports seq virtual attributes in declarative modules", async () => {
+      const personResource = defineResource({
+        modelName: "Person",
+        tableName: "people",
+        timestamps: false,
+        attributes: {
+          id: { type: "integer", primaryKey: true, autoIncrement: true },
+          firstName: { type: "string", allowNull: false },
+          lastName: { type: "string", allowNull: false },
+          fullName: {
+            type: DataTypes.VIRTUAL(DataTypes.STRING(200), ["firstName", "lastName"]),
+            get() {
+              return `${this.getDataValue("firstName")} ${this.getDataValue("lastName")}`;
+            },
+          },
+        },
+      });
+
+      assert.equal(personResource.attributes.fullName.type.key, "VIRTUAL");
+      assert.equal(typeof personResource.attributes.fullName.get, "function");
+      assert.equal(personResource.schemas.create.shapeDefinition.fullName, undefined);
+      assert.equal(personResource.schemas.update.shapeDefinition.fullName, undefined);
+
+      const adapter = new SQLiteAdapter({ database: ":memory:" });
+      const seq = new Seq({ adapter, models: [personResource.model], logging: false });
+      await seq.authenticate();
+      await seq.init();
+      await seq.sync({ force: true });
+
+      const schema = adapter.schemas.get("people");
+      assert.equal(schema.columns.fullName, undefined);
+      assert.deepEqual(schema.virtualAttributes, ["fullName"]);
+
+      const person = await personResource.model.create({ firstName: "Ada", lastName: "Lovelace" });
+      assert.equal(person.toJSON().fullName, "Ada Lovelace");
+      await seq.close();
     });  });
 
 
@@ -189,6 +227,7 @@ describe("Etapa 1 - N�cleo", () => {
           id: { type: "integer", primaryKey: true, autoIncrement: true },
           descripcion: { type: "string", maxLength: 120, allowNull: false, title: "Nombre", max: 120 },
           precio: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0, title: "Precio", min: 0 },
+          tags: { type: "array", itemType: "string" },
           activo: { type: "boolean", defaultValue: true, title: "Activo" },
         },
       });
@@ -196,9 +235,11 @@ describe("Etapa 1 - N�cleo", () => {
       assert.equal(productoResource.attributes.descripcion.type.options.length, 120);
       assert.equal(productoResource.attributes.precio.type.options.precision, 12);
       assert.equal(productoResource.attributes.precio.type.options.scale, 2);
+      assert.equal(productoResource.attributes.tags.type.key, "ARRAY");
+      assert.equal(productoResource.attributes.tags.type.options.itemType.key, "STRING");
 
-      const valid = await productoResource.schemas.create.validate({ descripcion: "Teclado", precio: 10 });
-      assert.deepEqual(valid, { descripcion: "Teclado", precio: 10, activo: true });
+      const valid = await productoResource.schemas.create.validate({ descripcion: "Teclado", precio: 10, tags: ["periferico"] });
+      assert.deepEqual(valid, { descripcion: "Teclado", precio: 10, tags: ["periferico"], activo: true });
 
       const invalid = await productoResource.schemas.create.validate({ precio: -1 }, { safe: true });
       assert.equal(invalid.errors.descripcion, "Nombre es requerido");
