@@ -11,6 +11,7 @@ import { loadModuleBundle } from "./config/config-loader.js";
 import { normalizeModules } from "./config/config-normalizer.js";
 import { RouteRegistry } from "./openapi/route-registry.js";
 import { buildOpenApiDocument } from "./openapi/openapi-builder.js";
+import { buildPostmanCollection } from "./postman/postman-builder.js";
 import { loadModels } from "./loaders/model-loader.js";
 import { loadModule } from "./loaders/module-loader.js";
 import { installApp, normalizeInstallableApps, renderInstallHtml, renderInstallScript } from "./install/install.services.js";
@@ -46,6 +47,7 @@ export async function createApiKit(conf = {}) {
     trustProxy: conf.trustProxy ?? false,
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
+    postman: conf.postman ?? null,
     sse: conf.sse || { enabled: false },
   };
   if (config.audit) config.audit.events = auditEvents;
@@ -101,6 +103,7 @@ export async function createApiKit(conf = {}) {
   const mainRouter = express.Router();
   const packageInfo = await loadPackageInfo(config.baseDir);
   const openapi = normalizeOpenApiConfig(config.openapi);
+  const postman = normalizePostmanConfig(config.postman, openapi);
 
   await installHttpMiddleware(mainRouter, config);
   mainRouter.use(runWithContext);
@@ -111,6 +114,7 @@ export async function createApiKit(conf = {}) {
   installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   installFrontendInstallRoutes({ mainRouter, routeRegistry, config, authorize });
   installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize });
+  installPostmanRoute({ mainRouter, routeRegistry, modules, packageInfo, config, postman, authorize });
   installStaticFiles(mainRouter, config);
 
   mainRouter.use(errorHandler);
@@ -254,6 +258,22 @@ function installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, 
   const handlers = [];
   if (authorize) handlers.push(authorize({ auth, permissions }));
   handlers.push((_req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi}))});
+
+  mainRouter.get(fullPath, ...handlers);
+}
+
+function installPostmanRoute({ mainRouter, routeRegistry, modules, packageInfo, config, postman, authorize }) {
+  if (!postman) return;
+
+  const fullPath = joinPaths(config.basePath, postman.path || "/postman.json");
+  const auth = normalizeRouteAuth(postman.auth);
+  const permissions = postman.permission ? [postman.permission] : [];
+
+  routeRegistry.register({ module: "openapi", operationId: "postman.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "postman", auth, permissions, summary: "Postman collection", description: "", tags: ["postman"], deprecated: false});
+
+  const handlers = [];
+  if (authorize) handlers.push(authorize({ auth, permissions }));
+  handlers.push((_req, res) => {res.json(buildPostmanCollection({ routes: routeRegistry, modules, packageInfo, config: { ...postman, basePath: config.basePath } }))});
 
   mainRouter.get(fullPath, ...handlers);
 }
@@ -692,6 +712,15 @@ function normalizeOpenApiConfig(openapi) {
   if (!openapi) return null;
   if (openapi === true) return {};
   return openapi;
+}
+
+function normalizePostmanConfig(postman, openapi) {
+  if (postman) return postman === true ? {} : postman;
+  if (!openapi?.postman) return null;
+  return {
+    ...openapi,
+    path: openapi.postmanPath || "/postman.json",
+  };
 }
 
 function normalizeAuditConfig(audit) {

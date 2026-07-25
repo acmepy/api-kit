@@ -73,6 +73,7 @@ before(async () => {
     baseDir: process.cwd(),
     basePath: "/api",
     openapi: {},
+    postman: true,
     modules: [
       {
         name: "clientes",
@@ -344,6 +345,36 @@ describe("Etapa 1 - N�cleo", () => {
       assert.notDeepEqual(res.body.paths["/api/clientes"].get.tags, ["Clientes"]);
       assert.equal(res.body.paths["/api/clientes"].post.requestBody.content["application/json"].schema.$ref, "#/components/schemas/clientes_create");
       assert.ok(res.body.components.schemas.clientes_create);
+    });
+
+    it("downloads Postman collection with module folders", async () => {
+      const res = await request("GET", "/api/postman.json");
+      assert.equal(res.status, 200);
+      assert.equal(res.body.info.schema, "https://schema.getpostman.com/json/collection/v2.1.0/collection.json");
+      assert.match(res.body.info.description, /Use el request Login para obtener el token/);
+      assert.match(res.body.info.description, /actualiza automaticamente la variable bearerToken/);
+      assert.match(res.body.info.description, /Use el request Logout/);
+      assert.match(res.body.info.description, /limpiar bearerToken/);
+      assert.equal(res.body.variable.find((item) => item.key === "baseUrl").value, "http://localhost:3000");
+
+      const root = res.body.item.find((item) => item.name === "api");
+      const clientes = root.item.find((item) => item.name === "clientes");
+      assert.ok(clientes);
+      assert.deepEqual(clientes.item.map((item) => item.name), ["Listar", "Schema", "Obtener por ID", "Crear", "Actualizar", "Eliminar"]);
+
+      const getById = clientes.item.find((item) => item.name === "Obtener por ID");
+      assert.equal(getById.request.method, "GET");
+      assert.equal(getById.request.url.raw, "{{baseUrl}}/api/clientes/:id");
+      assert.deepEqual(getById.request.url.variable, [{ key: "id", value: "string" }]);
+
+      const create = clientes.item.find((item) => item.name === "Crear");
+      assert.equal(create.request.method, "POST");
+      assert.equal(create.request.body.mode, "raw");
+      assert.deepEqual(JSON.parse(create.request.body.raw), {
+        nombre: "string",
+        email: "user@example.com",
+        activo: true,
+      });
     });
 
   describe("CRUD - list", () => {

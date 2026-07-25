@@ -39,6 +39,7 @@ const api = await createApiKit({
   auth: { secret: process.env.IAM_SECRET || "dev-secret" },
   audit: true,
   openapi: true,
+  postman: true,
 });
 
 await seq.authenticate();
@@ -162,6 +163,20 @@ La pagina HTML de `/install/` consume el JSON de `POST /install/:app` y muestra 
 Si `auth` global esta habilitado, las rutas del instalador tambien requieren auth.
 
 Si `openapi` esta habilitado y existen apps instalables, `/install/{app}` aparece en el documento OpenAPI.
+
+Si `postman` esta habilitado, `api-kit` expone una coleccion Postman en `/postman.json` dentro del `basePath`.
+
+```js
+const api = await createApiKit({
+  seq,
+  basePath: "/api",
+  modules: "./example/modules.js",
+  openapi: true,
+  postman: true,
+});
+```
+
+La coleccion queda disponible en `/api/postman.json` y agrupa las rutas como `api > modulo > endpoints`.
 
 ## Scripts
 

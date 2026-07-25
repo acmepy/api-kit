@@ -24,7 +24,8 @@ async function main() {
     },
     auth: { secret: process.env.IAM_SECRET || "dev-secret" },
     audit:true,
-    openapi: true,
+    openapi:false,
+    postman: true,
   });
 
   await seq.authenticate();

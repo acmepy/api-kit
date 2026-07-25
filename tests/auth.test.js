@@ -26,6 +26,7 @@ describe("auth", () => {
       basePath: "/api",
       auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
       openapi: { auth: true, permission: "openapi.read" },
+      postman: { auth: true, permission: "openapi.read" },
       modules,
     });
 
@@ -100,6 +101,27 @@ describe("auth", () => {
       assert.deepEqual(openapi.body.paths["/api/openapi.json"].get["x-permissions"], ["openapi.read"]);
       assert.equal(openapi.body.paths["/api/login"].post.security, undefined);
       assert.equal(openapi.body.paths["/api/login"].post.requestBody.content["application/json"].schema.properties.password.format, "password");
+
+      const deniedPostman = await request(server, "GET", "/api/postman.json");
+      assert.equal(deniedPostman.status, 401);
+
+      const postman = await request(server, "GET", "/api/postman.json", { basic: ["admin", "1234"] });
+      assert.equal(postman.status, 200);
+      const root = postman.body.item.find((item) => item.name === "api");
+      const loginFolder = root.item.find((item) => item.name === "login");
+      const loginRequest = loginFolder.item.find((item) => item.name === "Login");
+      assert.deepEqual(JSON.parse(loginRequest.request.body.raw), { username: "admin", password: "1234" });
+      assert.deepEqual(loginRequest.event[0].script.exec, [
+        "const response = pm.response.json();",
+        "pm.collectionVariables.set(\"bearerToken\", response.data.token);",
+        "",
+      ]);
+      const logoutFolder = root.item.find((item) => item.name === "logout");
+      const logoutRequest = logoutFolder.item.find((item) => item.name === "Logout");
+      assert.deepEqual(logoutRequest.event[0].script.exec, [
+        "pm.collectionVariables.set(\"bearerToken\", null);",
+        "",
+      ]);
     } finally {
       await api.close();
       await close(server);
