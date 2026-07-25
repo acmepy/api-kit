@@ -73,6 +73,63 @@ export const modules = [
 ];
 ```
 
+## CRUD Generado
+
+Cada modulo declarativo crea un CRUD REST bajo `basePath` usando el nombre de la tabla o del modulo.
+
+Para el ejemplo anterior, con `basePath: "/api"` y `tableName: "clientes"`, se exponen:
+
+| Metodo | Path | Accion |
+| --- | --- | --- |
+| `GET` | `/api/clientes` | Lista registros |
+| `GET` | `/api/clientes/:id` | Obtiene un registro por ID |
+| `POST` | `/api/clientes` | Crea un registro |
+| `PUT` | `/api/clientes/:id` | Actualiza un registro |
+| `DELETE` | `/api/clientes/:id` | Elimina un registro |
+| `GET` | `/api/clientes/schema` | Devuelve los schemas del recurso |
+
+`POST` y `PUT` validan el body contra los schemas generados desde los attributes del modulo. Los campos no declarados se rechazan por defecto.
+
+### Query De List
+
+`GET /api/clientes` soporta paginacion y filtros por query string.
+
+Paginacion:
+
+- `page`: pagina actual; default `1`.
+- `limit`: cantidad por pagina; default `20`; maximo `100` salvo configuracion del recurso.
+
+Ejemplos:
+
+```http
+GET /api/clientes?page=1&limit=20
+GET /api/clientes?activo=true
+GET /api/clientes?nombre[in]=Ana,Jose
+GET /api/clientes?createdAt[between]=2026-01-01,2026-01-31
+```
+
+Los operadores se pueden escribir con cualquiera de estas formas:
+
+```http
+GET /api/productos?precio[mayor]=10
+GET /api/productos?precio.mayor=10
+GET /api/productos?precio__mayor=10
+```
+
+Operadores soportados:
+
+| Operador | Alias | Uso |
+| --- | --- | --- |
+| `eq` | `equal`, `igual` | Igualdad. Tambien es el default: `?activo=true` |
+| `gt` | `greater`, `mayor` | Mayor que |
+| `gte` | `greaterOrEqual`, `mayorIgual` | Mayor o igual |
+| `lt` | `less`, `menor` | Menor que |
+| `lte` | `lessOrEqual`, `menorIgual` | Menor o igual |
+| `in` | `incluido` | Valor incluido en una lista separada por comas |
+| `between` | - | Rango con dos valores separados por coma |
+
+Los valores se convierten segun el tipo del atributo (`integer`, `number`, `decimal`, `boolean`, `date`, `string`). Los operadores de rango (`gt`, `gte`, `lt`, `lte`, `between`) solo aplican a tipos comparables como numeros, fechas y strings.
+
 ## Apps Estaticas
 
 Las apps estaticas tambien se declaran dentro de `modules`.
