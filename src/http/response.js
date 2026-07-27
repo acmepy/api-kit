@@ -7,11 +7,3 @@ export function ok(data, meta = null) {
 export function list(data, pagination) {
   return { ok: true, data, pagination };
 }
-/*
-export function error(code, message, { errors = null, txId = null } = {}) {
-  const response = { ok: false, code, message };
-  if (errors) response.errors = errors;
-  if (txId) response.txId = txId;
-  return response;
-}
-*/

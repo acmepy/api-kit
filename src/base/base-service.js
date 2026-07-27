@@ -2,7 +2,7 @@ import { NotFoundError } from "../errors/not-found-error.js";
 import { ValidationError } from "../errors/validation-error.js";
 import { Op } from "seq";
 
-const FILTER_OPERATORS = {eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, in: Op.in, incluido: Op.in, between: Op.between};
+const FILTER_OPERATORS = {eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between};
 const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
 const RANGE_OPERATORS = new Set([Op.gt, Op.gte, Op.lt, Op.lte, Op.between]);
 
@@ -320,11 +320,13 @@ export class BaseService {
 
   #queryFilters(key, value) {
     if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
-      return Object.entries(value).map(([operatorName, operatorValue]) => {
+      const symbolFilters = Object.getOwnPropertySymbols(value).map((operator) => ({ field: key, operator, value: value[operator] }));
+      const namedFilters = Object.entries(value).map(([operatorName, operatorValue]) => {
         const operator = FILTER_OPERATORS[operatorName];
         if (!operator) throw new ValidationError(`Operador de filtro "${operatorName}" no está soportado`);
         return { field: key, operator, value: operatorValue };
       });
+      return [...symbolFilters, ...namedFilters];
     }
 
     return [{ ...this.#parseFilterKey(key), value }];
@@ -433,8 +435,6 @@ export class BaseService {
     return "unknown";
   }
 }
-
-
 
 
 

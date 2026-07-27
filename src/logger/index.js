@@ -6,11 +6,11 @@ export function setLogging(logging) {
   _logging = logging;
 }
 
-export function log(level, ...args) {
+export function log(level, path, ...args) {
   if (!_logging) return;
-  if (_logging === true) return console[level]?.("[api-kit]", ...args);
-  if (typeof _logging === "function") return _logging("[api-kit]", level, ...args);
-  if (typeof _logging === "object") return _logging[level]?.("[api-kit]", ...args);
+  if (_logging === true) return console[level]?.("[api-kit] ["+path+"]", ...args);
+  if (typeof _logging === "function") return _logging("[api-kit] [ "+path+"]", level, ...args);
+  if (typeof _logging === "object") return _logging[level]?.("[api-kit] ["+path+"]", ...args);
 }
 
 export function requestLogger(req, res, next) {
@@ -29,15 +29,15 @@ export function requestLogger(req, res, next) {
 }
 
 export function errorLogger(err, req, { txId, status, code, errors }) {
-  log(status >= 500 ? "error" : "warn", "http.error", {
-    txId,
-    status,
-    code,
-    message: err.message,
-    errorName: err.name || err.constructor?.name || "Error",
-    method: req.method,
-    path: req.originalUrl || req.url,
-    ...(errors && { errors }),
-    ...(status >= 500 && err.stack && { stack: err.stack }),
-  });
+  log(
+    status >= 500 ? "error" : "warn", "http.error", 
+    "["+txId+"]",  
+    err.name || err.constructor?.name || "Error", 
+    err.message, 
+    status, 
+    code, 
+    req.method, 
+    req.originalUrl || req.url, 
+    errors, (status >= 500 && err.stack && { stack: err.stack })
+  );
 }
