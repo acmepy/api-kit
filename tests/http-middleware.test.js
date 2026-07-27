@@ -3,7 +3,17 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import { Seq, SQLiteAdapter } from "seq";
-import { createApiKit } from "../src/index.js";
+import { createApiKit, defineResource } from "../src/index.js";
+
+const loggedClienteResource = defineResource({
+  modelName: "LoggedCliente",
+  tableName: "logged_clientes",
+  attributes: {
+    id: { type: "integer", primaryKey: true, autoIncrement: true },
+    ruc: { type: "string", unique: true, maxLength: 20 },
+    nombre: { type: "string", allowNull: false },
+  },
+});
 
 describe("http middleware", () => {
   it("can enable cors, helmet, and compression from createApiKit options", async () => {
@@ -260,6 +270,140 @@ describe("http middleware", () => {
 
       assert.equal(staticFilesAsset.status, 404);
       assert.equal(staticAsset.status, 404);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("logs requests through the api-kit logger", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const infos = [];
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      openapi: {},
+      logging: {
+        info: (...args) => infos.push(args),
+      },
+      modules: [],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const res = await request(server, "GET", "/api/openapi.json", {
+        headers: {
+          "X-Transaction-Id": "tx-123",
+          "User-Agent": "api-kit-test",
+        },
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      assert.equal(res.status, 200);
+      assert.equal(infos.length, 1);
+      assert.equal(infos[0][0], "[api-kit]");
+      assert.equal(infos[0][1], "request");
+      assert.equal(infos[0][2], "tx-123");
+      assert.equal(typeof infos[0][3], "string");
+      assert.equal(infos[0][4], "GET");
+      assert.equal(infos[0][5], "/api/openapi.json");
+      assert.equal(infos[0][6], 200);
+      assert.equal(typeof infos[0][7], "number");
+      assert.ok(infos[0][7] >= 0);
+      assert.equal(Number(infos[0][8]), Number(res.headers["content-length"] || 0));
+      assert.equal(infos[0][9], "api-kit-test");
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("logs HTTP errors through configured logging levels", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const warnings = [];
+    const errors = [];
+    const api = await createApiKit({
+      seq,
+      baseDir: process.cwd(),
+      basePath: "/api",
+      paths: { services: "./example/services" },
+      logging: {
+        warn: (...args) => warnings.push(args),
+        error: (...args) => errors.push(args),
+      },
+      modules: [
+        {
+          name: "clientes",
+          basePath: "/clientes",
+          resource: loggedClienteResource,
+          endpoints: {
+            ruc: { method: "get", path: "/ruc/:ruc", summary: "Buscar por RUC" },
+          },
+        },
+      ],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(api.router);
+    app.get("/api/fail", async () => {
+      throw new Error("Boom");
+    });
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const custom = await request(server, "GET", "/api/clientes/ruc/80000000-0");
+      const crud = await request(server, "GET", "/api/clientes/999");
+
+      assert.equal(custom.status, 404);
+      assert.equal(custom.body.code, "NOT_FOUND");
+      assert.equal(crud.status, 404);
+      assert.equal(crud.body.code, "NOT_FOUND");
+      assert.equal(errors.length, 0);
+      assert.equal(warnings.length, 2);
+
+      assert.equal(warnings[0][0], "[api-kit]");
+      assert.equal(warnings[0][1], "http.error");
+      const customLog = warnings[0][2];
+      assert.equal(customLog.status, 404);
+      assert.equal(customLog.code, "NOT_FOUND");
+      assert.equal(customLog.method, "GET");
+      assert.equal(customLog.path, "/api/clientes/ruc/80000000-0");
+      assert.equal(typeof customLog.txId, "string");
+      assert.equal(customLog.stack, undefined);
+
+      const crudLog = warnings[1][2];
+      assert.equal(crudLog.status, 404);
+      assert.equal(crudLog.method, "GET");
+      assert.equal(crudLog.path, "/api/clientes/999");
+      const res = await request(server, "GET", "/api/fail");
+
+      assert.equal(res.status, 500);
+      assert.equal(errors.length, 1);
+      assert.equal(errors[0][0], "[api-kit]");
+      assert.equal(errors[0][1], "http.error");
+      const entry = errors[0][2];
+      assert.equal(entry.status, 500);
+      assert.equal(entry.code, "INTERNAL_ERROR");
+      assert.equal(entry.method, "GET");
+      assert.equal(entry.path, "/api/fail");
+      assert.match(entry.stack, /Error: Boom/);
     } finally {
       await api.close();
       await close(server);

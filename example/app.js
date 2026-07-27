@@ -26,6 +26,7 @@ async function main() {
     audit:true,
     openapi:false,
     postman: true,
+    logging: true,
   });
 
   await seq.authenticate();
@@ -36,7 +37,7 @@ async function main() {
   app.use(api.errorHandler);
 
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {console.log(`api-kit demo running on http://localhost:${PORT}`)});
+  app.listen(PORT, () => {console.log(`[api-kit] demo running on http://localhost:${PORT}`)});
 }
 
 main().catch(console.error);
@@ -65,5 +66,4 @@ async function seedIam(api) {
     }
   }
 }
-
 

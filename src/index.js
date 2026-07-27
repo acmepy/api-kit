@@ -1,4 +1,5 @@
 export { createApiKit } from "./api-kit.js";
+export { log, requestLogger, setLogging } from "./logger/index.js";
 export { defineResource } from "./define-resource.js";
 export { BaseModel } from "./base/base-model.js";
 export { BaseService } from "./base/base-service.js";
@@ -7,5 +8,5 @@ export { BaseModule } from "./base/base-module.js";
 export { AppError, ConfigError, ValidationError, NotFoundError, ConflictError, AuthRequiredError, ForbiddenError, InternalError, } from "./errors/index.js";
 export { getContext, runWithContext } from "./context/request-context.js";
 export { RouteRegistry } from "./openapi/route-registry.js";
-export { ok, list, error } from "./http/response.js";
+export { ok, list } from "./http/response.js";
 

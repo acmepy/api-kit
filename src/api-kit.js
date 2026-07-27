@@ -22,6 +22,7 @@ import { ok } from "./http/response.js";
 import { ValidationError } from "./errors/validation-error.js";
 import { AuthRequiredError } from "./errors/auth-required-error.js";
 import { ForbiddenError } from "./errors/forbidden-error.js";
+import { requestLogger, setLogging } from "./logger/index.js";
 
 export async function createApiKit(conf = {}) {
   const auditEvents = new EventEmitter();
@@ -48,8 +49,10 @@ export async function createApiKit(conf = {}) {
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
     postman: conf.postman ?? null,
+    logging: conf.logging ?? false,
     sse: conf.sse || { enabled: false },
   };
+  setLogging(config.logging || false);
   if (config.audit) config.audit.events = auditEvents;
 
   validateConfig(config);
@@ -107,6 +110,7 @@ export async function createApiKit(conf = {}) {
 
   await installHttpMiddleware(mainRouter, config);
   mainRouter.use(runWithContext);
+  mainRouter.use(requestLogger);
 
   installAuthRoutes({ mainRouter, routeRegistry, config, authContext, authorize });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
