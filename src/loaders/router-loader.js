@@ -1,7 +1,7 @@
 import path from "node:path";
 import { importModule, fileExists } from "../utils/import-module.js";
 import { camelCase } from "../utils/naming.js";
-import { BaseRouter } from "../base/base-router.js";
+import { BaseRouter } from "../base/index.js";
 
 export async function loadRouter({ moduleName, service, config, routeRegistry, routersDir, authorize }) {
   if (routersDir) {

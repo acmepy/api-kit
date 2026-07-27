@@ -1,7 +1,7 @@
 import path from "node:path";
 import { importModule, fileExists } from "../utils/import-module.js";
 import { camelCase } from "../utils/naming.js";
-import { BaseService } from "../base/base-service.js";
+import { BaseService } from "../base/index.js";
 
 export async function loadService({ moduleName, model, schemas, config, servicesDir }) {
   if (servicesDir) {

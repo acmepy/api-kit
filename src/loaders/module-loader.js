@@ -1,5 +1,5 @@
 import path from "node:path";
-import { BaseModule } from "../base/base-module.js";
+import { BaseModule } from "../base/index.js";
 import { loadService } from "./service-loader.js";
 import { loadRouter } from "./router-loader.js";
 import { loadSchemas } from "./schema-loader.js";

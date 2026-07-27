@@ -1,5 +1,5 @@
 import express from "express";
-import { createApiKit } from "../src/index.js";
+import { createApiKit } from "../index.js";
 import { Seq, SQLiteAdapter } from "seq";
 
 async function main() {
@@ -66,4 +66,3 @@ async function seedIam(api) {
     }
   }
 }
-
