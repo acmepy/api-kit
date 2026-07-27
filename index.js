@@ -18,6 +18,6 @@ export {
   RouteRegistry,
   ok,
   list,
-  error,
+  //error,
 } from "./src/index.js";
 
