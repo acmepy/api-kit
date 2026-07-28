@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import packageInfo from "../package.json" with { type: "json" };
-import { createApiKit, defineResource } from "../src/index.js";
-import { getContext } from "../src/index.js";
-import { normalizeModule } from "../src/config/config-normalizer.js";
+import { createApiKit, defineResource } from "../src/server/index.js";
+import { getContext } from "../src/server/index.js";
+import { normalizeModule } from "../src/server/config/config-normalizer.js";
 import { Seq, SQLiteAdapter, DataTypes } from "seq";
 
 const clienteResource = defineResource({

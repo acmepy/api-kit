@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import { Seq, SQLiteAdapter } from "seq";
-import { createApiKit } from "../src/index.js";
+import { createApiKit } from "../src/server/index.js";
 
 const modules = [
   {

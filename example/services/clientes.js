@@ -1,4 +1,4 @@
-import { BaseService, NotFoundError } from "../../src/index.js";
+import { BaseService, NotFoundError } from "api-kit/server";
 
 export default class ClientesService extends BaseService {
   async ruc({ params, transaction } = {}) {

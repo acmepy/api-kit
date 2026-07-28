@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { loadModules } from "../src/config/config-loader.js";
+import { loadModules } from "../src/server/config/config-loader.js";
 
 describe("loadModules", () => {
   it("converts resource definitions to module configs", async () => {

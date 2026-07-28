@@ -1,4 +1,4 @@
-import { createApiKit } from "../index.js";
+import { createApiKit } from "api-kit/server";
 import { Seq, SQLiteAdapter } from "seq";
 
 const logger = {

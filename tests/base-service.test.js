@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Seq, SQLiteAdapter } from "seq";
-import { BaseService, defineResource, ValidationError } from "../src/index.js";
+import { BaseService, defineResource, ValidationError } from "../src/server/index.js";
 
 describe("BaseService list filters", () => {
   let service;

@@ -16,10 +16,22 @@ npm run dev
 
 La demo queda disponible en `http://localhost:3000`.
 
+## Entrypoints
+
+El paquete se consume por subpath explicito:
+
+```js
+import { createApiKit } from "api-kit/server";
+import { createApiKitClient } from "api-kit/client";
+import { runApiKitCli } from "api-kit/cli";
+```
+
+El import raiz `api-kit` no exporta la API publica.
+
 ## Uso Basico
 
 ```js
-import { createApiKit } from "api-kit";
+import { createApiKit } from "api-kit/server";
 import { Seq, SQLiteAdapter } from "seq";
 
 const adapter = new SQLiteAdapter({

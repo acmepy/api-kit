@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import { Seq, SQLiteAdapter } from "seq";
-import { createApiKit, defineResource } from "../src/index.js";
+import { createApiKit, defineResource } from "../src/server/index.js";
 
 const loggedClienteResource = defineResource({
   modelName: "LoggedCliente",

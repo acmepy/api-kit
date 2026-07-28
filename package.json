@@ -1,6 +1,6 @@
 {
   "name": "api-kit",
-  "version": "0.7.2",
+  "version": "0.8.1",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -15,7 +15,11 @@
   "license": "MIT",
   "author": "Hugo",
   "type": "module",
-  "main": "index.js",
+  "exports": {
+    "./server": "./src/server/index.js",
+    "./client": "./src/client/index.js",
+    "./cli": "./src/cli/index.js"
+  },
   "scripts": {
     "test": "node --test",
     "dev": "node ./example/app.js"

@@ -7,8 +7,8 @@ import os from "node:os";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import AdmZip from "adm-zip";
 import { Seq, SQLiteAdapter } from "seq";
-import { createApiKit } from "../src/index.js";
-import { installApp, normalizeInstallableApps, renderInstallHtml, renderInstallScript } from "../src/install/install.services.js";
+import { createApiKit } from "../src/server/index.js";
+import { installApp, normalizeInstallableApps, renderInstallHtml, renderInstallScript } from "../src/server/install/install.services.js";
 
 describe("installable static modules", () => {
   it("detects apps by repo and applies defaults", async () => {

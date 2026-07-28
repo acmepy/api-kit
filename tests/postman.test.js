@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { RouteRegistry } from "../src/openapi/route-registry.js";
-import { buildPostmanCollection } from "../src/postman/postman-builder.js";
+import { RouteRegistry } from "../src/server/openapi/route-registry.js";
+import { buildPostmanCollection } from "../src/server/postman/postman-builder.js";
 
 describe("Postman collection", () => {
   it("groups login session and logout routes inside a single session folder", () => {
