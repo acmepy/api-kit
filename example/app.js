@@ -1,6 +1,12 @@
 import { createApiKit } from "../index.js";
 import { Seq, SQLiteAdapter } from "seq";
 
+const logger = {
+  info: (...args) => console.info(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args),
+};
+
 async function main() {
   const adapter = new SQLiteAdapter({
     database: ":memory:",
@@ -18,11 +24,15 @@ async function main() {
     paths: {
       services: "./example/services",
     },
-    auth: { secret: process.env.IAM_SECRET || "dev-secret" },
+    auth: {
+      secret: process.env.IAM_SECRET || "dev-secret",
+      strategies: ["bearer", "basic"],
+      tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",
+    },
     audit:true,
     openapi:false,
     postman: true,
-    logging: true,
+    logging: logger,
   });
 
   await seq.authenticate();

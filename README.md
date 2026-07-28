@@ -31,14 +31,25 @@ const adapter = new SQLiteAdapter({
 });
 const seq = new Seq({ adapter });
 
+const logger = {
+  info: (...args) => console.info(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args),
+};
+
 const api = await createApiKit({
   seq,
   basePath: "/api",
   modules: "./example/modules.js",
-  auth: { secret: process.env.IAM_SECRET || "dev-secret" },
+  auth: {
+    secret: process.env.IAM_SECRET || "dev-secret",
+    strategies: ["bearer", "basic"],
+    tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",
+  },
   audit: true,
   openapi: true,
   postman: true,
+  logging: logger,
 });
 
 await seq.authenticate();
@@ -50,6 +61,36 @@ api.app.listen(3000);
 `naming` pertenece al adapter de `seq`; no es una opcion de `createApiKit`.
 `createApiKit` crea una instancia de Express si no recibe `app`, monta las rutas y el `errorHandler`, e instala `express.json()` por defecto. Se puede pasar una app existente con `app` y desactivar o configurar JSON con `json: false` u opciones en `json`.
 El `basePath` responde con un saludo del backend usando el `name` del `package.json`; por ejemplo `GET /api`.
+
+## Middlewares HTTP
+
+`createApiKit` puede instalar middlewares comunes de Express desde la configuracion. Cada opcion acepta `true` para usar defaults, un objeto con opciones del middleware, o `false` para desactivar.
+
+```js
+const api = await createApiKit({
+  seq,
+  cors: { origin: "https://app.example.com" },
+  helmet: true,
+  compression: { threshold: 0 },
+  rateLimit: {
+    windowMs: 60_000,
+    limit: 100,
+  },
+  trustProxy: 1,
+  json: { limit: "1mb" },
+  text: {
+    type: "text/plain",
+    limit: "10mb",
+  },
+});
+```
+
+Notas:
+
+- `json` esta activo por defecto y monta `express.json()`.
+- `text: true` monta `express.text()` con `{ type: "text/plain", limit: "10mb" }`.
+- `cors`, `helmet`, `compression` y `rateLimit` estan desactivados por defecto.
+- `trustProxy` configura `app.set("trust proxy", value)` cuando se recibe un valor distinto de `false`.
 
 ## Modulos
 
