@@ -3,9 +3,8 @@ import express from "express";
 import { readFile } from "node:fs/promises";
 import { EventEmitter } from "node:events";
 import { Op } from "seq";
-import { RBAC } from "iam";
 import { SeqAdapter } from "iam/adapters";
-import { Auth, signJwt, verifyJwt } from "iam/express";
+import { auth as iamAuth, can as iamCan } from "iam/express";
 import { validateConfig } from "./config/config-validator.js";
 import { loadModuleBundle } from "./config/config-loader.js";
 import { normalizeModules } from "./config/config-normalizer.js";
@@ -19,8 +18,6 @@ import { getContext } from "./context/request-context.js";
 import { errorHandler } from "./http/error-handler.js";
 import { ok } from "./http/response.js";
 import { ValidationError } from "./errors/validation-error.js";
-import { AuthRequiredError } from "./errors/auth-required-error.js";
-import { ForbiddenError } from "./errors/forbidden-error.js";
 import { requestLogger, setLogging } from "./logger/index.js";
 
 export async function createApiKit(conf = {}) {
@@ -75,6 +72,7 @@ export async function createApiKit(conf = {}) {
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
   installAuditHooks(moduleConfigs, config.audit);
+  installAuthAuditHooks(authContext, moduleConfigs, config.audit);
 
   const explicitModels = { ...config.models };
   for (const moduleConfig of moduleConfigs) {
@@ -113,7 +111,7 @@ export async function createApiKit(conf = {}) {
   mainRouter.use(requestLogger);
 
   installWelcomeRoute({ mainRouter, routeRegistry, config, packageInfo });
-  installAuthRoutes({ mainRouter, routeRegistry, config, authContext, authorize });
+  installAuthRoutes({ mainRouter, routeRegistry, config, authContext });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
@@ -188,9 +186,7 @@ function installWelcomeRoute({ mainRouter, routeRegistry, config, packageInfo })
 
   routeRegistry.register({ module: "system", operationId: "system.welcome", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "welcome", auth: { required: false, strategies: [] }, permissions: [], summary: "Backend welcome", description: "", tags: ["system"], deprecated: false });
 
-  mainRouter.get(fullPath, (_req, res) => {
-    res.json(ok({ name: packageName, message: `Bienvenido al backend de ${packageName}` }));
-  });
+  mainRouter.get(fullPath, (_req, res) => {res.json(ok({ name: packageName, message: `Bienvenido al backend de ${packageName}` }))});
 }
 
 function installStaticFiles(router, config) {
@@ -220,17 +216,9 @@ function installFrontendInstallRoutes({ mainRouter, routeRegistry, config, autho
   routeRegistry.register({ module: "install", operationId: "install.script", method: "get", expressPath: "/install/app.js", openApiPath: "/install/app.js", serviceMethod: "installScript", auth, permissions: [], summary: "Script del instalador", description: "", tags: ["install"], deprecated: false });
   routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions: [], summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
 
-  mainRouter.get("/install", ...handlers, (_req, res) => {
-    res.type("html").send(renderInstallHtml(apps));
-  });
-
-  mainRouter.get("/install/", ...handlers, (_req, res) => {
-    res.type("html").send(renderInstallHtml(apps));
-  });
-
-  mainRouter.get("/install/app.js", ...handlers, (_req, res) => {
-    res.type("application/javascript").send(renderInstallScript());
-  });
+  mainRouter.get("/install", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps));});
+  mainRouter.get("/install/", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps))});
+  mainRouter.get("/install/app.js", ...handlers, (_req, res) => {res.type("application/javascript").send(renderInstallScript());});
 
   mainRouter.post("/install/:app", ...handlers, async (req, res) => {
     const app = apps.find((item) => item.app === req.params.app);
@@ -246,14 +234,7 @@ function normalizeStaticFileConfig(config, baseDir) {
   const mountPath = normalizeMountPath(value.mountPath || value.pathPrefix || (value.appName ? `/${value.appName}` : null));
   const rootInput = value.root || value.dir || value.directory || value.path || (value.appName ? `./public/${value.appName}` : null);
   if (!mountPath || !rootInput) return null;
-
-  return {
-    mountPath,
-    root: path.resolve(baseDir, rootInput),
-    spa: value.spa ?? true,
-    index: value.index || "index.html",
-    options: { redirect: false, ...value.options },
-  };
+  return {mountPath, root: path.resolve(baseDir, rootInput), spa: value.spa ?? true, index: value.index || "index.html", options: { redirect: false, ...value.options }};
 }
 
 function normalizeMountPath(value) {
@@ -269,33 +250,25 @@ function escapeRegExp(value) {
 
 function installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize }) {
   if (!openapi) return;
-
   const fullPath = joinPaths(config.basePath, openapi.path || "/openapi.json");
   const auth = normalizeRouteAuth(openapi.auth);
   const permissions = openapi.permission ? [openapi.permission] : [];
-
   routeRegistry.register({ module: "openapi", operationId: "openapi.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "openapi", auth, permissions, summary: "OpenAPI document", description: "", tags: ["openapi"], deprecated: false});
-
   const handlers = [];
   if (authorize) handlers.push(authorize({ auth, permissions }));
   handlers.push((_req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi}))});
-
   mainRouter.get(fullPath, ...handlers);
 }
 
 function installPostmanRoute({ mainRouter, routeRegistry, modules, packageInfo, config, postman, authorize }) {
   if (!postman) return;
-
   const fullPath = joinPaths(config.basePath, postman.path || "/postman.json");
   const auth = normalizeRouteAuth(postman.auth);
   const permissions = postman.permission ? [postman.permission] : [];
-
   routeRegistry.register({ module: "openapi", operationId: "postman.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "postman", auth, permissions, summary: "Postman collection", description: "", tags: ["postman"], deprecated: false});
-
   const handlers = [];
   if (authorize) handlers.push(authorize({ auth, permissions }));
   handlers.push((_req, res) => {res.json(buildPostmanCollection({ routes: routeRegistry, modules, packageInfo, config: { ...postman, basePath: config.basePath } }))});
-
   mainRouter.get(fullPath, ...handlers);
 }
 
@@ -385,10 +358,28 @@ async function canViewAuditChange(change, { req, modules, routeRegistry, authCon
   const permissions = route.permissions || [];
   for (const permission of permissions) {
     if (!permission) continue;
-    if (!(await authContext.rbac.can(userId, permission))) return false;
+    if (!(await canRequest(permission, req))) return false;
   }
 
   return true;
+}
+
+function canRequest(permission, req) {
+  return new Promise((resolve) => {
+    const res = {
+      statusCode: 200,
+      status(statusCode) {
+        this.statusCode = statusCode;
+        return this;
+      },
+      json() {
+        resolve(false);
+        return this;
+      },
+    };
+
+    Promise.resolve(iamCan(permission)(req, res, (error) => resolve(!error))).catch(() => resolve(false));
+  });
 }
 
 function routeForAuditChange(change, { modules, routeRegistry }) {
@@ -410,106 +401,45 @@ function moduleForAuditChange(change, modules) {
   return null;
 }
 
-function installAuthRoutes({ mainRouter, routeRegistry, config, authContext, authorize }) {
+function installAuthRoutes({ mainRouter, routeRegistry, config, authContext }) {
   if (!authContext) return;
 
   const loginPath = joinPaths(config.basePath, authContext.loginPath);
+  const sessionPath = joinPaths(config.basePath, authContext.sessionPath);
   const logoutPath = joinPaths(config.basePath, authContext.logoutPath);
 
   routeRegistry.register({module: "auth", operationId: "auth.login", method: "post", expressPath: loginPath, openApiPath: loginPath, serviceMethod: "login", auth: { required: false, strategies: [] }, permissions: [], summary: "Login", description: "", tags: ["auth"], deprecated: false});
+  routeRegistry.register({module: "auth", operationId: "auth.session", method: "get", expressPath: sessionPath, openApiPath: sessionPath, serviceMethod: "session", auth: { required: true, strategies: authContext.strategies }, permissions: [], summary: "Session", description: "", tags: ["auth"], deprecated: false});
   routeRegistry.register({module: "auth", operationId: "auth.logout", method: "post", expressPath: logoutPath, openApiPath: logoutPath, serviceMethod: "logout", auth: { required: true, strategies: ["bearer", "basic"] }, permissions: [], summary: "Logout", description: "", tags: ["auth"], deprecated: false});
 
-  mainRouter.post(loginPath, async (req, res, next) => {
-    try {
-      const { username, password } = req.body || {};
-      const expiresAt = expiresAtFor(authContext.tokenExpiresIn);
-      const session = await authContext.auth.login({ username, password, options: { expiresAt } });
-      const token = await signJwt({ sessionId: session.id }, authContext.secret);
-      await authContext.adapter.updateSession?.(session.id, { token, options: { ...session.options, expiresAt } });
-      res.json(ok({ user: session.user, token, session: { id: session.id, expiresAt } }));
-    } catch (error) {
-      next(normalizeAuthError(error));
-    }
-  });
-
-  mainRouter.post(logoutPath, authorize({ auth: { required: true, strategies: ["bearer", "basic"] }, permissions: [] }), async (req, res, next) => {
-    try {
-      if (req.session?.id) await authContext.auth.logout(req.session.id);
-      res.json(ok(true));
-    } catch (error) {
-      next(normalizeAuthError(error));
-    }
-  });
+  const basePath = normalizeMountPath(config.basePath) || "/";
+  const authRouter = express.Router();
+  authRouter.post(authContext.loginPath, authContext.middleware);
+  authRouter.get(authContext.sessionPath, authContext.middleware);
+  authRouter.post(authContext.logoutPath, authContext.middleware);
+  mainRouter.use(basePath, authRouter);
 }
 
 function createAuthContext(config, authBackend) {
   const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models });
-  const rbac = new RBAC({ adapter });
-  const auth = new Auth({ adapter, rbac });
-  return { ...authBackend, adapter, auth, rbac, models: adapter.models || authBackend.models || null};
+  const middleware = iamAuth(iamAuthOptions(authBackend, adapter));
+  return { ...authBackend, adapter, middleware, models: adapter.models || authBackend.models || null};
 }
 
 function createAuthorizer(authContext) {
-  return ({ auth = { required: false }, permissions = [] } = {}) => async (req, _res, next) => {
-    try {
-      if (!auth?.required) return next();
-      const authHeaders = challengeHeadersFor(auth);
-      if (!authContext) throw new AuthRequiredError("Auth no configurado", { headers: authHeaders });
+  return ({ auth = { required: false }, permissions = [] } = {}) => {
+    if (!auth?.required) return (_req, _res, next) => next();
+    if (!authContext) return (_req, res) => res.status(401).json({ ok: false, message: "Auth no configurado" });
 
-      const session = await authenticateRequest(req, authContext, auth.strategies);
-      req.session = session;
-      req.user = session.user;
-      setAuthContext(session);
+    const handlers = [
+      iamAuth(iamAuthOptions({ ...authContext, ...auth }, authContext.adapter)),
+      syncAuthContext,
+      ...(permissions || []).filter(Boolean).map((permission) => iamCan(permission)),
+      syncAuthContext,
+    ];
 
-      for (const permission of permissions || []) {
-        if (!permission) continue;
-        const allowed = await authContext.rbac.can(session.user.id, permission);
-        if (!allowed) throw new ForbiddenError("No tiene permisos para realizar esta accion");
-      }
-
-      return next();
-    } catch (error) {
-      next(normalizeAuthError(error, auth));
-    }
+    return composeMiddlewares(handlers);
   };
-}
-
-async function authenticateRequest(req, authContext, strategies = ["bearer", "basic"]) {
-  const header = req.headers?.authorization || "";
-  const allowed = normalizeStrategies(strategies);
-
-  if (header.startsWith("Bearer ") && allowed.includes("bearer")) {
-    const token = header.slice("Bearer ".length).trim();
-    if (!token) throw new AuthRequiredError("Token requerido");
-    const payload = await verifyJwt(token, authContext.secret);
-    const session = await authContext.auth.getSession(payload.sessionId || payload.id);
-    await assertSessionNotExpired(session, authContext);
-    return session;
-  }
-  if (header.startsWith("Basic ") && allowed.includes("basic")) return authenticateBasic(header, authContext);
-  throw new AuthRequiredError("Autenticacion requerida");
-}
-
-async function authenticateBasic(header, authContext) {
-  const encoded = header.slice("Basic ".length).trim();
-  const decoded = Buffer.from(encoded, "base64").toString("utf8");
-  const separator = decoded.indexOf(":");
-  if (separator === -1) throw new AuthRequiredError("Credenciales invalidas");
-
-  const username = decoded.slice(0, separator);
-  const password = decoded.slice(separator + 1);
-  const user = await authContext.adapter.findUserByUsername(username);
-  await authContext.auth.validateUser(user);
-  await authContext.auth.validatePassword(user, password);
-  return authContext.auth.createTemporarySession(user, {});
-}
-
-async function assertSessionNotExpired(session, authContext) {
-  const expiresAt = session?.options?.expiresAt;
-  if (!expiresAt) return;
-  if (new Date(expiresAt).getTime() > Date.now()) return;
-  if (session?.id) await authContext.auth.logout(session.id);
-  throw new AuthRequiredError("Sesion expirada");
 }
 
 function setAuthContext(session) {
@@ -520,9 +450,46 @@ function setAuthContext(session) {
   ctx.audit = { ...(ctx.audit || {}), userId: session.user?.id || null };
 }
 
+function syncAuthContext(req, _res, next) {
+  if (req.session) {
+    req.user = req.session.user;
+    setAuthContext(req.session);
+  }
+  next();
+}
+
+function composeMiddlewares(middlewares) {
+  return (req, res, next) => {
+    let index = 0;
+    const run = (error) => {
+      if (error) return next(error);
+      const middleware = middlewares[index++];
+      if (!middleware) return next();
+      try {
+        return Promise.resolve(middleware(req, res, run)).catch(next);
+      } catch (err) {
+        return next(err);
+      }
+    };
+    return run();
+  };
+}
+
+function iamAuthOptions(auth, adapter) {
+  return {
+    adapter,
+    jwt: {
+      secret: auth.secret,
+      expiresIn: auth.tokenExpiresIn,
+    },
+    strategies: toIamStrategies(auth.strategies || ["bearer", "basic"]),
+    createSession: auth.createSession,
+  };
+}
+
 function normalizeAuthBackendConfig(auth) {
-  if (!auth?.required) return null;
-  return {loginPath: "/login", logoutPath: "/logout", secret: process.env.IAM_SECRET || "api-kit-dev-secret", tokenExpiresIn: auth?.tokenExpiresIn || "1h", adapter: auth?.adapter, models: auth?.models, ...auth};
+  if (!auth) return null;
+  return {loginPath: "/login", sessionPath: "/session", logoutPath: "/logout", secret: process.env.IAM_SECRET || "api-kit-dev-secret", tokenExpiresIn: auth?.tokenExpiresIn || "1h", adapter: auth?.adapter, models: auth?.models, ...auth};
 }
 
 function normalizeGlobalAuth(auth) {
@@ -543,37 +510,8 @@ function normalizeStrategies(strategies = []) {
   return strategies.map((strategy) => (strategy === "jwt" ? "bearer" : strategy));
 }
 
-function expiresAtFor(expiresIn) {
-  return new Date(Date.now() + parseDuration(expiresIn)).toISOString();
-}
-
-function parseDuration(value) {
-  if (typeof value === "number") return value * 1000;
-  const match = String(value || "1h").trim().match(/^(\d+)\s*(ms|s|m|h|d)?$/i);
-  if (!match) return 60 * 60 * 1000;
-  const amount = Number(match[1]);
-  const unit = (match[2] || "s").toLowerCase();
-  const multipliers = { ms: 1, s: 1000, m: 60000, h: 3600000, d: 86400000 };
-  return amount * multipliers[unit];
-}
-
-function normalizeAuthError(error, auth = null) {
-  const headers = challengeHeadersFor(auth);
-  if (error instanceof AuthRequiredError) {
-    if (headers && !error.headers) error.headers = headers;
-    return error;
-  }
-  if (error instanceof ForbiddenError || error instanceof ValidationError) return error;
-  const code = error?.code;
-  if (code === "FORBIDDEN" || error?.status === 403) return new ForbiddenError(error.message, { cause: error });
-  if (error?.status === 401 || String(code || "").includes("AUTH") || String(code || "").includes("TOKEN") || String(code || "").includes("SESSION")) return new AuthRequiredError(error.message, { cause: error, headers });
-  return error;
-}
-
-function challengeHeadersFor(auth) {
-  const strategies = normalizeStrategies(auth?.strategies || []);
-  if (!strategies.includes("basic")) return null;
-  return { "WWW-Authenticate": 'Basic realm="api-kit", charset="UTF-8"' };
+function toIamStrategies(strategies = []) {
+  return normalizeStrategies(strategies).map((strategy) => (strategy === "bearer" ? "jwt" : strategy));
 }
 
 function findAuditModel(modules, models) {
@@ -649,6 +587,23 @@ function installAuditHooks(moduleConfigs, auditConfig) {
   }
 }
 
+function installAuthAuditHooks(authContext, moduleConfigs, auditConfig) {
+  if (!authContext || !auditConfig) return;
+
+  const auditModule = moduleConfigs.find((moduleConfig) => isAuditModule(moduleConfig));
+  const AuditModel = auditModule?.resource?.model;
+  const SessionModel = authContext.models?.Session;
+  if (!AuditModel || !SessionModel?.addHook) return;
+
+  SessionModel.addHook("afterCreate", async function auditSessionCreate(payload) {
+    await writeAudit(AuditModel, auditConfig, this, "create", payload, {}, snapshot(payload), { emit: false });
+  });
+
+  SessionModel.addHook("afterUpdate", async function auditSessionUpdate(payload, options = {}) {
+    await writeAudit(AuditModel, auditConfig, this, "update", payload, options.auditOld || {}, snapshot(payload), { emit: false });
+  });
+}
+
 function appendHook(hooks, name, hook) {
   const existing = hooks[name];
   if (!existing) {
@@ -660,7 +615,7 @@ function appendHook(hooks, name, hook) {
   }
 }
 
-async function writeAudit(AuditModel, auditConfig, ModelClass, action, model, oldData, newData) {
+async function writeAudit(AuditModel, auditConfig, ModelClass, action, model, oldData, newData, options = {}) {
   const tableName = tableNameFor(ModelClass);
   if (!tableName || isAuditTableName(tableName)) return;
 
@@ -679,7 +634,7 @@ async function writeAudit(AuditModel, auditConfig, ModelClass, action, model, ol
     },
     { hooks: false },
   );
-  auditConfig?.events?.emit("change", auditRow.toJSON());
+  if (options.emit !== false) auditConfig?.events?.emit("change", auditRow.toJSON());
 }
 
 function isModelInstance(value) {
@@ -738,10 +693,7 @@ function normalizeOpenApiConfig(openapi) {
 function normalizePostmanConfig(postman, openapi) {
   if (postman) return postman === true ? {} : postman;
   if (!openapi?.postman) return null;
-  return {
-    ...openapi,
-    path: openapi.postmanPath || "/postman.json",
-  };
+  return {...openapi,path: openapi.postmanPath || "/postman.json"};
 }
 
 function normalizeAuditConfig(audit) {

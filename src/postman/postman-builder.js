@@ -6,6 +6,11 @@ export function buildPostmanCollection({ routes, modules = new Map(), packageInf
 
   for (const route of routes.getAll()) {
     if (route.serviceMethod === "postman") continue;
+    if (isRootPostmanItem(route)) {
+      root.item.push(postmanItemFor(route, modules));
+      continue;
+    }
+
     const folderName = postmanFolderName(route);
     if (!folders.has(folderName)) {
       const folder = { name: folderName, item: [] };
@@ -27,6 +32,10 @@ export function buildPostmanCollection({ routes, modules = new Map(), packageInf
   };
 }
 
+function isRootPostmanItem(route) {
+  return route.operationId === "system.welcome" || route.serviceMethod === "welcome";
+}
+
 function collectionDescription(config, packageInfo) {
   const description = config.description || packageInfo.description || "";
   const loginHelp = "Use el request Login para obtener el token. Al ejecutarlo, la coleccion actualiza automaticamente la variable bearerToken con el token recibido para usar el resto de los recursos protegidos. Use el request Logout para cerrar la sesion y limpiar bearerToken.";
@@ -34,8 +43,7 @@ function collectionDescription(config, packageInfo) {
 }
 
 function postmanFolderName(route) {
-  if (route.module === "auth") return route.serviceMethod || route.module;
-  if (route.module === "audit") return route.serviceMethod || route.module;
+  if (route.module === "auth") return "session";
   if (route.module === "openapi") return route.openApiPath.split("/").filter(Boolean).pop() || route.module;
   return String(route.module);
 }

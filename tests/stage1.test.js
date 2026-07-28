@@ -358,6 +358,12 @@ describe("Etapa 1 - N�cleo", () => {
       assert.equal(res.body.variable.find((item) => item.key === "baseUrl").value, "http://localhost:3000");
 
       const root = res.body.item.find((item) => item.name === "api");
+      const welcome = root.item.find((item) => item.name === "Backend welcome");
+      assert.ok(welcome);
+      assert.equal(welcome.request.method, "GET");
+      assert.equal(welcome.request.url.raw, "{{baseUrl}}/api");
+      assert.equal(root.item.find((item) => item.name === "system"), undefined);
+
       const clientes = root.item.find((item) => item.name === "clientes");
       assert.ok(clientes);
       assert.deepEqual(clientes.item.map((item) => item.name), ["Listar", "Schema", "Obtener por ID", "Crear", "Actualizar", "Eliminar"]);

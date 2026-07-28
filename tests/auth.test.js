@@ -46,7 +46,7 @@ describe("auth", () => {
       const denied = await request(server, "GET", "/api/clientes");
       assert.equal(denied.status, 401);
       assert.equal(denied.body.ok, false);
-      assert.equal(denied.headers["www-authenticate"], 'Basic realm="api-kit", charset="UTF-8"');
+      assert.equal(denied.headers["www-authenticate"], 'Basic realm="IAM"');
 
       const login = await request(server, "POST", "/api/login", {
         body: { username: "admin", password: "1234" },
@@ -55,7 +55,14 @@ describe("auth", () => {
       assert.equal(login.body.ok, true);
       assert.equal(login.body.data.user.id, "admin");
       assert.equal(typeof login.body.data.token, "string");
-      assert.ok(login.body.data.session.expiresAt);
+      assert.equal(typeof login.body.data.id, "string");
+      assert.equal(login.body.data.expiresIn, 300);
+
+      const session = await request(server, "GET", "/api/session", {
+        token: login.body.data.token,
+      });
+      assert.equal(session.status, 200);
+      assert.equal(session.body.data.user.id, "admin");
 
       const created = await request(server, "POST", "/api/clientes", {
         token: login.body.data.token,
@@ -75,13 +82,13 @@ describe("auth", () => {
         body: { activo: false },
       });
       assert.equal(forbidden.status, 403);
-      assert.equal(forbidden.body.code, "FORBIDDEN");
+      assert.equal(forbidden.body.ok, false);
 
       const logout = await request(server, "POST", "/api/logout", {
         token: login.body.data.token,
       });
       assert.equal(logout.status, 200);
-      assert.equal(logout.body.data, true);
+      assert.deepEqual(logout.body.data, {});
 
       const afterLogout = await request(server, "GET", "/api/clientes", {
         token: login.body.data.token,
@@ -101,6 +108,7 @@ describe("auth", () => {
       assert.deepEqual(openapi.body.paths["/api/openapi.json"].get["x-permissions"], ["openapi.read"]);
       assert.equal(openapi.body.paths["/api/login"].post.security, undefined);
       assert.equal(openapi.body.paths["/api/login"].post.requestBody.content["application/json"].schema.properties.password.format, "password");
+      assert.deepEqual(openapi.body.paths["/api/session"].get.security, [{ bearerAuth: [] }, { basicAuth: [] }]);
 
       const deniedPostman = await request(server, "GET", "/api/postman.json");
       assert.equal(deniedPostman.status, 401);
@@ -108,16 +116,16 @@ describe("auth", () => {
       const postman = await request(server, "GET", "/api/postman.json", { basic: ["admin", "1234"] });
       assert.equal(postman.status, 200);
       const root = postman.body.item.find((item) => item.name === "api");
-      const loginFolder = root.item.find((item) => item.name === "login");
-      const loginRequest = loginFolder.item.find((item) => item.name === "Login");
+      const sessionFolder = root.item.find((item) => item.name === "session");
+      assert.deepEqual(sessionFolder.item.map((item) => item.name), ["Login", "Session", "Logout"]);
+      const loginRequest = sessionFolder.item.find((item) => item.name === "Login");
       assert.deepEqual(JSON.parse(loginRequest.request.body.raw), { username: "admin", password: "1234" });
       assert.deepEqual(loginRequest.event[0].script.exec, [
         "const response = pm.response.json();",
         "pm.collectionVariables.set(\"bearerToken\", response.data.token);",
         "",
       ]);
-      const logoutFolder = root.item.find((item) => item.name === "logout");
-      const logoutRequest = logoutFolder.item.find((item) => item.name === "Logout");
+      const logoutRequest = sessionFolder.item.find((item) => item.name === "Logout");
       assert.deepEqual(logoutRequest.event[0].script.exec, [
         "pm.collectionVariables.set(\"bearerToken\", null);",
         "",
@@ -128,7 +136,7 @@ describe("auth", () => {
     }
   });
 
-  it("does not send basic auth challenge for bearer-only routes", async () => {
+  it("delegates bearer-only auth challenges to iam", async () => {
     const adapter = new SQLiteAdapter({ database: ":memory:" });
     const seq = new Seq({ adapter, logging: false });
     const api = await createApiKit({
@@ -153,7 +161,7 @@ describe("auth", () => {
       const denied = await request(server, "GET", "/api/clientes");
 
       assert.equal(denied.status, 401);
-      assert.equal(denied.headers["www-authenticate"], undefined);
+      assert.equal(denied.headers["www-authenticate"], 'Basic realm="IAM"');
     } finally {
       await api.close();
       await close(server);

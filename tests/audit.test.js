@@ -148,6 +148,66 @@ describe("audit", () => {
     }
   });
 
+  it("audits IAM session changes without exposing them through changes or sse events", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      audit: true,
+      auth: { required: true, secret: "test-secret" },
+      modules,
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+    await seedAuditAuth(api.auth.models, { admin: ["audit.changes"] });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+    const emitted = [];
+    api.events.on("change", (change) => emitted.push(change));
+
+    try {
+      const since = new Date(Date.now() - 1000).toISOString();
+      const login = await request(server, "POST", "/api/login", {
+        body: { username: "admin", password: "1234" },
+      });
+      assert.equal(login.status, 200);
+
+      const logout = await request(server, "POST", "/api/logout", {
+        token: login.body.data.token,
+      });
+      assert.equal(logout.status, 200);
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const Audit = api.models.get("audit");
+      const sessionTableName = tableNameForModel(api.auth.models.Session);
+      const rows = await Audit.findAll({ order: [["id", "ASC"]] });
+      const sessionRows = rows.map((row) => row.toJSON()).filter((row) => row.tableName === sessionTableName);
+
+      assert.deepEqual(sessionRows.map((row) => row.action), ["create", "update"]);
+      assert.equal(sessionRows[0].new.userId, "admin");
+      assert.equal(sessionRows[1].new.active, false);
+      assert.equal(emitted.some((change) => change.tableName === sessionTableName), false);
+
+      const changes = await request(server, "GET", `/api/changes?since=${encodeURIComponent(since)}`, {
+        basic: ["admin", "1234"],
+      });
+      assert.equal(changes.status, 200);
+      assert.equal(changes.body.data.some((change) => change.tableName === sessionTableName), false);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("streams audit changes over sse", async () => {
     const adapter = new SQLiteAdapter({ database: ":memory:" });
     const seq = new Seq({ adapter, logging: false });
@@ -216,7 +276,14 @@ async function seedAuditAuth(models, users) {
 function request(server, method, path, options = {}) {
   const { port } = server.address();
   const headers = {};
+  let body = null;
   if (options.basic) headers.Authorization = `Basic ${Buffer.from(options.basic.join(":")).toString("base64")}`;
+  if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.body) {
+    body = JSON.stringify(options.body);
+    headers["Content-Type"] = "application/json";
+    headers["Content-Length"] = Buffer.byteLength(body);
+  }
   return new Promise((resolve, reject) => {
     const req = http.request({ hostname: "localhost", port, path, method, headers }, (res) => {
       let raw = "";
@@ -230,8 +297,13 @@ function request(server, method, path, options = {}) {
       });
     });
     req.on("error", reject);
+    if (body) req.write(body);
     req.end();
   });
+}
+
+function tableNameForModel(ModelClass) {
+  return ModelClass?._resolvedTableName || ModelClass?.tableName || ModelClass?.modelName || ModelClass?.name || "";
 }
 
 function openSse(server, path) {

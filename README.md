@@ -214,6 +214,8 @@ La pagina HTML de `/install/` consume el JSON de `POST /install/:app` y muestra 
 
 ## Auth y OpenAPI
 
+La autenticacion y autorizacion se delegan al middleware Express de `iam`: `auth()` valida Basic/Bearer y maneja sesiones, y `can()` valida permisos por ruta. Cuando `auth.required` esta habilitado, `api-kit` auto registra las rutas de IAM bajo el `basePath`: `POST /login`, `GET /session` y `POST /logout`. Con `basePath: "/api"`, quedan en `/api/login`, `/api/session` y `/api/logout`.
+
 Si `auth` global esta habilitado, las rutas del instalador tambien requieren auth.
 
 Si `openapi` esta habilitado y existen apps instalables, `/install/{app}` aparece en el documento OpenAPI.
