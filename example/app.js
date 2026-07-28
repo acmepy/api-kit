@@ -1,4 +1,3 @@
-import express from "express";
 import { createApiKit } from "../index.js";
 import { Seq, SQLiteAdapter } from "seq";
 
@@ -11,9 +10,6 @@ async function main() {
     },
   });
   const seq = new Seq({ adapter });
-
-  const app = express();
-  app.use(express.json());
 
   const api = await createApiKit({
     seq,
@@ -33,11 +29,8 @@ async function main() {
   await seq.sync();
   await seedIam(api);
 
-  app.use(api.router);
-  app.use(api.errorHandler);
-
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {console.log(`[api-kit] demo running on http://localhost:${PORT}`)});
+  api.app.listen(PORT, () => {console.log(`[api-kit] demo running on http://localhost:${PORT}`)});
 }
 
 main().catch(console.error);

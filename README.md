@@ -19,7 +19,6 @@ La demo queda disponible en `http://localhost:3000`.
 ## Uso Basico
 
 ```js
-import express from "express";
 import { createApiKit } from "api-kit";
 import { Seq, SQLiteAdapter } from "seq";
 
@@ -45,14 +44,12 @@ const api = await createApiKit({
 await seq.authenticate();
 await seq.sync();
 
-const app = express();
-app.use(express.json());
-app.use(api.router);
-app.use(api.errorHandler);
-app.listen(3000);
+api.app.listen(3000);
 ```
 
 `naming` pertenece al adapter de `seq`; no es una opcion de `createApiKit`.
+`createApiKit` crea una instancia de Express si no recibe `app`, monta las rutas y el `errorHandler`, e instala `express.json()` por defecto. Se puede pasar una app existente con `app` y desactivar o configurar JSON con `json: false` u opciones en `json`.
+El `basePath` responde con un saludo del backend usando el `name` del `package.json`; por ejemplo `GET /api`.
 
 ## Modulos
 

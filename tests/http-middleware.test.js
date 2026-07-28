@@ -16,6 +16,80 @@ const loggedClienteResource = defineResource({
 });
 
 describe("http middleware", () => {
+  it("returns an express app with routes and error handling mounted", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      openapi: {},
+      modules: [],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    api.router.get("/api/fail-app", async () => {
+      throw new Error("App boom");
+    });
+
+    const server = await listen(api.app);
+
+    try {
+      const ok = await request(server, "GET", "/api/openapi.json");
+      const welcome = await request(server, "GET", "/api");
+      const fail = await request(server, "GET", "/api/fail-app");
+      const missing = await request(server, "GET", "/missing");
+
+      assert.equal(typeof api.app.listen, "function");
+      assert.equal(ok.status, 200);
+      assert.equal(ok.body.openapi, "3.0.3");
+      assert.equal(welcome.status, 200);
+      assert.deepEqual(welcome.body, { ok: true, data: { name: "api-kit", message: "Bienvenido al backend de api-kit" } });
+      assert.equal(fail.status, 500);
+      assert.equal(fail.body.code, "INTERNAL_ERROR");
+      assert.equal(fail.body.message, "App boom");
+      assert.equal(missing.status, 404);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("uses and returns the provided express app", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const app = express();
+    app.get("/health", (_req, res) => res.json({ ok: true }));
+    const api = await createApiKit({
+      seq,
+      app,
+      basePath: "/api",
+      openapi: {},
+      modules: [],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const server = await listen(app);
+
+    try {
+      const health = await request(server, "GET", "/health");
+      const openapi = await request(server, "GET", "/api/openapi.json");
+
+      assert.equal(api.app, app);
+      assert.deepEqual(health.body, { ok: true });
+      assert.equal(openapi.status, 200);
+      assert.equal(openapi.body.openapi, "3.0.3");
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("can enable cors, helmet, and compression from createApiKit options", async () => {
     const adapter = new SQLiteAdapter({ database: ":memory:" });
     const seq = new Seq({ adapter, logging: false });
@@ -136,6 +210,74 @@ describe("http middleware", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ hola: "json" }),
       });
+      assert.equal(json.status, 200);
+      assert.deepEqual(json.body, { type: "object", body: { hola: "json" } });
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("serves a package welcome message at the base path", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      baseDir: process.cwd(),
+      basePath: "/api",
+      openapi: {},
+      modules: [],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const server = await listen(api.app);
+
+    try {
+      const welcome = await request(server, "GET", "/api");
+      const openapi = await request(server, "GET", "/api/openapi.json");
+
+      assert.equal(welcome.status, 200);
+      assert.deepEqual(welcome.body, { ok: true, data: { name: "api-kit", message: "Bienvenido al backend de api-kit" } });
+      assert.ok(openapi.body.paths["/api"].get);
+      assert.equal(openapi.body.paths["/api"].get.operationId, "system_welcome");
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("parses application/json bodies by default", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      modules: [],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    api.router.post("/api/echo-json", (req, res) => {
+      res.json({ type: typeof req.body, body: req.body });
+    });
+
+    const app = express();
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const json = await request(server, "POST", "/api/echo-json", {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hola: "json" }),
+      });
+
       assert.equal(json.status, 200);
       assert.deepEqual(json.body, { type: "object", body: { hola: "json" } });
     } finally {
@@ -311,17 +453,16 @@ describe("http middleware", () => {
 
       assert.equal(res.status, 200);
       assert.equal(infos.length, 1);
-      assert.equal(infos[0][0], "[api-kit]");
-      assert.equal(infos[0][1], "request");
-      assert.equal(infos[0][2], "tx-123");
-      assert.equal(typeof infos[0][3], "string");
-      assert.equal(infos[0][4], "GET");
-      assert.equal(infos[0][5], "/api/openapi.json");
-      assert.equal(infos[0][6], 200);
-      assert.equal(typeof infos[0][7], "number");
-      assert.ok(infos[0][7] >= 0);
-      assert.equal(Number(infos[0][8]), Number(res.headers["content-length"] || 0));
-      assert.equal(infos[0][9], "api-kit-test");
+      assert.equal(infos[0][0], "[api-kit] [request]");
+      assert.equal(infos[0][1], "tx-123");
+      assert.equal(typeof infos[0][2], "string");
+      assert.equal(infos[0][3], "GET");
+      assert.equal(infos[0][4], "/api/openapi.json");
+      assert.equal(infos[0][5], 200);
+      assert.equal(typeof infos[0][6], "number");
+      assert.ok(infos[0][6] >= 0);
+      assert.equal(Number(infos[0][7]), Number(res.headers["content-length"] || 0));
+      assert.equal(infos[0][8], "api-kit-test");
     } finally {
       await api.close();
       await close(server);
@@ -378,32 +519,32 @@ describe("http middleware", () => {
       assert.equal(errors.length, 0);
       assert.equal(warnings.length, 2);
 
-      assert.equal(warnings[0][0], "[api-kit]");
-      assert.equal(warnings[0][1], "http.error");
-      const customLog = warnings[0][2];
-      assert.equal(customLog.status, 404);
-      assert.equal(customLog.code, "NOT_FOUND");
-      assert.equal(customLog.method, "GET");
-      assert.equal(customLog.path, "/api/clientes/ruc/80000000-0");
-      assert.equal(typeof customLog.txId, "string");
-      assert.equal(customLog.stack, undefined);
+      assert.equal(warnings[0][0], "[api-kit] [http.error]");
+      assert.match(warnings[0][1], /^\[[^\]]+\]$/);
+      assert.equal(warnings[0][2], "NotFoundError");
+      assert.equal(warnings[0][4], 404);
+      assert.equal(warnings[0][5], "NOT_FOUND");
+      assert.equal(warnings[0][6], "GET");
+      assert.equal(warnings[0][7], "/api/clientes/ruc/80000000-0");
+      assert.equal(warnings[0][9], false);
 
-      const crudLog = warnings[1][2];
-      assert.equal(crudLog.status, 404);
-      assert.equal(crudLog.method, "GET");
-      assert.equal(crudLog.path, "/api/clientes/999");
+      assert.equal(warnings[1][0], "[api-kit] [http.error]");
+      assert.equal(warnings[1][4], 404);
+      assert.equal(warnings[1][6], "GET");
+      assert.equal(warnings[1][7], "/api/clientes/999");
       const res = await request(server, "GET", "/api/fail");
 
       assert.equal(res.status, 500);
       assert.equal(errors.length, 1);
-      assert.equal(errors[0][0], "[api-kit]");
-      assert.equal(errors[0][1], "http.error");
-      const entry = errors[0][2];
-      assert.equal(entry.status, 500);
-      assert.equal(entry.code, "INTERNAL_ERROR");
-      assert.equal(entry.method, "GET");
-      assert.equal(entry.path, "/api/fail");
-      assert.match(entry.stack, /Error: Boom/);
+      assert.equal(errors[0][0], "[api-kit] [http.error]");
+      assert.match(errors[0][1], /^\[[^\]]+\]$/);
+      assert.equal(errors[0][2], "Error");
+      assert.equal(errors[0][3], "Boom");
+      assert.equal(errors[0][4], 500);
+      assert.equal(errors[0][5], "INTERNAL_ERROR");
+      assert.equal(errors[0][6], "GET");
+      assert.equal(errors[0][7], "/api/fail");
+      assert.match(errors[0][9].stack, /Error: Boom/);
     } finally {
       await api.close();
       await close(server);

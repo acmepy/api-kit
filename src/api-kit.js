@@ -42,6 +42,7 @@ export async function createApiKit(conf = {}) {
     helmet: conf.helmet ?? false,
     compression: conf.compression ?? false,
     rateLimit: conf.rateLimit ?? false,
+    json: conf.json ?? true,
     text: conf.text ?? false,
     staticModules: [],
     trustProxy: conf.trustProxy ?? false,
@@ -111,6 +112,7 @@ export async function createApiKit(conf = {}) {
   mainRouter.use(runWithContext);
   mainRouter.use(requestLogger);
 
+  installWelcomeRoute({ mainRouter, routeRegistry, config, packageInfo });
   installAuthRoutes({ mainRouter, routeRegistry, config, authContext, authorize });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
@@ -120,9 +122,11 @@ export async function createApiKit(conf = {}) {
   installPostmanRoute({ mainRouter, routeRegistry, modules, packageInfo, config, postman, authorize });
   installStaticFiles(mainRouter, config);
 
-  mainRouter.use(errorHandler);
+  const app = conf.app || express();
+  app.use(mainRouter);
+  app.use(errorHandler);
 
-  return {router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: auditEvents, auth: authContext, close: async () => { auditEvents.removeAllListeners(); },
+  return {app, router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: auditEvents, auth: authContext, close: async () => { auditEvents.removeAllListeners(); },
   };
 }
 
@@ -158,6 +162,9 @@ async function installHttpMiddleware(router, config) {
     router.use(rateLimit(rateLimitOptions === true ? undefined : rateLimitOptions));
   }
 
+  const jsonOptions = normalizeMiddlewareOptions(config.json);
+  if (jsonOptions) router.use(express.json(jsonOptions === true ? undefined : jsonOptions));
+
   const textOptions = normalizeTextOptions(config.text);
   if (textOptions) router.use(express.text(textOptions));
 }
@@ -173,6 +180,17 @@ function normalizeTextOptions(value) {
   const defaults = { type: "text/plain", limit: "10mb" };
   if (value === true) return defaults;
   return { ...defaults, ...value };
+}
+
+function installWelcomeRoute({ mainRouter, routeRegistry, config, packageInfo }) {
+  const fullPath = normalizeMountPath(config.basePath) || "/";
+  const packageName = packageInfo.name || "api-kit";
+
+  routeRegistry.register({ module: "system", operationId: "system.welcome", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "welcome", auth: { required: false, strategies: [] }, permissions: [], summary: "Backend welcome", description: "", tags: ["system"], deprecated: false });
+
+  mainRouter.get(fullPath, (_req, res) => {
+    res.json(ok({ name: packageName, message: `Bienvenido al backend de ${packageName}` }));
+  });
 }
 
 function installStaticFiles(router, config) {
