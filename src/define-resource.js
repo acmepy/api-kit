@@ -128,7 +128,8 @@ function shouldIncludeInSchema(definition, operation) {
   if (definition.schema === false) return false;
   if (operation === "create" && definition.create === false) return false;
   if (operation === "update" && definition.update === false) return false;
-  if (definition.primaryKey && definition.autoIncrement) return false;
+  if (operation === "create" && definition.primaryKey && definition.autoIncrement) return false;
+  if (operation === "update" && definition.primaryKey && definition.update !== true) return false;
   return true;
 }
 

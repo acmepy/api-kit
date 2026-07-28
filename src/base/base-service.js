@@ -73,6 +73,12 @@ export class BaseService {
     const data = await this.#validateBody("update", body);
     const auditOld = instance.toJSON();
     try {
+      if (this.#updatesPrimaryKey(instance, data)) {
+        const pk = this.#model.primaryKeyAttribute;
+        await this.#model.update(data, { where: { [pk]: auditOld[pk] }, auditOld, ...(transaction && { transaction }) });
+        const updated = await this.#model.findByPk(data[pk], { ...(transaction && { transaction }) });
+        return { data: updated.toJSON() };
+      }
       await instance.update(data, { auditOld, ...(transaction && { transaction }) });
       return { data: instance.toJSON() };
     } catch (error) {
@@ -169,17 +175,46 @@ export class BaseService {
 
   async #validateBody(operation, body = {}) {
     const schema = this.#schemas[operation] || this.#schemas.body;
-    if (!schema) return body;
-    this.#validateBodyFields(schema, body || {});
+    const payload = this.#sanitizeBody(operation, body || {});
+    if (!schema) return payload;
+    this.#validateBodyFields(schema, payload);
 
     try {
-      return await schema.validate(body || {});
+      return await schema.validate(payload);
     } catch (error) {
-      throw new ValidationError(error.message, {
-        errors: error.errors || null,
-        cause: error,
-      });
+      throw new ValidationError(error.message, {errors: error.errors || null, cause: error,});
     }
+  }
+
+  #sanitizeBody(operation, body) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+    const definitions = this.#filterDefinitions();
+    let payload = body;
+
+    for (const [field, definition] of Object.entries(definitions)) {
+      if (!(field in body)) continue;
+      if (!this.#shouldOmitBodyField(operation, definition)) continue;
+      if (payload === body) payload = { ...body };
+      delete payload[field];
+    }
+
+    return payload;
+  }
+
+  #shouldOmitBodyField(operation, definition) {
+    if (operation === "create") {
+      if (definition?.create === false) return true;
+      return definition?.primaryKey && definition.autoIncrement;
+    }
+    if (operation !== "update") return false;
+    if (definition?.update === false) return true;
+    return definition?.primaryKey && definition.update !== true;
+  }
+
+  #updatesPrimaryKey(instance, data) {
+    const pk = this.#model?.primaryKeyAttribute;
+    if (!pk || !data || typeof data !== "object" || !(pk in data)) return false;
+    return data[pk] !== instance.getDataValue(pk);
   }
 
   #validateBodyFields(schema, body) {
@@ -435,6 +470,3 @@ export class BaseService {
     return "unknown";
   }
 }
-
-
-
