@@ -1,3 +1,11 @@
+import { normalizeJsonSchema, normalizeStrategies } from "../utils/normalize.js";
+
+export function normalizeOpenApiConfig(openapi) {
+  if (!openapi) return null;
+  if (openapi === true) return {};
+  return openapi;
+}
+
 export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {} }) {
   const paths = {};
   const schemas = {};
@@ -84,10 +92,6 @@ function securityFor(route) {
   if (strategies.includes("bearer")) security.push({ bearerAuth: [] });
   if (strategies.includes("basic")) security.push({ basicAuth: [] });
   return security.length > 0 ? security : undefined;
-}
-
-function normalizeStrategies(strategies = []) {
-  return strategies.map((strategy) => (strategy === "jwt" ? "bearer" : strategy));
 }
 
 function parametersFor(route) {
@@ -208,27 +212,3 @@ function toJsonSchema(schema) {
   return normalizeJsonSchema(schema.toJsonSchema());
 }
 
-function normalizeJsonSchema(schema) {
-  if (!schema || typeof schema !== "object") return schema;
-
-  const normalized = Array.isArray(schema) ? schema.map((item) => normalizeJsonSchema(item)) : { ...schema };
-
-  if (Array.isArray(normalized.type) && normalized.type.includes("null")) {
-    const types = normalized.type.filter((type) => type !== "null");
-    normalized.type = types.length === 1 ? types[0] : types;
-    normalized.nullable = true;
-  }
-
-  if (normalized.properties) {
-    normalized.properties = Object.fromEntries(
-      Object.entries(normalized.properties).map(([key, value]) => [key, normalizeJsonSchema(value)]),
-    );
-  }
-
-  if (normalized.items) normalized.items = normalizeJsonSchema(normalized.items);
-  if (normalized.oneOf) normalized.oneOf = normalized.oneOf.map((item) => normalizeJsonSchema(item));
-  if (normalized.anyOf) normalized.anyOf = normalized.anyOf.map((item) => normalizeJsonSchema(item));
-  if (normalized.allOf) normalized.allOf = normalized.allOf.map((item) => normalizeJsonSchema(item));
-
-  return normalized;
-}

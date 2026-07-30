@@ -4,11 +4,37 @@ import os from "node:os";
 import AdmZip from "adm-zip";
 import { AppError } from "../errors/app-error.js";
 import { ValidationError } from "../errors/validation-error.js";
+import { ok } from "../http/response.js";
+import { normalizeMountPath } from "../utils/normalize.js";
 
 export function normalizeInstallableApps(staticModules, baseDir) {
   return staticModules
     .filter((staticModule) => staticModule?.repo)
     .map((staticModule) => normalizeInstallableApp(staticModule, baseDir));
+}
+
+export function installFrontendInstallRoutes({ mainRouter, routeRegistry, config, authorize }) {
+  const apps = config.installableApps || [];
+  if (apps.length === 0) return;
+
+  const auth = config.auth || { required: false, strategies: [] };
+  const handlers = [];
+  if (authorize) handlers.push(authorize({ auth, permissions: [] }));
+
+  routeRegistry.register({ module: "install", operationId: "install.list", method: "get", expressPath: "/install", openApiPath: "/install", serviceMethod: "installList", auth, permissions: [], summary: "Instalador de frontends", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.script", method: "get", expressPath: "/install/app.js", openApiPath: "/install/app.js", serviceMethod: "installScript", auth, permissions: [], summary: "Script del instalador", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions: [], summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
+
+  mainRouter.get("/install", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps));});
+  mainRouter.get("/install/", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps))});
+  mainRouter.get("/install/app.js", ...handlers, (_req, res) => {res.type("application/javascript").send(renderInstallScript());});
+
+  mainRouter.post("/install/:app", ...handlers, async (req, res) => {
+    const app = apps.find((item) => item.app === req.params.app);
+    if (!app) return res.status(404).json({ ok: false, code: "NOT_FOUND", message: "Frontend no encontrado" });
+    const data = await installApp(app, { token: req.body?.token });
+    res.json(ok(data));
+  });
 }
 
 export async function installApp(app, { token, fetch: fetchImpl = globalThis.fetch } = {}) {
@@ -243,13 +269,6 @@ function installResult(app, tag, status) {
 
 function appIdForMountPath(mountPath) {
   return mountPath.replace(/^\/+|\/+$/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "root";
-}
-
-function normalizeMountPath(value) {
-  if (!value) return null;
-  const clean = String(value).trim();
-  if (!clean) return null;
-  return clean.startsWith("/") ? clean.replace(/\/+$/g, "") || "/" : `/${clean.replace(/\/+$/g, "")}`;
 }
 
 function assertRepo(repo) {

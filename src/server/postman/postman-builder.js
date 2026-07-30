@@ -1,5 +1,11 @@
 const POSTMAN_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
 
+export function normalizePostmanConfig(postman, openapi) {
+  if (postman) return postman === true ? {} : postman;
+  if (!openapi?.postman) return null;
+  return {...openapi,path: openapi.postmanPath || "/postman.json"};
+}
+
 export function buildPostmanCollection({ routes, modules = new Map(), packageInfo = {}, config = {} }) {
   const root = { name: basePathName(config.basePath), item: [] };
   const folders = new Map();

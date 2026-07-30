@@ -1,5 +1,6 @@
 import { NotFoundError } from "../errors/not-found-error.js";
 import { ValidationError } from "../errors/validation-error.js";
+import { normalizeJsonSchema } from "../utils/normalize.js";
 import { Op } from "seq";
 
 const FILTER_OPERATORS = {eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between};
@@ -101,7 +102,7 @@ export class BaseService {
   #toJsonSchema(schema, operation) {
     if (!schema) return {};
     if (typeof schema.toJsonSchema !== "function") return {};
-    return this.#enrichJsonSchema(this.#normalizeJsonSchema(schema.toJsonSchema()), operation);
+    return this.#enrichJsonSchema(normalizeJsonSchema(schema.toJsonSchema()), operation);
   }
 
   #enrichJsonSchema(schema, operation) {
@@ -139,31 +140,6 @@ export class BaseService {
     }
 
     return enriched;
-  }
-
-  #normalizeJsonSchema(schema) {
-    if (!schema || typeof schema !== "object") return schema;
-
-    const normalized = Array.isArray(schema) ? schema.map((item) => this.#normalizeJsonSchema(item)) : { ...schema };
-
-    if (Array.isArray(normalized.type) && normalized.type.includes("null")) {
-      const types = normalized.type.filter((type) => type !== "null");
-      normalized.type = types.length === 1 ? types[0] : types;
-      normalized.nullable = true;
-    }
-
-    if (normalized.properties) {
-      normalized.properties = Object.fromEntries(
-        Object.entries(normalized.properties).map(([key, value]) => [key, this.#normalizeJsonSchema(value)]),
-      );
-    }
-
-    if (normalized.items) normalized.items = this.#normalizeJsonSchema(normalized.items);
-    if (normalized.oneOf) normalized.oneOf = normalized.oneOf.map((item) => this.#normalizeJsonSchema(item));
-    if (normalized.anyOf) normalized.anyOf = normalized.anyOf.map((item) => this.#normalizeJsonSchema(item));
-    if (normalized.allOf) normalized.allOf = normalized.allOf.map((item) => this.#normalizeJsonSchema(item));
-
-    return normalized;
   }
 
   #resourceName() {

@@ -1,3 +1,5 @@
+import { joinPaths } from "../utils/paths.js";
+
 const ENDPOINT_DEFAULTS = {
   list: { enabled: true, method: "get", path: "/", summary: "Listar" },
   schema: { enabled: true, method: "get", path: "/schema", summary: "Schema" },
@@ -57,15 +59,5 @@ function normalizeAuth(auth) {
     required: auth.required ?? true,
     strategies: Array.isArray(strategies) ? strategies : [strategies],
   };
-}
-
-function joinPaths(...parts) {
-  const clean = parts
-    .filter((part) => part !== undefined && part !== null && part !== "")
-    .map((part) => String(part).trim())
-    .filter(Boolean);
-  if (clean.length === 0) return "/";
-  const path = clean.map((part) => part.replace(/^\/+|\/+$/g, "")).filter(Boolean).join("/");
-  return `/${path}`;
 }
 
