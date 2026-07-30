@@ -14,7 +14,7 @@ export function installAuthRoutes({ mainRouter, routeRegistry, config, authConte
 
   routeRegistry.register({module: "auth", operationId: "auth.login", method: "post", expressPath: loginPath, openApiPath: loginPath, serviceMethod: "login", auth: { required: false, strategies: [] }, permissions: [], summary: "Login", description: "", tags: ["auth"], deprecated: false});
   routeRegistry.register({module: "auth", operationId: "auth.session", method: "get", expressPath: sessionPath, openApiPath: sessionPath, serviceMethod: "session", auth: { required: true, strategies: authContext.strategies }, permissions: [], summary: "Session", description: "", tags: ["auth"], deprecated: false});
-  routeRegistry.register({module: "auth", operationId: "auth.logout", method: "post", expressPath: logoutPath, openApiPath: logoutPath, serviceMethod: "logout", auth: { required: true, strategies: ["bearer", "basic"] }, permissions: [], summary: "Logout", description: "", tags: ["auth"], deprecated: false});
+  routeRegistry.register({module: "auth", operationId: "auth.logout", method: "post", expressPath: logoutPath, openApiPath: logoutPath, serviceMethod: "logout", auth: { required: true, strategies: authContext.strategies }, permissions: [], summary: "Logout", description: "", tags: ["auth"], deprecated: false});
 
   const basePath = normalizeMountPath(config.basePath) || "/";
   const authRouter = express.Router();

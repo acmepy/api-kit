@@ -158,9 +158,6 @@ async function canViewAuditChange(change, { req, modules, routeRegistry, authCon
   if (!route) return false;
   if (!route.auth?.required) return true;
 
-  const userId = req.session?.user?.id;
-  if (!userId) return false;
-
   const permissions = route.permissions || [];
   for (const permission of permissions) {
     if (!permission) continue;
