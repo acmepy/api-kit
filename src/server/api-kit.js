@@ -10,7 +10,7 @@ import { normalizePostmanConfig } from "./schema/postman-builder.js";
 import { RouteRegistry } from "./schema/route-registry.js";
 import { loadModels, loadModule } from "./loaders/index.js";
 import { installFrontendInstallRoutes, normalizeInstallableApps } from "./install/install.services.js";
-import { installAuditChangesRoute, installAuditHooks, installAuditSseRoute, installAuthAuditHooks, normalizeAuditConfig } from "./install/audit.services.js";
+import { createAuditWriter, installAuditChangesRoute, installAuditHooks, installAuditSseRoute, normalizeAuditConfig } from "./install/audit.services.js";
 import { createAuthContext, createAuthorizer, installAuthRoutes } from "./install/auth.services.js";
 import { installHttpMiddleware } from "./install/http-middleware.services.js";
 import { installOpenApiRoute, installPostmanRoute } from "./install/schema.services.js";
@@ -66,14 +66,15 @@ export async function createApiKit(conf = {}) {
   config.staticModules.push(...moduleBundle.staticModules);
   config.installableApps = normalizeInstallableApps(config.staticModules, config.baseDir);
   config.auth = normalizeGlobalAuth(mergeAuthConfig(moduleBundle.auth, config.auth));
-  const authBackend = normalizeAuthBackendConfig(config.auth);
-  const authContext = authBackend ? createAuthContext(config, authBackend) : null;
-  const authorize = createAuthorizer(authContext);
 
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
+  const authBackend = normalizeAuthBackendConfig(config.auth);
+  const auditWriter = createAuditWriter(moduleConfigs, config.audit);
+  const authContext = authBackend ? createAuthContext(config, authBackend, { auditWriter }) : null;
+  const authorize = createAuthorizer(authContext);
+
   installAuditHooks(moduleConfigs, config.audit);
-  installAuthAuditHooks(authContext, moduleConfigs, config.audit);
 
   const explicitModels = { ...config.models };
   for (const moduleConfig of moduleConfigs) {
@@ -137,11 +138,14 @@ function mergeAuthConfig(base, override) {
 }
 
 function registerSeqModels(seq, modelClasses) {
-  if (!seq || !Array.isArray(seq._modelClasses)) return;
+  if (!seq || typeof seq.registerModel !== "function") return;
 
   for (const modelClass of new Set(modelClasses)) {
-    if (!modelClass || seq._modelClasses.includes(modelClass)) continue;
-    seq._modelClasses.push(modelClass);
+    if (!modelClass) continue;
+    if (!modelClass.modelName && typeof modelClass.define === "function") modelClass.define(seq);
+    const modelName = modelClass.modelName || modelClass.name;
+    if (modelName && typeof seq.hasModel === "function" && seq.hasModel(modelName)) continue;
+    if (modelClass.modelName) seq.registerModel(modelClass);
   }
 }
 

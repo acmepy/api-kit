@@ -2,6 +2,7 @@ import express from "express";
 import { SeqAdapter } from "iam/adapters";
 import { auth as iamAuth, can as iamCan } from "iam/express";
 import { getContext } from "../context/request-context.js";
+import { applyNamingConvention } from "../utils/naming.js";
 import { joinPaths } from "../utils/paths.js";
 import { normalizeMountPath, toIamStrategies } from "../utils/normalize.js";
 
@@ -24,10 +25,10 @@ export function installAuthRoutes({ mainRouter, routeRegistry, config, authConte
   mainRouter.use(basePath, authRouter);
 }
 
-export function createAuthContext(config, authBackend) {
-  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models });
+export function createAuthContext(config, authBackend, { auditWriter } = {}) {
+  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models, auditable: authAuditable(config, authBackend, auditWriter) });
   const middleware = iamAuth(iamAuthOptions(authBackend, adapter));
-  return { ...authBackend, adapter, middleware, models: adapter.models || authBackend.models || null};
+  return { ...authBackend, adapter, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
 }
 
 export function createAuthorizer(authContext) {
@@ -88,5 +89,13 @@ function iamAuthOptions(auth, adapter) {
     },
     strategies: toIamStrategies(auth.strategies || ["bearer", "basic"]),
     createSession: auth.createSession,
+  };
+}
+
+function authAuditable(config, authBackend, auditWriter) {
+  if (!auditWriter || authBackend.auditable === false) return null;
+  return {
+    tableName: authBackend.tableNames?.Session || applyNamingConvention("Session", config.seq?.adapter?.naming),
+    write: auditWriter,
   };
 }

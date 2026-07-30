@@ -34,45 +34,28 @@ export function installAuditHooks(moduleConfigs, auditConfig) {
       if (isModelInstance(payload)) previousData.set(payload, snapshot(payload));
     });
     appendHook(hooks, "afterCreate", async function auditCreate(payload) {
-      await writeAudit(AuditModel, auditConfig, this, "create", payload, {}, snapshot(payload));
+      await writeAudit(AuditModel, auditConfig, moduleConfig, "create", payload, {}, snapshot(payload));
     });
     appendHook(hooks, "afterUpdate", async function auditUpdate(payload, options = {}) {
       if (Array.isArray(payload)) {
-        for (const model of payload) await writeAudit(AuditModel, auditConfig, this, "bulk-update", model, options.where || {}, snapshot(model));
+        for (const model of payload) await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-update", model, options.where || {}, snapshot(model));
         return;
       }
-      await writeAudit(AuditModel, auditConfig, this, "update", payload, options.auditOld || previousData.get(payload) || {}, snapshot(payload));
+      await writeAudit(AuditModel, auditConfig, moduleConfig, "update", payload, options.auditOld || previousData.get(payload) || {}, snapshot(payload));
     });
     appendHook(hooks, "afterDestroy", async function auditDestroy(payload, options = {}) {
       if (isModelInstance(payload)) {
-        await writeAudit(AuditModel, auditConfig, this, "delete", payload, options.auditOld || previousData.get(payload) || snapshot(payload), {});
+        await writeAudit(AuditModel, auditConfig, moduleConfig, "delete", payload, options.auditOld || previousData.get(payload) || snapshot(payload), {});
         return;
       }
-      await writeAudit(AuditModel, auditConfig, this, "bulk-delete", null, options.where || {}, {});
+      await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-delete", null, options.where || {}, {});
     });
     appendHook(hooks, "afterBulkCreate", async function auditBulkCreate(models) {
-      for (const model of models || []) await writeAudit(AuditModel, auditConfig, this, "bulk-create", model, {}, snapshot(model));
+      for (const model of models || []) await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-create", model, {}, snapshot(model));
     });
 
     resource.options.hooks = hooks;
   }
-}
-
-export function installAuthAuditHooks(authContext, moduleConfigs, auditConfig) {
-  if (!authContext || !auditConfig) return;
-
-  const auditModule = moduleConfigs.find((moduleConfig) => isAuditModule(moduleConfig));
-  const AuditModel = auditModule?.resource?.model;
-  const SessionModel = authContext.models?.Session;
-  if (!AuditModel || !SessionModel?.addHook) return;
-
-  SessionModel.addHook("afterCreate", async function auditSessionCreate(payload) {
-    await writeAudit(AuditModel, auditConfig, this, "create", payload, {}, snapshot(payload), { emit: false });
-  });
-
-  SessionModel.addHook("afterUpdate", async function auditSessionUpdate(payload, options = {}) {
-    await writeAudit(AuditModel, auditConfig, this, "update", payload, options.auditOld || {}, snapshot(payload), { emit: false });
-  });
 }
 
 export function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {
@@ -83,7 +66,7 @@ export function installAuditChangesRoute({ mainRouter, routeRegistry, modules, m
     summary: "Cambios desde una fecha",
     handler: ({ AuditModel, modules, routeRegistry, authContext }) => async (req, res) => {
       const since = parseSince(req.query?.since);
-      const sinceField = auditSinceField(AuditModel);
+      const sinceField = auditSinceField(modules);
       const rows = await AuditModel.findAll({where: { [sinceField]: { [Op.gte]: since } }, order: [["id", "ASC"]],});
       const visible = [];
       for (const row of rows) {
@@ -93,6 +76,22 @@ export function installAuditChangesRoute({ mainRouter, routeRegistry, modules, m
       res.json(ok(visible));
     },
   });
+}
+
+export function createAuditWriter(moduleConfigs, auditConfig) {
+  if (!auditConfig) return null;
+
+  const auditModule = moduleConfigs.find((moduleConfig) => isAuditModule(moduleConfig));
+  const AuditModel = auditModule?.resource?.model;
+  if (!AuditModel) return null;
+
+  return async function auditWrite(change) {
+    const moduleConfig = {
+      name: change.resource || change.module || change.tableName,
+      resource: { definition: { id: { primaryKey: true } }, options: { tableName: change.tableName } },
+    };
+    await writeAudit(AuditModel, auditConfig, moduleConfig, change.action, plainAuditModel(change), change.old || {}, change.new || {}, { emit: change.emit ?? false });
+  };
 }
 
 export function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {
@@ -197,7 +196,7 @@ function moduleForAuditChange(change, modules) {
   if (!tableName) return null;
 
   for (const mod of modules.values()) {
-    const names = [mod.config?.name, mod.config?.resource?.options?.tableName, mod.model?._resolvedTableName, mod.model?.tableName, mod.model?.modelName, mod.model?.name, ].filter(Boolean).map((name) => String(name).toLowerCase());
+    const names = [mod.config?.name, mod.config?.resource?.options?.tableName, mod.model?.tableName, mod.model?.modelName, mod.model?.name, ].filter(Boolean).map((name) => String(name).toLowerCase());
     if (names.includes(tableName)) return mod;
   }
 
@@ -218,8 +217,9 @@ function parseSince(value) {
   return date;
 }
 
-function auditSinceField(AuditModel) {
-  return AuditModel?.options?.createdAt || "createdAt";
+function auditSinceField(modules) {
+  const auditModule = [...modules.values()].find((mod) => isAuditModule(mod.config));
+  return auditModule?.config?.resource?.options?.createdAt || "createdAt";
 }
 
 function appendHook(hooks, name, hook) {
@@ -233,8 +233,8 @@ function appendHook(hooks, name, hook) {
   }
 }
 
-async function writeAudit(AuditModel, auditConfig, ModelClass, action, model, oldData, newData, options = {}) {
-  const tableName = tableNameFor(ModelClass);
+async function writeAudit(AuditModel, auditConfig, moduleConfig, action, model, oldData, newData, options = {}) {
+  const tableName = tableNameFor(moduleConfig);
   if (!tableName || isAuditTableName(tableName)) return;
 
   const ctx = getContext() || {};
@@ -245,7 +245,7 @@ async function writeAudit(AuditModel, auditConfig, ModelClass, action, model, ol
       clientIp: audit.clientIp || audit.ip || "",
       userId: audit.userId || audit.usuarioId || null,
       tableName,
-      rowId: rowId(model) || rowIdFromWhere(oldData),
+      rowId: rowId(model, moduleConfig) || rowIdFromWhere(oldData),
       action,
       old: jsonSafe(oldData || {}),
       new: jsonSafe(newData || {}),
@@ -256,20 +256,25 @@ async function writeAudit(AuditModel, auditConfig, ModelClass, action, model, ol
 }
 
 function isModelInstance(value) {
-  return value && typeof value === "object" && value.dataValues && value.constructor;
+  return value && typeof value === "object" && typeof value.toJSON === "function";
 }
 
 function snapshot(model) {
-  if (!model?.dataValues) return {};
-  return jsonSafe(model.dataValues);
+  if (!model || typeof model.toJSON !== "function") return {};
+  return jsonSafe(model.toJSON());
 }
 
-function rowId(model) {
-  if (!model?.dataValues) return "";
-  const pk = model.constructor?.primaryKeyAttribute;
-  if (pk && model.dataValues[pk] !== undefined && model.dataValues[pk] !== null) return String(model.dataValues[pk]);
-  if (model.dataValues.id !== undefined && model.dataValues.id !== null) return String(model.dataValues.id);
+function rowId(model, moduleConfig) {
+  if (!model || typeof model.getDataValue !== "function") return "";
+  const pk = primaryKeyFor(moduleConfig);
+  const value = model.getDataValue(pk);
+  if (value !== undefined && value !== null) return String(value);
   return "";
+}
+
+function primaryKeyFor(moduleConfig) {
+  const definitions = moduleConfig?.resource?.definition || {};
+  return Object.entries(definitions).find(([, definition]) => definition?.primaryKey)?.[0] || "id";
 }
 
 function rowIdFromWhere(where = {}) {
@@ -277,8 +282,8 @@ function rowIdFromWhere(where = {}) {
   return Object.values(where).filter((value) => value !== undefined && value !== null).join("_");
 }
 
-function tableNameFor(ModelClass) {
-  return ModelClass?._resolvedTableName || ModelClass?.tableName || ModelClass?.modelName || ModelClass?.name || "";
+function tableNameFor(moduleConfig) {
+  return moduleConfig?.resource?.options?.tableName || moduleConfig?.name || "";
 }
 
 function isAuditModule(moduleConfig) {
@@ -288,4 +293,11 @@ function isAuditModule(moduleConfig) {
 function jsonSafe(value) {
   if (!value || typeof value !== "object") return {};
   return JSON.parse(JSON.stringify(value));
+}
+
+function plainAuditModel(change) {
+  return {
+    toJSON: () => ({ id: change.rowId, ...(change.new || {}) }),
+    getDataValue: (key) => (key === "id" ? change.rowId : change.new?.[key]),
+  };
 }

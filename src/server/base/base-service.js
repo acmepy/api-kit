@@ -75,7 +75,7 @@ export class BaseService {
     const auditOld = instance.toJSON();
     try {
       if (this.#updatesPrimaryKey(instance, data)) {
-        const pk = this.#model.primaryKeyAttribute;
+        const pk = this.#primaryKeyAttribute();
         await this.#model.update(data, { where: { [pk]: auditOld[pk] }, auditOld, ...(transaction && { transaction }) });
         const updated = await this.#model.findByPk(data[pk], { ...(transaction && { transaction }) });
         return { data: updated.toJSON() };
@@ -112,7 +112,7 @@ export class BaseService {
     const definitions = this.#config.resource?.definition || this.#model?.resourceDefinition?.attributes || {};
 
     for (const [field, property] of Object.entries(enriched.properties)) {
-      const definition = definitions[field] || this.#model?.rawAttributes?.[field];
+      const definition = definitions[field];
       if (!definition) continue;
       if (operation === "create" && definition.create === false) continue;
       if (operation === "update" && definition.update === false) continue;
@@ -188,7 +188,7 @@ export class BaseService {
   }
 
   #updatesPrimaryKey(instance, data) {
-    const pk = this.#model?.primaryKeyAttribute;
+    const pk = this.#primaryKeyAttribute();
     if (!pk || !data || typeof data !== "object" || !(pk in data)) return false;
     return data[pk] !== instance.getDataValue(pk);
   }
@@ -428,7 +428,12 @@ export class BaseService {
   }
 
   #filterDefinitions() {
-    return this.#config.resource?.definition || this.#model?.resourceDefinition?.attributes || this.#model?.rawAttributes || {};
+    return this.#config.resource?.definition || this.#model?.resourceDefinition?.attributes || {};
+  }
+
+  #primaryKeyAttribute() {
+    const definitions = this.#filterDefinitions();
+    return Object.entries(definitions).find(([, definition]) => definition?.primaryKey)?.[0] || "id";
   }
 
   #filterType(definition) {
