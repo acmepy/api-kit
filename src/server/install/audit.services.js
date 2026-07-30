@@ -7,8 +7,9 @@ import { joinPaths } from "../utils/paths.js";
 
 export function normalizeAuditConfig(audit) {
   if (!audit) return false;
-  if (audit === true) return { changesPath: "/changes", ssePath: "/sse" };
-  return { changesPath: "/changes", ssePath: "/sse", ...audit };
+  const defaults = { changesPath: "/changes", ssePath: "/sse", heartbeatTimeout: 15000 };
+  if (audit === true) return defaults;
+  return { ...defaults, ...audit, heartbeatTimeout: normalizeAuditHeartbeatTimeout(audit.heartbeatTimeout, defaults.heartbeatTimeout) };
 }
 
 export function installAuditHooks(moduleConfigs, auditConfig) {
@@ -111,7 +112,7 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
       };
       config.audit.events.on("change", sendChange);
 
-      const heartbeat = setInterval(() => {res.write(": heartbeat\n\n")}, 30000);
+      const heartbeat = setInterval(() => {res.write(": heartbeat\n\n")}, config.audit.heartbeatTimeout);
       heartbeat.unref?.();
 
       req.on("close", () => {
@@ -120,6 +121,12 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
       });
     },
   });
+}
+
+function normalizeAuditHeartbeatTimeout(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  const timeout = Number(value);
+  return Number.isFinite(timeout) && timeout > 0 ? timeout : fallback;
 }
 
 export function isAuditTableName(name) {

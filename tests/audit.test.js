@@ -240,6 +240,34 @@ describe("audit", () => {
       await close(server);
     }
   });
+
+  it("uses the configured audit sse heartbeat timeout", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({ seq, basePath: "/api", audit: { heartbeatTimeout: 10 }, modules });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+    const stream = openSse(server, "/api/sse");
+
+    try {
+      await stream.connected;
+      const comment = await timeoutAfter(stream.nextHeartbeat, 500, "SSE heartbeat not received");
+      assert.equal(comment, "heartbeat");
+    } finally {
+      stream.close();
+      await api.close();
+      await close(server);
+    }
+  });
 });
 
 function listen(app) {
@@ -312,6 +340,8 @@ function openSse(server, path) {
   let connectedResolve;
   let eventResolve;
   let eventReject;
+  let heartbeatResolve;
+  let heartbeatReject;
   let buffer = "";
 
   const connected = new Promise((resolve) => {
@@ -320,6 +350,10 @@ function openSse(server, path) {
   const nextEvent = new Promise((resolve, reject) => {
     eventResolve = resolve;
     eventReject = reject;
+  });
+  const nextHeartbeat = new Promise((resolve, reject) => {
+    heartbeatResolve = resolve;
+    heartbeatReject = reject;
   });
 
   req = http.request({ hostname: "localhost", port, path, method: "GET", headers: { Accept: "text/event-stream" } }, (res) => {
@@ -332,19 +366,39 @@ function openSse(server, path) {
       buffer = events.pop() || "";
 
       for (const rawEvent of events) {
+        const comment = parseSseComment(rawEvent);
+        if (comment === "heartbeat") heartbeatResolve(comment);
         const parsed = parseSseEvent(rawEvent);
         if (parsed) eventResolve(parsed);
       }
     });
   });
-  req.on("error", eventReject);
+  req.on("error", (error) => {
+    eventReject(error);
+    heartbeatReject(error);
+  });
   req.end();
 
   return {
     connected,
     nextEvent,
+    nextHeartbeat,
     close: () => req.destroy(),
   };
+}
+
+function timeoutAfter(promise, timeout, message) {
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeout);
+  });
+  timer.unref?.();
+  return Promise.race([promise.finally(() => clearTimeout(timer)), timeoutPromise]);
+}
+
+function parseSseComment(rawEvent) {
+  const comment = rawEvent.split("\n").find((line) => line.startsWith(": "))?.slice(2);
+  return comment || null;
 }
 
 function parseSseEvent(rawEvent) {
