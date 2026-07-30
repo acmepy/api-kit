@@ -30,7 +30,7 @@ async function main() {
       tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",
     },
     audit:true,
-    openapi:false,
+    openapi:true,
     postman: true,
     logging: logger,
   });
