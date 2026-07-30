@@ -1,5 +1,5 @@
-import { buildOpenApiDocument } from "../openapi/openapi-builder.js";
-import { buildPostmanCollection } from "../postman/postman-builder.js";
+import { buildOpenApiDocument } from "../schema/openapi-builder.js";
+import { buildPostmanCollection } from "../schema/postman-builder.js";
 import { joinPaths } from "../utils/paths.js";
 
 export function installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize }) {
