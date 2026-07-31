@@ -81,6 +81,11 @@ export async function createApiKit(conf = {}) {
     const resourceModel = moduleConfig.resource?.model;
     const modelName = resourceModel?.modelName || moduleConfig.resource?.options?.modelName || moduleConfig.resource?.model?.name;
     if (modelName && !explicitModels[modelName]) explicitModels[modelName] = resourceModel;
+    for (const detailResource of moduleConfig.detailResources || []) {
+      const detailModel = detailResource?.model;
+      const detailModelName = detailModel?.modelName || detailResource?.options?.modelName || detailModel?.name;
+      if (detailModelName && !explicitModels[detailModelName]) explicitModels[detailModelName] = detailModel;
+    }
   }
 
   const modelsMap = await loadModels({seq: config.seq, explicitModels, modelsDir: resolvedPaths.models,moduleConfigs});

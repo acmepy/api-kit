@@ -397,10 +397,49 @@ export class BaseService {
 
     try {
       const validated = await schema.validate(validationPayload);
-      return { ...validated, ...forceFields };
+      return { ...validated, ...this.#castForceFields(forceFields, definitions) };
     } catch (error) {
       throw new ValidationError(error.message, {errors: error.errors || null, cause: error,});
     }
+  }
+
+  #castForceFields(forceFields = {}, definitions = {}) {
+    return Object.fromEntries(
+      Object.entries(forceFields).map(([field, value]) => [field, this.#castBodyValue(field, value, definitions[field])]),
+    );
+  }
+
+  #castBodyValue(field, value, definition) {
+    if (!definition || value === null || value === undefined) return value;
+    const type = this.#filterType(definition);
+
+    if (type === "integer") {
+      const number = Number(value);
+      if (!Number.isInteger(number)) throw new ValidationError(`Campo "${field}" debe ser integer`);
+      return number;
+    }
+
+    if (type === "decimal" || type === "number") {
+      const number = Number(value);
+      if (!Number.isFinite(number)) throw new ValidationError(`Campo "${field}" debe ser number`);
+      return number;
+    }
+
+    if (type === "boolean") {
+      if (value === true || value === false) return value;
+      const normalized = String(value).toLowerCase();
+      if (["true", "1", "yes", "si", "sÃ­"].includes(normalized)) return true;
+      if (["false", "0", "no"].includes(normalized)) return false;
+      throw new ValidationError(`Campo "${field}" debe ser boolean`);
+    }
+
+    if (type === "date") {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) throw new ValidationError(`Campo "${field}" debe ser date`);
+      return date;
+    }
+
+    return value;
   }
 
   #validationPayload(schema, payload, forceFields) {

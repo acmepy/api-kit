@@ -286,6 +286,74 @@ describe("http middleware", () => {
     }
   });
 
+  it("creates master-detail records from inline detail module definitions", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      modules: [
+        {
+          modelName: "Venta",
+          tableName: "ventas",
+          timestamps: false,
+          attributes: {
+            id: { type: "integer", primaryKey: true, autoIncrement: true },
+            cliente: { type: "string", allowNull: false },
+            total: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0 },
+          },
+          details: [
+            {
+              modelName: "VentaItem",
+              tableName: "venta_items",
+              timestamps: false,
+              attributes: {
+                id: { type: "integer", primaryKey: true, autoIncrement: true },
+                ventaId: { type: "integer", allowNull: false, create: false, update: false },
+                producto: { type: "string", allowNull: false },
+                cantidad: { type: "integer", allowNull: false },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const server = await listen(api.app);
+
+    try {
+      const created = await request(server, "POST", "/api/ventas", {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cliente: "Ana",
+          total: 2,
+          items: [{ producto: "Mouse", cantidad: 2 }],
+        }),
+      });
+
+      assert.equal(created.status, 200);
+      assert.equal(created.body.data.cliente, "Ana");
+      assert.equal(created.body.data.items.length, 1);
+      assert.equal(created.body.data.items[0].ventaId, created.body.data.id);
+
+      const detail = await request(server, "POST", `/api/ventas/${created.body.data.id}/items`, {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ producto: "Teclado", cantidad: 1 }),
+      });
+
+      assert.equal(detail.status, 200);
+      assert.equal(detail.body.data.producto, "Teclado");
+      assert.equal(detail.body.data.ventaId, created.body.data.id);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("can serve static app files with spa fallback from modules config", async () => {
     const adapter = new SQLiteAdapter({ database: ":memory:" });
     const seq = new Seq({ adapter, logging: false });

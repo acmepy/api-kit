@@ -7,6 +7,9 @@ const ENDPOINT_DEFAULTS = {
   create: { enabled: true, method: "post", path: "/", summary: "Crear" },
   update: { enabled: true, method: "put", path: "/:id", summary: "Actualizar" },
   remove: { enabled: true, method: "delete", path: "/:id", summary: "Eliminar" },
+  createDetail: { enabled: false, method: "post", path: "/:id/:detail", summary: "Crear detalle" },
+  updateDetail: { enabled: false, method: "put", path: "/:id/:detail/:detailId", summary: "Actualizar detalle" },
+  removeDetail: { enabled: false, method: "delete", path: "/:id/:detail/:detailId", summary: "Eliminar detalle" },
 };
 
 const MODULE_DEFAULTS = { auth: { required: false, strategies: [] }, tags: [], description: "" };
@@ -22,9 +25,11 @@ export function normalizeModule(config, options = {}) {
   for (const [op, defaults] of Object.entries(ENDPOINT_DEFAULTS)) {
     const userEndpoint = config.endpoints?.[op];
     const disabledByModuleOption = op === "schema" && config.schema === false;
+    const enabledByDetails = isDetailEndpoint(op) && hasDetails(config);
+    if (isDetailEndpoint(op) && userEndpoint === undefined && !enabledByDetails) continue;
     if (disabledByModuleOption || userEndpoint === false || userEndpoint?.enabled === false) {
       normalized.endpoints[op] = normalizeEndpoint({ ...defaults, ...userEndpoint, enabled: false }, normalized, op);
-    } else if (userEndpoint !== undefined) {
+    } else if (userEndpoint !== undefined || enabledByDetails) {
       normalized.endpoints[op] = normalizeEndpoint({ ...defaults, ...(typeof userEndpoint === "object" ? userEndpoint : {}), enabled: true }, normalized, op);
     } else {
       normalized.endpoints[op] = normalizeEndpoint({ ...defaults }, normalized, op);
@@ -59,5 +64,13 @@ function normalizeAuth(auth) {
     required: auth.required ?? true,
     strategies: Array.isArray(strategies) ? strategies : [strategies],
   };
+}
+
+function isDetailEndpoint(operation) {
+  return operation === "createDetail" || operation === "updateDetail" || operation === "removeDetail";
+}
+
+function hasDetails(config) {
+  return config.details && typeof config.details === "object" && Object.keys(config.details).length > 0;
 }
 

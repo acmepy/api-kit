@@ -1,6 +1,7 @@
 import path from "node:path";
 import { importModuleNamespace, fileExists } from "../utils/import-module.js";
 import { defineResource } from "../define-resource.js";
+import { camelCase } from "../utils/naming.js";
 
 export async function loadModules(input, baseDir) {
   return (await loadModuleBundle(input, baseDir)).modules;
@@ -77,9 +78,72 @@ function normalizeModuleInput(input) {
   const { name, basePath, description, tags, endpoints, schema, auth, audit, filterWhitelist, defaultOrder, maxSize, details, ...definition } = input;
   const resource = defineResource(definition);
   const moduleName = name || definition.tableName || definition.modelName?.toLowerCase();
-  return { name: moduleName, basePath, description, tags, endpoints, schema, auth, audit, filterWhitelist, defaultOrder, maxSize, details, resource};
+  if (!Array.isArray(details)) return { name: moduleName, basePath, description, tags, endpoints, schema, auth, audit, filterWhitelist, defaultOrder, maxSize, details, resource};
+
+  const detailResources = normalizeDetailResources({ parentDefinition: definition, parentResource: resource, details });
+  return {
+    name: moduleName,
+    basePath,
+    description,
+    tags,
+    endpoints,
+    schema,
+    auth,
+    audit,
+    filterWhitelist,
+    defaultOrder,
+    maxSize,
+    details: Object.fromEntries(detailResources.map((detail) => [detail.name, detail.config])),
+    detailResources: detailResources.map((detail) => detail.resource),
+    resource,
+  };
 }
 
 function isResourceDefinition(input) {
   return input && typeof input === "object" && !input.resource && input.attributes && input.modelName;
+}
+
+function normalizeDetailResources({ parentDefinition, parentResource, details }) {
+  return details.map((detailDefinition) => {
+    const { name, detailName, as, association, foreignKey, removeMissing, ...definition } = detailDefinition;
+    const resource = defineResource(definition);
+    const detail = name || detailName || as || association || detailNameFromDefinition(parentDefinition, definition);
+    const fk = foreignKey || foreignKeyFromDefinition(parentDefinition, definition);
+    const parentAlias = camelCase(parentDefinition.modelName || parentDefinition.tableName || "parent");
+
+    parentResource.model.hasMany(resource.model, { as: detail, foreignKey: fk });
+    resource.model.belongsTo(parentResource.model, { as: parentAlias, foreignKey: fk });
+
+    return {
+      name: detail,
+      resource,
+      config: { association: detail, ...(removeMissing !== undefined && { removeMissing }) },
+    };
+  });
+}
+
+function detailNameFromDefinition(parentDefinition, detailDefinition) {
+  const tableName = detailDefinition.tableName;
+  if (tableName) {
+    const parentTable = parentDefinition.tableName || "";
+    const singularParentTable = parentTable.endsWith("s") ? parentTable.slice(0, -1) : parentTable;
+    if (singularParentTable && tableName.startsWith(`${singularParentTable}_`)) return tableName.slice(singularParentTable.length + 1);
+    return tableName;
+  }
+
+  const modelName = detailDefinition.modelName || "details";
+  const parentModelName = parentDefinition.modelName || "";
+  if (parentModelName && modelName.startsWith(parentModelName)) {
+    const suffix = modelName.slice(parentModelName.length);
+    if (suffix) return camelCase(suffix);
+  }
+  return camelCase(modelName);
+}
+
+function foreignKeyFromDefinition(parentDefinition, detailDefinition) {
+  const parentKey = `${camelCase(parentDefinition.modelName || parentDefinition.tableName || "parent")}Id`;
+  if (detailDefinition.attributes?.[parentKey]) return parentKey;
+
+  const idFields = Object.keys(detailDefinition.attributes || {}).filter((field) => field.endsWith("Id"));
+  return idFields[0] || parentKey;
 }

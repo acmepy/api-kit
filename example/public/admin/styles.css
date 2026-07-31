@@ -146,6 +146,13 @@ label span {
   align-items: start;
 }
 
+.master-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 480px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
 .form,
 .login {
   display: grid;
@@ -161,6 +168,48 @@ label span {
 
 .login {
   width: min(420px, 100%);
+}
+
+.form-section {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.form-section:last-of-type {
+  border-bottom: 0;
+}
+
+.section-row,
+.actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.actions-row {
+  margin-top: 18px;
+  justify-content: flex-start;
+}
+
+.detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(92px, 0.7fr) minmax(100px, 0.8fr) 40px;
+  gap: 10px;
+  align-items: end;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.detail-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.detail-row:has(input[name="cobroMedio"]) {
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.8fr) 40px;
 }
 
 input {
@@ -227,6 +276,20 @@ input:focus {
   background: #fff;
   border-color: var(--line);
   color: var(--text);
+}
+
+.small {
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.icon-button {
+  display: inline-grid;
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+  place-items: center;
+  font-weight: 700;
 }
 
 .table-panel {
@@ -316,8 +379,18 @@ tr:last-child td {
   }
 
   .metrics,
-  .grid {
+  .grid,
+  .master-grid {
     grid-template-columns: 1fr;
+  }
+
+  .detail-row,
+  .detail-row:has(input[name="cobroMedio"]) {
+    grid-template-columns: 1fr;
+  }
+
+  .icon-button {
+    width: 100%;
   }
 
   h1 {

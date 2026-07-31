@@ -10,6 +10,48 @@ export const modules = [
     path: "./example/public/admin",
   },
   {
+    modelName: "Venta",
+    tableName: "ventas",
+    timestamps: true,
+    attributes: {
+      id: { type: "integer", primaryKey: true, autoIncrement: true },
+      cliente: { type: "string", maxLength: 100, allowNull: false, title: "Cliente", max: 100 },
+      fecha: { type: "date", allowNull: false, title: "Fecha" },
+      total: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0, title: "Total", min: 0 },
+    },
+    details: [
+      {
+        name: "items",
+        foreignKey: "ventaId",
+        modelName: "VentaItem",
+        tableName: "venta_items",
+        timestamps: true,
+        attributes: {
+          id: { type: "integer", primaryKey: true, autoIncrement: true },
+          ventaId: { type: "integer", allowNull: false, create: false, update: false },
+          producto: { type: "string", maxLength: 120, allowNull: false, title: "Producto", max: 120 },
+          cantidad: { type: "integer", allowNull: false, title: "Cantidad", min: 1 },
+          precio: { type: "decimal", precision: 12, scale: 2, allowNull: false, title: "Precio", min: 0 },
+        },
+        removeMissing: true,
+      },
+      {
+        name: "cobros",
+        foreignKey: "ventaId",
+        modelName: "VentaCobro",
+        tableName: "venta_cobros",
+        timestamps: true,
+        attributes: {
+          id: { type: "integer", primaryKey: true, autoIncrement: true },
+          ventaId: { type: "integer", allowNull: false, create: false, update: false },
+          medio: { type: "string", maxLength: 40, allowNull: false, title: "Medio", max: 40 },
+          monto: { type: "decimal", precision: 12, scale: 2, allowNull: false, title: "Monto", min: 0 },
+        },
+        removeMissing: true,
+      },
+    ],
+  },
+  {
     modelName: "Cliente",
     tableName: "clientes",
     timestamps: true,

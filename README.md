@@ -140,6 +140,106 @@ Para el ejemplo anterior, con `basePath: "/api"` y `tableName: "clientes"`, se e
 
 `POST` y `PUT` validan el body contra los schemas generados desde los attributes del modulo. Los campos no declarados se rechazan por defecto.
 
+## Maestro-Detalle
+
+El ejemplo local incluye una venta con dos detalles: `items` y `cobros`. El maestro se declara como recurso normal y los detalles se pueden definir inline en `details`.
+
+```js
+{
+  modelName: "Venta",
+  tableName: "ventas",
+  timestamps: true,
+  attributes: {
+    id: { type: "integer", primaryKey: true, autoIncrement: true },
+    cliente: { type: "string", allowNull: false },
+    fecha: { type: "date", allowNull: false },
+    total: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0 },
+  },
+  details: [
+    {
+      name: "items",
+      foreignKey: "ventaId",
+      modelName: "VentaItem",
+      tableName: "venta_items",
+      attributes: {
+        id: { type: "integer", primaryKey: true, autoIncrement: true },
+        ventaId: { type: "integer", allowNull: false, create: false, update: false },
+        producto: { type: "string", allowNull: false },
+        cantidad: { type: "integer", allowNull: false },
+        precio: { type: "decimal", precision: 12, scale: 2, allowNull: false },
+      },
+      removeMissing: true,
+    },
+    {
+      name: "cobros",
+      foreignKey: "ventaId",
+      modelName: "VentaCobro",
+      tableName: "venta_cobros",
+      attributes: {
+        id: { type: "integer", primaryKey: true, autoIncrement: true },
+        ventaId: { type: "integer", allowNull: false, create: false, update: false },
+        medio: { type: "string", allowNull: false },
+        monto: { type: "decimal", precision: 12, scale: 2, allowNull: false },
+      },
+      removeMissing: true,
+    },
+  ],
+}
+```
+
+`api-kit` crea la asociacion `hasMany` automaticamente. Si el detalle declara `foreignKey`, usa ese atributo para relacionarlo con el maestro. Si no lo declara, intenta usar el nombre derivado del maestro, por ejemplo `Venta` -> `ventaId`; si ese atributo no existe, toma el primer atributo del detalle que termine en `Id`.
+
+El nombre del detalle tambien se puede controlar con `name`, `as` o `association`. Si no se declara, se deriva de la tabla del detalle; por ejemplo, `venta_items` queda como `items`.
+
+Crear una venta completa:
+
+```http
+POST /api/ventas
+Content-Type: application/json
+
+{
+  "cliente": "Ana",
+  "fecha": "2026-07-31T12:00:00.000Z",
+  "total": 150000,
+  "items": [
+    { "producto": "Mouse", "cantidad": 1, "precio": 50000 },
+    { "producto": "Teclado", "cantidad": 1, "precio": 100000 }
+  ],
+  "cobros": [
+    { "medio": "efectivo", "monto": 150000 }
+  ]
+}
+```
+
+Actualizar el maestro y reemplazar los detalles omitidos, porque el ejemplo usa `removeMissing: true`:
+
+```http
+PUT /api/ventas/1
+Content-Type: application/json
+
+{
+  "cliente": "Ana Maria",
+  "items": [
+    { "id": 1, "producto": "Mouse gamer", "cantidad": 1, "precio": 75000 }
+  ],
+  "cobros": [
+    { "medio": "tarjeta", "monto": 75000 }
+  ]
+}
+```
+
+Tambien se puede operar un detalle puntual con los endpoints genericos, que se habilitan automaticamente cuando el modulo tiene `details`:
+
+```http
+POST /api/ventas/1/items
+PUT /api/ventas/1/items/1
+DELETE /api/ventas/1/items/1
+
+POST /api/ventas/1/cobros
+PUT /api/ventas/1/cobros/1
+DELETE /api/ventas/1/cobros/1
+```
+
 ### Query De List
 
 `GET /api/clientes` soporta paginacion y filtros por query string.
