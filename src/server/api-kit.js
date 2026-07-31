@@ -95,7 +95,7 @@ export async function createApiKit(conf = {}) {
   for (const mod of modelsMap) models.set(mod[0], mod[1]);
 
   for (const moduleConfig of moduleConfigs) {
-    const mod = await loadModule({moduleConfig, seq: config.seq, modelsMap, routeRegistry, paths: resolvedPaths, authorize});
+    const mod = await loadModule({moduleConfig, seq: config.seq, modelsMap, servicesMap: services, routeRegistry, paths: resolvedPaths, authorize});
 
     modules.set(moduleConfig.name, mod);
     services.set(moduleConfig.name, mod.service);

@@ -11,11 +11,17 @@ export class BaseService {
   #model;
   #schemas;
   #config;
+  #seq;
+  #models;
+  #services;
 
-  constructor({ model, schemas = {}, config = {} }) {
+  constructor({ model, schemas = {}, config = {}, seq = null, models = null, services = null }) {
     this.#model = model;
     this.#schemas = schemas;
     this.#config = config;
+    this.#seq = seq;
+    this.#models = models;
+    this.#services = services;
   }
 
   get model() {
@@ -28,6 +34,18 @@ export class BaseService {
 
   get config() {
     return this.#config;
+  }
+
+  get seq() {
+    return this.#seq;
+  }
+
+  get models() {
+    return this.#models;
+  }
+
+  get services() {
+    return this.#services;
   }
 
   async list({ params, query, body, context, transaction } = {}) {
@@ -59,32 +77,69 @@ export class BaseService {
   }
 
   async create({ params, query, body, context, transaction } = {}) {
-    const data = await this.#validateBody("create", body);
-    try {
-      const instance = await this.#model.create(data, { ...(transaction && { transaction })});
-      return { data: instance.toJSON() };
-    } catch (error) {
-      throw this.#normalizePersistenceError(error);
-    }
+    const { body: masterBody, details } = this.#splitDetailsFromBody(body);
+    const data = await this.#validateBody("create", masterBody);
+
+    return this.#withTransaction(transaction, async (activeTransaction) => {
+      try {
+        const instance = await this.#model.create(data, { ...(activeTransaction && { transaction: activeTransaction })});
+        await this.#saveDetails(instance, details, { operation: "create", transaction: activeTransaction });
+        return { data: await this.#toJsonWithDetails(instance, activeTransaction) };
+      } catch (error) {
+        throw this.#normalizePersistenceError(error);
+      }
+    });
   }
 
   async update({ params, query, body, context, transaction } = {}) {
-    const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }),});
-    if (!instance)  throw new NotFoundError(this.#resourceName());
-    const data = await this.#validateBody("update", body);
-    const auditOld = instance.toJSON();
-    try {
-      if (this.#updatesPrimaryKey(instance, data)) {
-        const pk = this.#primaryKeyAttribute();
-        await this.#model.update(data, { where: { [pk]: auditOld[pk] }, auditOld, ...(transaction && { transaction }) });
-        const updated = await this.#model.findByPk(data[pk], { ...(transaction && { transaction }) });
-        return { data: updated.toJSON() };
+    const { body: masterBody, details } = this.#splitDetailsFromBody(body);
+    const data = await this.#validateBody("update", masterBody);
+
+    return this.#withTransaction(transaction, async (activeTransaction) => {
+      const instance = await this.#model.findByPk(params.id, { ...(activeTransaction && { transaction: activeTransaction }),});
+      if (!instance)  throw new NotFoundError(this.#resourceName());
+      const auditOld = instance.toJSON();
+      try {
+        let updated = instance;
+        if (this.#updatesPrimaryKey(instance, data)) {
+          const pk = this.#primaryKeyAttribute();
+          await this.#model.update(data, { where: { [pk]: auditOld[pk] }, auditOld, ...(activeTransaction && { transaction: activeTransaction }) });
+          updated = await this.#model.findByPk(data[pk], { ...(activeTransaction && { transaction: activeTransaction }) });
+        } else if (Object.keys(data || {}).length > 0) {
+          await instance.update(data, { auditOld, ...(activeTransaction && { transaction: activeTransaction }) });
+        }
+        await this.#saveDetails(updated, details, { operation: "update", transaction: activeTransaction });
+        return { data: await this.#toJsonWithDetails(updated, activeTransaction) };
+      } catch (error) {
+        throw this.#normalizePersistenceError(error);
       }
-      await instance.update(data, { auditOld, ...(transaction && { transaction }) });
+    });
+  }
+
+  async createDetail({ params, query, body, context, transaction } = {}) {
+    return this.#mutateDetail({ params, body, transaction }, async ({ descriptor, parentId, activeTransaction }) => {
+      const payload = await this.#validateDetailBody(descriptor, "create", body, { [descriptor.foreignKey]: parentId });
+      const instance = await this.#upsertDetail(descriptor.target, payload, { transaction: activeTransaction });
       return { data: instance.toJSON() };
-    } catch (error) {
-      throw this.#normalizePersistenceError(error);
-    }
+    });
+  }
+
+  async updateDetail({ params, query, body, context, transaction } = {}) {
+    return this.#mutateDetail({ params, body, transaction, detailIdRequired: true }, async ({ descriptor, parentId, detailId, activeTransaction }) => {
+      await this.#assertDetailBelongsToParent(descriptor, parentId, detailId, activeTransaction);
+      const payload = await this.#validateDetailBody(descriptor, "update", body, { [descriptor.primaryKey]: detailId, [descriptor.foreignKey]: parentId });
+      const instance = await this.#upsertDetail(descriptor.target, payload, { transaction: activeTransaction });
+      return { data: instance.toJSON() };
+    });
+  }
+
+  async removeDetail({ params, query, body, context, transaction } = {}) {
+    return this.#mutateDetail({ params, body, transaction, detailIdRequired: true }, async ({ descriptor, parentId, detailId, activeTransaction }) => {
+      const instance = await this.#assertDetailBelongsToParent(descriptor, parentId, detailId, activeTransaction);
+      const auditOld = instance.toJSON();
+      await instance.destroy({ auditOld, ...(activeTransaction && { transaction: activeTransaction }) });
+      return { data: auditOld };
+    });
   }
 
   async remove({ params, query, body, context, transaction } = {}) {
@@ -97,6 +152,170 @@ export class BaseService {
     } catch (error) {
       throw this.#normalizePersistenceError(error);
     }
+  }
+
+  #splitDetailsFromBody(body = {}) {
+    const detailsConfig = this.#detailsConfig();
+    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(detailsConfig).length === 0) {
+      return { body, details: new Map() };
+    }
+
+    let masterBody = body;
+    const details = new Map();
+
+    for (const key of Object.keys(detailsConfig)) {
+      if (!(key in body)) continue;
+      if (!Array.isArray(body[key])) throw new ValidationError(`Detalle "${key}" debe ser un array`, { errors: { [key]: "Debe ser un array" } });
+      if (masterBody === body) masterBody = { ...body };
+      details.set(key, body[key]);
+      delete masterBody[key];
+    }
+
+    return { body: masterBody, details };
+  }
+
+  async #withTransaction(transaction, callback) {
+    if (transaction || typeof this.#seq?.transaction !== "function") return callback(transaction || null);
+    return this.#seq.transaction((activeTransaction) => callback(activeTransaction));
+  }
+
+  async #saveDetails(parent, details, { operation, transaction } = {}) {
+    if (!parent || !details || details.size === 0) return [];
+
+    const saved = [];
+    for (const [name, items] of details.entries()) {
+      const descriptor = this.#detailDescriptor(name);
+      const parentId = parent.getDataValue(descriptor.parentPrimaryKey);
+      const savedForDetail = [];
+
+      for (const item of items) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) throw new ValidationError(`Detalle "${name}" debe contener objetos`);
+        const hasPrimaryKey = item[descriptor.primaryKey] !== undefined && item[descriptor.primaryKey] !== null;
+        const detailOperation = operation === "update" && hasPrimaryKey ? "update" : "create";
+        const forceFields = { [descriptor.foreignKey]: parentId };
+        if (detailOperation === "update") forceFields[descriptor.primaryKey] = item[descriptor.primaryKey];
+        const payload = await this.#validateDetailBody(descriptor, detailOperation, item, forceFields);
+        const instance = await this.#upsertDetail(descriptor.target, payload, { transaction });
+        saved.push(instance);
+        savedForDetail.push(instance);
+      }
+
+      if (operation === "update" && descriptor.removeMissing) {
+        await this.#removeMissingDetails(descriptor, parentId, savedForDetail, transaction);
+      }
+    }
+
+    return saved;
+  }
+
+  async #removeMissingDetails(descriptor, parentId, savedDetails, transaction) {
+    const ids = savedDetails
+      .map((item) => item.getDataValue(descriptor.primaryKey))
+      .filter((value) => value !== undefined && value !== null);
+    const where = { [descriptor.foreignKey]: parentId };
+    if (ids.length > 0) where[descriptor.primaryKey] = { [Op.notIn]: ids };
+    await descriptor.target.destroy({ where, ...(transaction && { transaction }) });
+  }
+
+  async #mutateDetail({ params = {}, transaction, detailIdRequired = false }, callback) {
+    const detailName = params.detail || params.detailName || params.details;
+    const parentId = params.id;
+    const detailId = params.detailId || params.childId;
+    if (!detailName) throw new ValidationError("Detalle requerido", { errors: { detail: "Requerido" } });
+    if (parentId === undefined || parentId === null) throw new ValidationError("ID del maestro requerido", { errors: { id: "Requerido" } });
+    if (detailIdRequired && (detailId === undefined || detailId === null)) throw new ValidationError("ID del detalle requerido", { errors: { detailId: "Requerido" } });
+
+    const descriptor = this.#detailDescriptor(detailName);
+
+    return this.#withTransaction(transaction, async (activeTransaction) => {
+      const parent = await this.#model.findByPk(parentId, { ...(activeTransaction && { transaction: activeTransaction }) });
+      if (!parent) throw new NotFoundError(this.#resourceName());
+      try {
+        return await callback({ descriptor, parent, parentId, detailId, activeTransaction });
+      } catch (error) {
+        throw this.#normalizePersistenceError(error);
+      }
+    });
+  }
+
+  async #assertDetailBelongsToParent(descriptor, parentId, detailId, transaction) {
+    const instance = await descriptor.target.findOne({
+      where: { [descriptor.primaryKey]: detailId, [descriptor.foreignKey]: parentId },
+      ...(transaction && { transaction }),
+    });
+    if (!instance) throw new NotFoundError(descriptor.name);
+    return instance;
+  }
+
+  async #upsertDetail(model, payload, options = {}) {
+    const primaryKey = model.primaryKeyAttribute || "id";
+    if (payload[primaryKey] === undefined || payload[primaryKey] === null) return model.create(payload, options);
+
+    const instance = await model.findByPk(payload[primaryKey], options);
+    if (instance) return instance.update(payload, options);
+
+    if (typeof model.upsert === "function") {
+      const result = await model.upsert(payload, { ...options, where: { [primaryKey]: payload[primaryKey] } });
+      return Array.isArray(result) ? result[0] : result;
+    }
+
+    return model.create(payload, options);
+  }
+
+  async #toJsonWithDetails(instance, transaction) {
+    const descriptors = this.#detailDescriptors();
+    if (descriptors.length === 0) return instance.toJSON();
+
+    const primaryKey = this.#primaryKeyAttribute();
+    const id = instance.getDataValue(primaryKey);
+    const fresh = await this.#model.findByPk(id, {
+      include: descriptors.map((descriptor) => ({ model: descriptor.target, as: descriptor.as })),
+      ...(transaction && { transaction }),
+    });
+    return this.#plainModel(fresh || instance);
+  }
+
+  #plainModel(value) {
+    if (Array.isArray(value)) return value.map((item) => this.#plainModel(item));
+    if (value instanceof Date) return value;
+    if (!value || typeof value !== "object") return value;
+    if (value.dataValues && typeof value.dataValues === "object") return this.#plainModel(value.dataValues);
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, this.#plainModel(item)]));
+  }
+
+  #detailDescriptors() {
+    return Object.keys(this.#detailsConfig()).map((name) => this.#detailDescriptor(name));
+  }
+
+  #detailDescriptor(name) {
+    const detailsConfig = this.#detailsConfig();
+    const config = detailsConfig[name];
+    if (!config) throw new ValidationError(`Detalle "${name}" no estÃ¡ configurado`, { errors: { detail: "No configurado" } });
+
+    const associationName = typeof config === "string" ? config : config.association || config.as || name;
+    const association = this.#association(associationName);
+    if (!association || association.type !== "hasMany") throw new ValidationError(`Detalle "${name}" debe usar una asociaciÃ³n hasMany`);
+
+    return {
+      name,
+      association,
+      as: association.as || associationName,
+      target: association.target,
+      foreignKey: association.foreignKey,
+      primaryKey: association.target?.primaryKeyAttribute || "id",
+      parentPrimaryKey: association.source?.primaryKeyAttribute || this.#primaryKeyAttribute(),
+      removeMissing: config?.removeMissing === true,
+    };
+  }
+
+  #association(name) {
+    if (this.#model?.associations?.[name]) return this.#model.associations[name];
+    return [...new Set(Object.values(this.#model?.associations || {}))].find((association) => association?.as === name) || null;
+  }
+
+  #detailsConfig() {
+    if (!this.#config.details || typeof this.#config.details !== "object" || Array.isArray(this.#config.details)) return {};
+    return this.#config.details;
   }
 
   #toJsonSchema(schema, operation) {
@@ -150,21 +369,53 @@ export class BaseService {
   }
 
   async #validateBody(operation, body = {}) {
-    const schema = this.#schemas[operation] || this.#schemas.body;
-    const payload = this.#sanitizeBody(operation, body || {});
+    return this.#validatePayload({
+      operation,
+      body,
+      schemas: this.#schemas,
+      definitions: this.#filterDefinitions(),
+    });
+  }
+
+  async #validateDetailBody(descriptor, operation, body = {}, forceFields = {}) {
+    return this.#validatePayload({
+      operation,
+      body,
+      forceFields,
+      schemas: descriptor.target?.resourceSchemas || {},
+      definitions: descriptor.target?.resourceDefinition?.attributes || descriptor.target?.rawAttributes || {},
+    });
+  }
+
+  async #validatePayload({ operation, body = {}, forceFields = {}, schemas = {}, definitions = {} }) {
+    const schema = schemas[operation] || schemas.body;
+    const rawPayload = { ...(body || {}), ...forceFields };
+    const payload = this.#sanitizeBody(operation, rawPayload, definitions);
+    const validationPayload = this.#validationPayload(schema, payload, forceFields);
     if (!schema) return payload;
-    this.#validateBodyFields(schema, payload);
+    this.#validateBodyFields(schema, validationPayload);
 
     try {
-      return await schema.validate(payload);
+      const validated = await schema.validate(validationPayload);
+      return { ...validated, ...forceFields };
     } catch (error) {
       throw new ValidationError(error.message, {errors: error.errors || null, cause: error,});
     }
   }
 
-  #sanitizeBody(operation, body) {
+  #validationPayload(schema, payload, forceFields) {
+    if (!schema?.shapeDefinition || !payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+    let validationPayload = payload;
+    for (const key of Object.keys(forceFields || {})) {
+      if (key in schema.shapeDefinition) continue;
+      if (validationPayload === payload) validationPayload = { ...payload };
+      delete validationPayload[key];
+    }
+    return validationPayload;
+  }
+
+  #sanitizeBody(operation, body, definitions = this.#filterDefinitions()) {
     if (!body || typeof body !== "object" || Array.isArray(body)) return body;
-    const definitions = this.#filterDefinitions();
     let payload = body;
 
     for (const [field, definition] of Object.entries(definitions)) {

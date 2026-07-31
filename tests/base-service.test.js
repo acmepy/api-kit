@@ -316,3 +316,199 @@ describe("BaseService list filters", () => {
     );
   });
 });
+
+describe("BaseService details", () => {
+  let seq;
+  let ventaResource;
+  let itemResource;
+  let cobroResource;
+  let service;
+
+  beforeEach(async () => {
+    ventaResource = defineResource({
+      modelName: "Venta",
+      tableName: "ventas",
+      timestamps: false,
+      attributes: {
+        id: { type: "integer", primaryKey: true, autoIncrement: true },
+        cliente: { type: "string", allowNull: false },
+        total: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0 },
+      },
+    });
+
+    itemResource = defineResource({
+      modelName: "VentaItem",
+      tableName: "venta_items",
+      timestamps: false,
+      attributes: {
+        id: { type: "integer", primaryKey: true, autoIncrement: true },
+        ventaId: { type: "integer", allowNull: false },
+        producto: { type: "string", allowNull: false },
+        cantidad: { type: "integer", allowNull: false },
+      },
+    });
+
+    cobroResource = defineResource({
+      modelName: "VentaCobro",
+      tableName: "venta_cobros",
+      timestamps: false,
+      attributes: {
+        id: { type: "integer", primaryKey: true, autoIncrement: true },
+        ventaId: { type: "integer", allowNull: false },
+        medio: { type: "string", allowNull: false },
+        monto: { type: "decimal", precision: 12, scale: 2, allowNull: false },
+      },
+    });
+
+    ventaResource.model.hasMany(itemResource.model, { as: "items", foreignKey: "ventaId" });
+    itemResource.model.belongsTo(ventaResource.model, { as: "venta", foreignKey: "ventaId" });
+    ventaResource.model.hasMany(cobroResource.model, { as: "cobros", foreignKey: "ventaId" });
+    cobroResource.model.belongsTo(ventaResource.model, { as: "venta", foreignKey: "ventaId" });
+
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    seq = new Seq({ adapter, models: [ventaResource.model, itemResource.model, cobroResource.model], logging: false });
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    service = new BaseService({
+      model: ventaResource.model,
+      schemas: ventaResource.schemas,
+      seq,
+      config: {
+        resource: ventaResource,
+        details: {
+          items: { association: "items" },
+          cobros: { association: "cobros" },
+        },
+      },
+    });
+  });
+
+  it("creates a master record with multiple details in one call", async () => {
+    const result = await service.create({
+      body: {
+        cliente: "Ana",
+        total: 150,
+        items: [
+          { producto: "Mouse", cantidad: 1 },
+          { producto: "Teclado", cantidad: 2 },
+        ],
+        cobros: [{ medio: "efectivo", monto: 150 }],
+      },
+    });
+
+    assert.equal(result.data.cliente, "Ana");
+    assert.equal(result.data.items.length, 2);
+    assert.equal(result.data.cobros.length, 1);
+    assert.equal(result.data.items[0].ventaId, result.data.id);
+    assert.equal(await itemResource.model.count(), 2);
+    assert.equal(await cobroResource.model.count(), 1);
+  });
+
+  it("rolls back the master when a detail is invalid", async () => {
+    await assert.rejects(
+      () =>
+        service.create({
+          body: {
+            cliente: "Ana",
+            total: 150,
+            items: [{ producto: "Mouse" }],
+          },
+        }),
+      ValidationError,
+    );
+
+    assert.equal(await ventaResource.model.count(), 0);
+    assert.equal(await itemResource.model.count(), 0);
+  });
+
+  it("upserts sent details and keeps omitted details by default", async () => {
+    const created = await service.create({
+      body: {
+        cliente: "Ana",
+        total: 150,
+        items: [
+          { producto: "Mouse", cantidad: 1 },
+          { producto: "Teclado", cantidad: 2 },
+        ],
+      },
+    });
+
+    const firstItem = created.data.items[0];
+    const updated = await service.update({
+      params: { id: created.data.id },
+      body: {
+        cliente: "Ana Maria",
+        items: [
+          { id: firstItem.id, producto: "Mouse gamer", cantidad: 3 },
+          { producto: "Monitor", cantidad: 1 },
+        ],
+      },
+    });
+
+    assert.equal(updated.data.cliente, "Ana Maria");
+    assert.equal(updated.data.items.length, 3);
+    assert.ok(updated.data.items.some((item) => item.producto === "Mouse gamer" && item.cantidad === 3));
+    assert.ok(updated.data.items.some((item) => item.producto === "Teclado"));
+    assert.ok(updated.data.items.some((item) => item.producto === "Monitor"));
+  });
+
+  it("removes omitted details when removeMissing is true", async () => {
+    service = new BaseService({
+      model: ventaResource.model,
+      schemas: ventaResource.schemas,
+      seq,
+      config: {
+        resource: ventaResource,
+        details: {
+          items: { association: "items", removeMissing: true },
+        },
+      },
+    });
+
+    const created = await service.create({
+      body: {
+        cliente: "Ana",
+        total: 150,
+        items: [
+          { producto: "Mouse", cantidad: 1 },
+          { producto: "Teclado", cantidad: 2 },
+        ],
+      },
+    });
+
+    const firstItem = created.data.items[0];
+    const updated = await service.update({
+      params: { id: created.data.id },
+      body: {
+        items: [{ id: firstItem.id, producto: "Mouse", cantidad: 5 }],
+      },
+    });
+
+    assert.equal(updated.data.items.length, 1);
+    assert.equal(updated.data.items[0].cantidad, 5);
+    assert.equal(await itemResource.model.count(), 1);
+  });
+
+  it("creates, updates, and removes individual details through generic methods", async () => {
+    const created = await service.create({ body: { cliente: "Ana", total: 0 } });
+    const detail = await service.createDetail({
+      params: { id: created.data.id, detail: "items" },
+      body: { producto: "Mouse", cantidad: 1 },
+    });
+
+    const updated = await service.updateDetail({
+      params: { id: created.data.id, detail: "items", detailId: detail.data.id },
+      body: { producto: "Mouse", cantidad: 4 },
+    });
+
+    assert.equal(updated.data.cantidad, 4);
+
+    await service.removeDetail({
+      params: { id: created.data.id, detail: "items", detailId: detail.data.id },
+    });
+
+    assert.equal(await itemResource.model.count(), 0);
+  });
+});
