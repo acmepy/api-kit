@@ -9,3 +9,11 @@ export function installWelcomeRoute({ mainRouter, routeRegistry, config, package
 
   mainRouter.get(fullPath, (_req, res) => {res.json(ok({ name: packageName, message: `Bienvenido al backend de ${packageName}` }))});
 }
+
+export function installPingRoute({ mainRouter, routeRegistry, config }) {
+  const fullPath = `${normalizeMountPath(config.basePath) || ""}/ping`;
+
+  routeRegistry.register({ module: "system", operationId: "system.ping", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "ping", auth: { required: false, strategies: [] }, permissions: [], summary: "Server ping", description: "", tags: ["system"], deprecated: false });
+
+  mainRouter.get(fullPath, (_req, res) => {res.json(ok({ pong: true }))});
+}

@@ -15,7 +15,7 @@ import { createAuthContext, createAuthorizer, installAuthRoutes } from "./instal
 import { installHttpMiddleware } from "./install/http-middleware.services.js";
 import { installOpenApiRoute, installPostmanRoute } from "./install/schema.services.js";
 import { installStaticFiles } from "./install/static-files.services.js";
-import { installWelcomeRoute } from "./install/welcome.services.js";
+import { installPingRoute, installWelcomeRoute } from "./install/welcome.services.js";
 import { runWithContext } from "./context/request-context.js";
 import { errorHandler } from "./http/error-handler.js";
 import { requestLogger, setLogging } from "./logger/index.js";
@@ -118,6 +118,7 @@ export async function createApiKit(conf = {}) {
   mainRouter.use(requestLogger);
 
   installWelcomeRoute({ mainRouter, routeRegistry, config, packageInfo });
+  installPingRoute({ mainRouter, routeRegistry, config });
   installAuthRoutes({ mainRouter, routeRegistry, config, authContext });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });

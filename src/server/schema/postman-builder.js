@@ -39,7 +39,7 @@ export function buildPostmanCollection({ routes, modules = new Map(), packageInf
 }
 
 function isRootPostmanItem(route) {
-  return route.operationId === "system.welcome" || route.serviceMethod === "welcome";
+  return route.module === "system";
 }
 
 function collectionDescription(config, packageInfo) {

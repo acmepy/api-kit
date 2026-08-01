@@ -1,4 +1,5 @@
 import express from "express";
+import { RBAC } from "iam";
 import { SeqAdapter } from "iam/adapters";
 import { auth as iamAuth, can as iamCan } from "iam/express";
 import { getContext } from "../context/request-context.js";
@@ -27,8 +28,9 @@ export function installAuthRoutes({ mainRouter, routeRegistry, config, authConte
 
 export function createAuthContext(config, authBackend, { auditWriter } = {}) {
   const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models, auditable: authAuditable(config, authBackend, auditWriter) });
+  const rbac = new RBAC({ adapter });
   const middleware = iamAuth(iamAuthOptions(authBackend, adapter));
-  return { ...authBackend, adapter, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
+  return { ...authBackend, adapter, rbac, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
 }
 
 export function createAuthorizer(authContext) {

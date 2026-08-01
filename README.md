@@ -14,7 +14,8 @@ Para correr el ejemplo local:
 npm run dev
 ```
 
-La demo queda disponible en `http://localhost:3000`.
+La demo basica queda disponible en `http://localhost:3000/basic`.
+La demo con `api-kit/client` queda disponible en `http://localhost:3000/client`.
 
 ## Entrypoints
 
@@ -27,6 +28,18 @@ import { runApiKitCli } from "api-kit/cli";
 ```
 
 El import raiz `api-kit` no exporta la API publica.
+
+## Client
+
+`api-kit/client` expone `createApiKitClient()` para consumir un server de `api-kit` desde frontends o procesos Node. El cliente usa `login()`, `logout()` y `session()` del server, guarda la sesion local mediante adapters y envia el token guardado como Bearer en los servicios descubiertos por OpenAPI.
+
+Metodos publicos de conexion:
+
+- `client.connected()` / `client.isConnected()`: indica si el server responde al ping.
+- `client.startConnection()` / `client.stopConnection()`: inicia o detiene el monitoreo por ping, changes y SSE.
+- `client.changes(since)`: consulta `/changes`; si no recibe `since`, usa la ultima recepcion registrada y, si no existe, la fecha/hora actual.
+- `client.lastReceivedAt()`: devuelve el ISO string de la ultima recepcion de datos por `/changes` o `/sse`, o `null` si aun no hubo recepcion.
+- `client.onChange(listener)`: escucha eventos `online`, `offline` y `sse`; los eventos relacionados a `/changes` y `/sse` incluyen `lastReceivedAt`.
 
 ## Uso Basico
 
@@ -287,8 +300,8 @@ Las apps estaticas tambien se declaran dentro de `modules`.
 ```js
 export const modules = [
   {
-    mountPath: "/admin",
-    root: "./public/admin",
+    mountPath: "/basic",
+    root: "./example/public/basic",
     spa: true,
   },
 ];

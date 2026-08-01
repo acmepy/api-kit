@@ -6,8 +6,24 @@ export const auth = {
 
 export const modules = [
   {
-    mountPath: "/admin",
-    path: "./example/public/admin",
+    mountPath: "/basic",
+    path: "./example/public/basic",
+  },
+  {
+    mountPath: "/client",
+    path: "./example/public/client",
+  },
+  {
+    modelName: "Cliente",
+    tableName: "clientes",
+    timestamps: true,
+    attributes: {
+      id: { type: "integer", primaryKey: true, autoIncrement: true },
+      ruc: { type: "string", maxLength: 20, unique: true, title: "RUC" },
+      nombre: { type: "string", maxLength: 100, allowNull: false, title: "Nombre" },
+      email: { type: "string", maxLength: 150, allowNull: true, unique: true, title: "Email", email: true },
+      activo: { type: "boolean", defaultValue: true, title: "Activo" },
+    },
   },
   {
     modelName: "Venta",
@@ -15,7 +31,7 @@ export const modules = [
     timestamps: true,
     attributes: {
       id: { type: "integer", primaryKey: true, autoIncrement: true },
-      cliente: { type: "string", maxLength: 100, allowNull: false, title: "Cliente", max: 100 },
+      cliente: { type: "string", maxLength: 100, allowNull: false, title: "Cliente" },
       fecha: { type: "date", allowNull: false, title: "Fecha" },
       total: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0, title: "Total", min: 0 },
     },
@@ -29,7 +45,7 @@ export const modules = [
         attributes: {
           id: { type: "integer", primaryKey: true, autoIncrement: true },
           ventaId: { type: "integer", allowNull: false, create: false, update: false },
-          producto: { type: "string", maxLength: 120, allowNull: false, title: "Producto", max: 120 },
+          producto: { type: "string", maxLength: 120, allowNull: false, title: "Producto" },
           cantidad: { type: "integer", allowNull: false, title: "Cantidad", min: 1 },
           precio: { type: "decimal", precision: 12, scale: 2, allowNull: false, title: "Precio", min: 0 },
         },
@@ -44,7 +60,7 @@ export const modules = [
         attributes: {
           id: { type: "integer", primaryKey: true, autoIncrement: true },
           ventaId: { type: "integer", allowNull: false, create: false, update: false },
-          medio: { type: "string", maxLength: 40, allowNull: false, title: "Medio", max: 40 },
+          medio: { type: "string", maxLength: 40, allowNull: false, title: "Medio" },
           monto: { type: "decimal", precision: 12, scale: 2, allowNull: false, title: "Monto", min: 0 },
         },
         removeMissing: true,
@@ -52,38 +68,11 @@ export const modules = [
     ],
   },
   {
-    modelName: "Cliente",
-    tableName: "clientes",
-    timestamps: true,
-    endpoints: {
-      ruc: { method: "get", path: "/ruc/:ruc", permission: "clientes.list", summary: "Buscar por RUC" },
-    },
-    attributes: {
-      id: { type: "integer", primaryKey: true, autoIncrement: true },
-      ruc:{type:"string", unique:true, maxLength:20},
-      nombre: { type: "string", maxLength: 100, allowNull: false, title: "Nombre", max: 100 },
-      email: { type: "string", maxLength: 150, unique: true, allowNull: true, title: "Email", email: true },
-      activo: { type: "boolean", defaultValue: true, title: "Activo" },
-    },
-  },
-  {
-    modelName: "Producto",
-    tableName: "productos",
-    timestamps: true,
-    audit: false,
-    attributes: {
-      id: { type: "integer", primaryKey: true, autoIncrement: true },
-      descripcion: { type: "string", maxLength: 120, allowNull: false, title: "Nombre", max: 120 },
-      precio: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0, title: "Precio", min: 0 },
-      activo: { type: "boolean", defaultValue: true, title: "Activo" },
-    },
-  },
-  {
     modelName: "audit",
     tableName: "audit",
     timestamps: true,
     audit: false,
-    endpoints: {schema: false, create: false, update: false, remove: false},
+    endpoints: { schema: false, create: false, update: false, remove: false },
     attributes: {
       id: { type: "integer", primaryKey: true, autoIncrement: true },
       txId: { type: "string", maxLength: 50, allowNull: false },

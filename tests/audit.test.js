@@ -241,6 +241,76 @@ describe("audit", () => {
     }
   });
 
+  it("streams audit updates over sse", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+    const cliente = await api.services.get("clientes").create({ body: { nombre: "Sofia" } });
+    const stream = openSse(server, "/api/sse");
+
+    try {
+      await stream.connected;
+      await api.services.get("clientes").update({ params: { id: cliente.data.id }, body: { activo: false } });
+
+      const event = await stream.nextEvent;
+      assert.equal(event.event, "audit");
+      assert.equal(event.data.action, "update");
+      assert.equal(event.data.tableName, "clientes");
+      assert.equal(event.data.old.activo, true);
+      assert.equal(event.data.new.activo, false);
+    } finally {
+      stream.close();
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("streams audit deletes over sse", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+    const cliente = await api.services.get("clientes").create({ body: { nombre: "Sofia" } });
+    const stream = openSse(server, "/api/sse");
+
+    try {
+      await stream.connected;
+      await api.services.get("clientes").remove({ params: { id: cliente.data.id } });
+
+      const event = await stream.nextEvent;
+      assert.equal(event.event, "audit");
+      assert.equal(event.data.action, "delete");
+      assert.equal(event.data.tableName, "clientes");
+      assert.equal(event.data.old.nombre, "Sofia");
+      assert.deepEqual(event.data.new, {});
+    } finally {
+      stream.close();
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("uses the configured audit sse heartbeat timeout", async () => {
     const adapter = new SQLiteAdapter({ database: ":memory:" });
     const seq = new Seq({ adapter, logging: false });

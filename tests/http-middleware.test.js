@@ -237,12 +237,17 @@ describe("http middleware", () => {
 
     try {
       const welcome = await request(server, "GET", "/api");
+      const ping = await request(server, "GET", "/api/ping");
       const openapi = await request(server, "GET", "/api/openapi.json");
 
       assert.equal(welcome.status, 200);
       assert.deepEqual(welcome.body, { ok: true, data: { name: "api-kit", message: "Bienvenido al backend de api-kit" } });
+      assert.equal(ping.status, 200);
+      assert.deepEqual(ping.body, { ok: true, data: { pong: true } });
       assert.ok(openapi.body.paths["/api"].get);
+      assert.ok(openapi.body.paths["/api/ping"].get);
       assert.equal(openapi.body.paths["/api"].get.operationId, "system_welcome");
+      assert.equal(openapi.body.paths["/api/ping"].get.operationId, "system_ping");
     } finally {
       await api.close();
       await close(server);
@@ -390,6 +395,109 @@ describe("http middleware", () => {
 
       const missingAsset = await request(server, "GET", "/admin/missing.js");
       assert.equal(missingAsset.status, 404);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("serves the basic example without the client package or browser persistence", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      modules: "./example/modules.js",
+      auth: { required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
+      audit: true,
+      openapi: true,
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const index = await request(server, "GET", "/basic");
+      assert.equal(index.status, 200);
+      assert.match(index.raw, /api-kit basic/);
+
+      const asset = await request(server, "GET", "/basic/app.js");
+      assert.equal(asset.status, 200);
+      assert.match(asset.raw, /fetch/);
+      assert.doesNotMatch(asset.raw, /api-kit\/client/);
+      assert.doesNotMatch(asset.raw, /Promise\.all/);
+      assert.doesNotMatch(asset.raw, /localStorage|sessionStorage|indexedDB|IndexedDB/);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("serves the client example using only the client package for API calls", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      modules: "./example/modules.js",
+      auth: { required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
+      audit: true,
+      openapi: true,
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const index = await request(server, "GET", "/client");
+      assert.equal(index.status, 200);
+      assert.match(index.raw, /api-kit client/);
+      assert.match(index.raw, /api-kit\/client/);
+
+      const asset = await request(server, "GET", "/client/app.js");
+      assert.equal(asset.status, 200);
+      assert.match(asset.raw, /createApiKitClient/);
+      assert.match(asset.raw, /LocalStorageAdapter/);
+      assert.match(asset.raw, /client\.connected\(\)/);
+      assert.match(asset.raw, /client\.serviceData\("clientes"\)/);
+      assert.match(asset.raw, /state\.clientes = await client\.serviceData\("clientes"\)/);
+      assert.match(asset.raw, /state\.ventas = await client\.serviceData\("ventas"\)/);
+      assert.match(asset.raw, /data-action="edit-cliente"/);
+      assert.match(asset.raw, /data-action="delete-cliente"/);
+      assert.match(asset.raw, /services\.clientes\.update/);
+      assert.match(asset.raw, /services\.clientes\.remove/);
+      assert.match(asset.raw, /client\.pending\(\)/);
+      assert.match(asset.raw, /data-action="edit-pending"/);
+      assert.match(asset.raw, /data-action="delete-pending"/);
+      assert.match(asset.raw, /data-action="send-pending"/);
+      assert.match(asset.raw, /data-action="send-all-pending"/);
+      assert.match(asset.raw, /client\.resendPending/);
+      assert.match(asset.raw, /client\.resendAllPending/);
+      assert.match(asset.raw, /savePending/);
+      assert.match(asset.raw, /deletePending/);
+      assert.match(asset.raw, /loadCachedLists/);
+      assert.match(asset.raw, /client\.syncServices/);
+      assert.doesNotMatch(asset.raw, /\.list\(/);
+      assert.doesNotMatch(asset.raw, new RegExp("client\\.start" + "Connection\\("));
+      assert.doesNotMatch(asset.raw, /client\.discover\(/);
+      assert.doesNotMatch(asset.raw, /fetch\s*\(/);
+      assert.doesNotMatch(asset.raw, /XMLHttpRequest|EventSource|WebSocket|axios|superagent|navigator\.onLine/);
+      assert.doesNotMatch(asset.raw, /Promise\.all/);
+      assert.doesNotMatch(asset.raw, /sessionStorage|indexedDB|IndexedDB/);
     } finally {
       await api.close();
       await close(server);
@@ -546,7 +654,7 @@ describe("http middleware", () => {
       seq,
       baseDir: process.cwd(),
       basePath: "/api",
-      paths: { services: "./example/services" },
+      paths: { services: "./tests/fixtures/services" },
       logging: {
         warn: (...args) => warnings.push(args),
         error: (...args) => errors.push(args),

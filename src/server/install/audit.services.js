@@ -1,8 +1,8 @@
 import { Op } from "seq";
-import { can as iamCan } from "iam/express";
 import { getContext } from "../context/request-context.js";
 import { ValidationError } from "../errors/validation-error.js";
 import { ok } from "../http/response.js";
+import { log } from "../logger/index.js";
 import { joinPaths } from "../utils/paths.js";
 
 export function normalizeAuditConfig(audit) {
@@ -64,14 +64,14 @@ export function installAuditChangesRoute({ mainRouter, routeRegistry, modules, m
     operationId: "audit.changes",
     serviceMethod: "changes",
     summary: "Cambios desde una fecha",
-    handler: ({ AuditModel, modules, routeRegistry, authContext }) => async (req, res) => {
+    handler: ({ AuditModel, modules, authContext }) => async (req, res) => {
       const since = parseSince(req.query?.since);
       const sinceField = auditSinceField(modules);
       const rows = await AuditModel.findAll({where: { [sinceField]: { [Op.gte]: since } }, order: [["id", "ASC"]],});
       const visible = [];
       for (const row of rows) {
         const change = row.toJSON();
-        if (await canViewAuditChange(change, { req, modules, routeRegistry, authContext })) visible.push(change);
+        if (await canViewAuditChange(change, { req, modules, authContext })) visible.push(change);
       }
       res.json(ok(visible));
     },
@@ -100,14 +100,14 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
     operationId: "audit.sse",
     serviceMethod: "sse",
     summary: "Cambios en vivo",
-    handler: ({ config, modules, routeRegistry, authContext }) => (req, res) => {
+    handler: ({ config, modules, authContext }) => (req, res) => {
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
 
       const sendChange = (change) => {
-        Promise.resolve(canViewAuditChange(change, { req, modules, routeRegistry, authContext }))
-          .then((allowed) => { if (allowed) res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`); })
-          .catch(() => {});
+        Promise.resolve(canViewAuditChange(change, { req, modules, authContext }))
+          .then((allowed) => {if (allowed) res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`)})
+          .catch((error) => log("error", "audit.sse", error));
       };
       config.audit.events.on("change", sendChange);
 
@@ -150,45 +150,13 @@ function installAuditRoute({ mainRouter, routeRegistry, modules, models, config,
   mainRouter.get(fullPath, ...handlers);
 }
 
-async function canViewAuditChange(change, { req, modules, routeRegistry, authContext }) {
-  if (!authContext) return true;
+function canViewAuditChange(change, { req, modules, authContext }) {
+  const permissions = req.session?.permissions;
+  if (!authContext || !Array.isArray(permissions)) return true;
 
-  const route = routeForAuditChange(change, { modules, routeRegistry });
-  if (!route) return false;
-  if (!route.auth?.required) return true;
-
-  const permissions = route.permissions || [];
-  for (const permission of permissions) {
-    if (!permission) continue;
-    if (!(await canRequest(permission, req))) return false;
-  }
-
-  return true;
-}
-
-function canRequest(permission, req) {
-  return new Promise((resolve) => {
-    const res = {
-      statusCode: 200,
-      status(statusCode) {
-        this.statusCode = statusCode;
-        return this;
-      },
-      json() {
-        resolve(false);
-        return this;
-      },
-    };
-
-    Promise.resolve(iamCan(permission)(req, res, (error) => resolve(!error))).catch(() => resolve(false));
-  });
-}
-
-function routeForAuditChange(change, { modules, routeRegistry }) {
   const mod = moduleForAuditChange(change, modules);
-  if (!mod) return null;
-
-  return routeRegistry.getAll().find((route) => route.module === mod.config.name && route.serviceMethod === "list") || null;
+  if (!mod) return false;
+  return permissions.includes(`${mod.config.name}.list`);
 }
 
 function moduleForAuditChange(change, modules) {
