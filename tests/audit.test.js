@@ -338,6 +338,143 @@ describe("audit", () => {
       await close(server);
     }
   });
+
+  it("closes authenticated sse streams when the bearer token expires", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      audit: { heartbeatTimeout: 50 },
+      auth: { required: true, secret: "test-secret", tokenExpiresIn: "1s" },
+      modules,
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+    await seedAuditAuth(api.auth.models, { admin: ["audit.sse", "clientes.list"] });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const login = await request(server, "POST", "/api/login", {
+        body: { username: "admin", password: "1234" },
+      });
+      assert.equal(login.status, 200);
+
+      const stream = openSse(server, "/api/sse", { token: login.body.data.token });
+      try {
+        await stream.connected;
+        const event = await timeoutAfter(stream.nextEvent, 1500, "SSE auth-expired event not received");
+        assert.equal(event.event, "auth-expired");
+        await timeoutAfter(stream.closed, 500, "SSE did not close after token expiration");
+      } finally {
+        stream.close();
+      }
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("streams authenticated audit changes created inside service transactions", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      audit: { heartbeatTimeout: 50 },
+      auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
+      modules,
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+    await seedAuditAuth(api.auth.models, { admin: ["audit.sse", "clientes.list"] });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const login = await request(server, "POST", "/api/login", {
+        body: { username: "admin", password: "1234" },
+      });
+      assert.equal(login.status, 200);
+
+      const stream = openSse(server, "/api/sse", { token: login.body.data.token });
+      try {
+        await stream.connected;
+        await api.services.get("clientes").create({ body: { nombre: "Transaccion SSE" } });
+
+        const event = await timeoutAfter(stream.nextEvent, 500, "SSE audit event not received");
+        assert.equal(event.event, "audit");
+        assert.equal(event.data.action, "create");
+        assert.equal(event.data.tableName, "clientes");
+        assert.equal(event.data.new.nombre, "Transaccion SSE");
+      } finally {
+        stream.close();
+      }
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("closes authenticated sse streams when the iam session is deactivated", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      audit: { heartbeatTimeout: 20 },
+      auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
+      modules,
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+    await seedAuditAuth(api.auth.models, { admin: ["audit.sse", "clientes.list"] });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+
+    try {
+      const login = await request(server, "POST", "/api/login", {
+        body: { username: "admin", password: "1234" },
+      });
+      assert.equal(login.status, 200);
+
+      const stream = openSse(server, "/api/sse", { token: login.body.data.token });
+      try {
+        await stream.connected;
+        await api.auth.adapter.deactivateSession(login.body.data.id);
+        const event = await timeoutAfter(stream.nextEvent, 500, "SSE session-closed event not received");
+        assert.equal(event.event, "session-closed");
+        await timeoutAfter(stream.closed, 500, "SSE did not close after session deactivation");
+      } finally {
+        stream.close();
+      }
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
 });
 
 function listen(app) {
@@ -404,7 +541,7 @@ function tableNameForModel(ModelClass) {
   return ModelClass?._resolvedTableName || ModelClass?.tableName || ModelClass?.modelName || ModelClass?.name || "";
 }
 
-function openSse(server, path) {
+function openSse(server, path, options = {}) {
   const { port } = server.address();
   let req;
   let connectedResolve;
@@ -412,7 +549,13 @@ function openSse(server, path) {
   let eventReject;
   let heartbeatResolve;
   let heartbeatReject;
+  let closedResolve;
+  let closedReject;
+  let manuallyClosed = false;
   let buffer = "";
+  const headers = { Accept: "text/event-stream", ...(options.headers || {}) };
+  if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.basic) headers.Authorization = `Basic ${Buffer.from(options.basic.join(":")).toString("base64")}`;
 
   const connected = new Promise((resolve) => {
     connectedResolve = resolve;
@@ -425,8 +568,12 @@ function openSse(server, path) {
     heartbeatResolve = resolve;
     heartbeatReject = reject;
   });
+  const closed = new Promise((resolve, reject) => {
+    closedResolve = resolve;
+    closedReject = reject;
+  });
 
-  req = http.request({ hostname: "localhost", port, path, method: "GET", headers: { Accept: "text/event-stream" } }, (res) => {
+  req = http.request({ hostname: "localhost", port, path, method: "GET", headers }, (res) => {
     assert.equal(res.statusCode, 200);
     connectedResolve();
     res.setEncoding("utf8");
@@ -442,10 +589,21 @@ function openSse(server, path) {
         if (parsed) eventResolve(parsed);
       }
     });
+    res.on("end", closedResolve);
+    res.on("close", closedResolve);
+    res.on("error", (error) => {
+      if (manuallyClosed) return closedResolve();
+      closedReject(error);
+    });
   });
   req.on("error", (error) => {
+    if (manuallyClosed && error.code === "ECONNRESET") {
+      closedResolve();
+      return;
+    }
     eventReject(error);
     heartbeatReject(error);
+    closedReject(error);
   });
   req.end();
 
@@ -453,7 +611,11 @@ function openSse(server, path) {
     connected,
     nextEvent,
     nextHeartbeat,
-    close: () => req.destroy(),
+    closed,
+    close: () => {
+      manuallyClosed = true;
+      req.destroy();
+    },
   };
 }
 

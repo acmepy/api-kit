@@ -226,7 +226,13 @@ export class ApiKitClient {
   async changes(since) {
     const requestedSince = since ? this.#normalizeDateTime(since) : this.#lastReceivedAt || this.#now();
     const query = { since: requestedSince };
-    const response = await this.request(this.#paths.changes, { query });
+    let response;
+    try {
+      response = await this.request(this.#paths.changes, { query });
+    } catch (error) {
+      if (this.#isAuthExpiredError(error)) await this.#expireSession(error);
+      throw error;
+    }
     const receivedAt = this.#touchLastReceivedAt();
     await this.#applyChangesData(response.data);
     this.#markOnline("changes", response.data, { lastReceivedAt: receivedAt });
@@ -273,6 +279,10 @@ export class ApiKitClient {
     try {
       await this.discover();
     } catch (error) {
+      if (this.#isAuthExpiredError(error)) {
+        await this.#expireSession(error);
+        throw error;
+      }
       const result = { ok: false, results: {}, errors: { discover: error.message } };
       this.#emitChange({ type: "sync", source: "services", ...result });
       return result;
@@ -289,18 +299,26 @@ export class ApiKitClient {
         continue;
       }
       try {
-        const response = await service.list();
+        const response = await service.request("list");
         await this.#adapter.set(cacheKey, response.data || []);
         results[service.name] = { ok: true, data: response.data || [] };
       } catch (error) {
+        if (this.#isAuthExpiredError(error)) {
+          await this.#expireSession(error);
+          throw error;
+        }
         results[service.name] = { ok: false, error: error.message };
       }
     }
 
     let pending = { ok: true, results: [], errors: [] };
     try {
-      pending = await this.#pendingService.resend(null, { discover: false });
+      pending = await this.#pendingService.resend(null, { discover: false, throwAuthErrors: true });
     } catch (error) {
+      if (this.#isAuthExpiredError(error)) {
+        await this.#expireSession(error);
+        throw error;
+      }
       pending = { ok: false, results: [], errors: [{ ok: false, error: error.message }] };
     }
 
@@ -467,6 +485,21 @@ export class ApiKitClient {
     this.#stopPing();
     this.#closeSse();
     this.#clearWatchdog();
+  }
+
+  async #expireSession(error) {
+    await this.#clearLocalSession();
+    await this.#clearServiceCaches();
+    await this.#pendingService.clear();
+    this.#stopPing();
+    this.#closeSse();
+    this.#clearWatchdog();
+    this.#markOffline("auth-expired", error?.response || null);
+    this.#startPing();
+  }
+
+  #isAuthExpiredError(error) {
+    return error instanceof ApiKitClientError && error.status === 401;
   }
 
   async #clearLocalSession() {

@@ -488,6 +488,7 @@ describe("http middleware", () => {
       assert.match(asset.raw, /client\.resendPending/);
       assert.match(asset.raw, /client\.resendAllPending/);
       assert.match(asset.raw, /savePending/);
+      assert.match(asset.raw, /client\.updatePending/);
       assert.match(asset.raw, /deletePending/);
       assert.match(asset.raw, /loadCachedLists/);
       assert.match(asset.raw, /client\.syncServices/);

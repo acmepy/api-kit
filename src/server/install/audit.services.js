@@ -95,6 +95,9 @@ export function createAuditWriter(moduleConfigs, auditConfig) {
 }
 
 export function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {
+  const clients = new Map();
+  let nextClientId = 0;
+
   installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }, {
     path: config.audit?.ssePath,
     operationId: "audit.sse",
@@ -104,22 +107,104 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
 
-      const sendChange = (change) => {
+      const client = {
+        id: ++nextClientId,
+        req,
+        res,
+        sessionId: req.session?.id,
+        heartbeat: null,
+        expirationTimer: null,
+        closed: false,
+      };
+      clients.set(client.id, client);
+
+      const closeClient = (event = "session-closed") => {
+        if (client.closed) return;
+        client.closed = true;
+        try {
+          res.write(`event: ${event}\ndata: {}\n\n`);
+        } catch {}
+        res.end();
+        cleanupSseClient(clients, client, config);
+      };
+
+      const validateClientSession = async () => {
+        if (!client.sessionId || !authContext?.adapter?.findSessionById) return true;
+        const session = await authContext.adapter.findSessionById(client.sessionId);
+        if (session && session.active !== false) return true;
+        closeClient("session-closed");
+        return false;
+      };
+
+      client.sendChange = (change) => {
         Promise.resolve(canViewAuditChange(change, { req, modules, authContext }))
-          .then((allowed) => {if (allowed) res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`)})
+          .then((allowed) => {if (allowed && !client.closed) res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`)})
           .catch((error) => log("error", "audit.sse", error));
       };
-      config.audit.events.on("change", sendChange);
+      config.audit.events.on("change", client.sendChange);
 
-      const heartbeat = setInterval(() => {res.write(": heartbeat\n\n")}, config.audit.heartbeatTimeout);
-      heartbeat.unref?.();
+      const expiresAt = bearerTokenExpiresAt(req);
+      if (expiresAt) {
+        const timeout = Math.max(expiresAt - Date.now(), 0);
+        client.expirationTimer = setTimeout(() => closeClient("auth-expired"), timeout);
+        client.expirationTimer.unref?.();
+      }
+
+      client.heartbeat = setInterval(() => {
+        Promise.resolve(validateClientSession())
+          .then((active) => {if (active && !client.closed) res.write(": heartbeat\n\n")})
+          .catch((error) => log("error", "audit.sse", error));
+      }, config.audit.heartbeatTimeout);
+      client.heartbeat.unref?.();
 
       req.on("close", () => {
-        clearInterval(heartbeat);
-        config.audit.events.off("change", sendChange);
+        cleanupSseClient(clients, client, config);
       });
     },
   });
+}
+
+function cleanupSseClient(clients, client, config) {
+  clients.delete(client.id);
+  if (client.heartbeat) {
+    clearInterval(client.heartbeat);
+    client.heartbeat = null;
+  }
+  if (client.expirationTimer) {
+    clearTimeout(client.expirationTimer);
+    client.expirationTimer = null;
+  }
+  if (client.sendChange) config.audit.events.off("change", client.sendChange);
+}
+
+function bearerTokenExpiresAt(req) {
+  const token = bearerToken(req);
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  const exp = Number(payload?.exp);
+  return Number.isFinite(exp) && exp > 0 ? exp * 1000 : null;
+}
+
+function bearerToken(req) {
+  const header = req.headers?.authorization || "";
+  if (!header.startsWith("Bearer ")) return null;
+  const token = header.slice("Bearer ".length).trim();
+  return token || null;
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+    return JSON.parse(Buffer.from(base64UrlToBase64(payload), "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function base64UrlToBase64(value) {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  return base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
 }
 
 function normalizeAuditHeartbeatTimeout(value, fallback) {

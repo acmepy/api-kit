@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { loadModules } from "../src/server/config/config-loader.js";
+import { loadModuleBundle, loadModules } from "../src/server/config/config-loader.js";
 
 describe("loadModules", () => {
   it("converts resource definitions to module configs", async () => {
@@ -53,5 +53,27 @@ describe("loadModules", () => {
     assert.equal(modules[0].detailResources.length, 1);
     assert.equal(modules[0].resource.model.associations.items.target, modules[0].detailResources[0].model);
     assert.equal(modules[0].resource.model.associations.items.foreignKey, "ventaId");
+  });
+
+  it("ignores global auth exported by module bundles", async () => {
+    const bundle = await loadModuleBundle(
+      {
+        auth: { required: true, tokenExpiresIn: "1m" },
+        modules: [
+          {
+            modelName: "Cliente",
+            tableName: "clientes",
+            attributes: {
+              id: { type: "integer", primaryKey: true, autoIncrement: true },
+              nombre: { type: "string", allowNull: false },
+            },
+          },
+        ],
+      },
+      process.cwd(),
+    );
+
+    assert.equal("auth" in bundle, false);
+    assert.equal(bundle.modules.length, 1);
   });
 });

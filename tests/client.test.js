@@ -505,7 +505,18 @@ describe("client public API", () => {
         calls.push({ pathname, method: options.method || "GET", authorization: options.headers?.Authorization });
         if (pathname === "/api/ping") return jsonResponse({ ok: true, data: { pong: true } });
         if (pathname === "/api/logout") return jsonResponse({ ok: true, data: { logout: true } });
-        if (pathname === "/api/openapi.json") return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
+        if (pathname === "/api/openapi.json") {
+          return jsonResponse({
+            openapi: "3.0.3",
+            paths: {
+              "/api/clientes": { get: { tags: ["clientes"], operationId: "clientes_list" } },
+              "/api/ventas": { get: { tags: ["ventas"], operationId: "ventas_list" } },
+              "/api/audit": { get: { tags: ["audit"], operationId: "audit_list" } },
+            },
+          });
+        }
+        if (pathname === "/api/changes") return jsonResponse({ ok: true, data: [] });
+        if (pathname === "/api/sse") return sseResponse('data: {"ok":true}\n\n');
         throw new Error(`Unexpected URL ${url}`);
       },
       pingInterval: 50,
@@ -1189,6 +1200,62 @@ describe("client public API", () => {
     await client.clearSession();
   });
 
+  it("expires local session during reconnect when openapi returns 401", async () => {
+    const calls = [];
+    const events = [];
+    let pingOk = false;
+    const adapter = new MapAdapter(new Map([
+      ["api-kit:session", { token: "old-token" }],
+      ["api-kit:clientes", [{ id: 1 }]],
+      ["api-kit:audit", [{ id: 2 }]],
+      ["api-kit:pending", [{ id: -1, service: "clientes", operation: "create", localId: -1, data: { nombre: "Local" } }]],
+      ["api-kit:temporaryId", -1],
+    ]));
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url, options = {}) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push({ pathname, authorization: options.headers?.Authorization });
+        if (pathname === "/api/ping") {
+          if (!pingOk) return jsonResponse({ ok: false, message: "Offline" }, 503);
+          return jsonResponse({ ok: true, data: { pong: true } });
+        }
+        if (pathname === "/api/openapi.json") return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
+        throw new Error(`Unexpected URL ${url}`);
+      },
+      pingInterval: 50,
+      pingTimeout: 50,
+      sseWatchdogTimeout: 1000,
+    });
+    client.onChange((event) => events.push(event));
+    await client.discover({
+      openapi: "3.0.3",
+      paths: {
+        "/api/clientes": { get: { tags: ["clientes"], operationId: "clientes_list" } },
+        "/api/audit": { get: { tags: ["audit"], operationId: "audit_list" } },
+      },
+    });
+    await wait(0);
+    pingOk = true;
+    calls.length = 0;
+    events.length = 0;
+
+    await wait(70);
+
+    assert.equal(calls.filter((call) => call.pathname === "/api/ping").length >= 1, true);
+    assert.equal(calls.find((call) => call.pathname === "/api/openapi.json").authorization, "Bearer old-token");
+    assert.equal(calls.some((call) => call.pathname === "/api/sse"), false);
+    assert.equal(await adapter.get("api-kit:session"), undefined);
+    assert.equal(await adapter.get("api-kit:clientes"), undefined);
+    assert.deepEqual(await adapter.get("api-kit:audit"), [{ id: 2 }]);
+    assert.equal(await adapter.get("api-kit:pending"), undefined);
+    assert.equal(await adapter.get("api-kit:temporaryId"), undefined);
+    assert.equal(client.token(), null);
+    assert.ok(events.some((event) => event.type === "offline" && event.source === "auth-expired"));
+    await client.clearSession();
+  });
+
   it("uses lastReceivedAt as the next changes since value", async () => {
     const calls = [];
     const client = createApiKitClient({
@@ -1236,6 +1303,112 @@ describe("client public API", () => {
     assert.equal(calls.filter((url) => url.includes("/changes")).length >= 1, true);
     assert.equal(calls.some((url) => url.endsWith("/sse")), false);
     assert.equal(client.connected(), true);
+    await client.clearSession();
+  });
+
+  it("expires local session when changes returns 401 during reconnect", async () => {
+    const calls = [];
+    const events = [];
+    let pingOk = false;
+    const adapter = new MapAdapter(new Map([
+      ["api-kit:session", { token: "old-token" }],
+      ["api-kit:clientes", [{ id: 1 }]],
+      ["api-kit:pending", [{ id: -1, service: "clientes", operation: "create", localId: -1, data: { nombre: "Local" } }]],
+    ]));
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url, options = {}) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push({ pathname, authorization: options.headers?.Authorization });
+        if (pathname === "/api/ping") {
+          if (!pingOk) return jsonResponse({ ok: false, message: "Offline" }, 503);
+          return jsonResponse({ ok: true, data: { pong: true } });
+        }
+        if (pathname === "/api/openapi.json") {
+          return jsonResponse({
+            openapi: "3.0.3",
+            paths: {
+              "/api/clientes": { get: { tags: ["clientes"], operationId: "clientes_list" } },
+            },
+          });
+        }
+        if (pathname === "/api/changes") return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
+        throw new Error(`Unexpected URL ${url}`);
+      },
+      pingInterval: 50,
+      pingTimeout: 50,
+      sseWatchdogTimeout: 1000,
+    });
+    client.onChange((event) => events.push(event));
+    await wait(0);
+    pingOk = true;
+    calls.length = 0;
+    events.length = 0;
+
+    await wait(70);
+
+    assert.equal(calls.filter((call) => call.pathname === "/api/ping").length >= 1, true);
+    assert.equal(calls.find((call) => call.pathname === "/api/changes").authorization, "Bearer old-token");
+    assert.equal(calls.some((call) => call.pathname === "/api/sse"), false);
+    assert.equal(await adapter.get("api-kit:session"), undefined);
+    assert.equal(await adapter.get("api-kit:clientes"), undefined);
+    assert.equal(await adapter.get("api-kit:pending"), undefined);
+    assert.equal(client.lastReceivedAt(), null);
+    assert.ok(events.some((event) => event.type === "offline" && event.source === "auth-expired"));
+    await client.clearSession();
+  });
+
+  it("expires local session when a service list returns 401 during sync", async () => {
+    const calls = [];
+    const events = [];
+    let pingOk = false;
+    const adapter = new MapAdapter(new Map([
+      ["api-kit:session", { token: "old-token" }],
+      ["api-kit:clientes", []],
+      ["api-kit:pending", [{ id: -1, service: "clientes", operation: "create", localId: -1, data: { nombre: "Local" } }]],
+    ]));
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url, options = {}) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push({ pathname, authorization: options.headers?.Authorization });
+        if (pathname === "/api/ping") {
+          if (!pingOk) return jsonResponse({ ok: false, message: "Offline" }, 503);
+          return jsonResponse({ ok: true, data: { pong: true } });
+        }
+        if (pathname === "/api/openapi.json") {
+          return jsonResponse({
+            openapi: "3.0.3",
+            paths: {
+              "/api/clientes": { get: { tags: ["clientes"], operationId: "clientes_list" } },
+            },
+          });
+        }
+        if (pathname === "/api/clientes") return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
+        throw new Error(`Unexpected URL ${url}`);
+      },
+      pingInterval: 50,
+      pingTimeout: 50,
+    });
+    client.onChange((event) => events.push(event));
+    await wait(0);
+    pingOk = true;
+    calls.length = 0;
+    events.length = 0;
+
+    await assert.rejects(() => client.syncServices(), (error) => {
+      assert.equal(error.status, 401);
+      return true;
+    });
+
+    assert.equal(calls.find((call) => call.pathname === "/api/clientes").authorization, "Bearer old-token");
+    assert.equal(await adapter.get("api-kit:session"), undefined);
+    assert.equal(await adapter.get("api-kit:clientes"), undefined);
+    assert.equal(await adapter.get("api-kit:pending"), undefined);
+    assert.ok(events.some((event) => event.type === "offline" && event.source === "auth-expired"));
+    assert.equal(events.some((event) => event.type === "sync" && event.errors?.clientes), false);
     await client.clearSession();
   });
 

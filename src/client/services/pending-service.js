@@ -52,7 +52,7 @@ export class PendingService {
     const results = [];
 
     for (const operation of targets) {
-      results.push(await this.#resendOperation(operation));
+      results.push(await this.#resendOperation(operation, options));
     }
 
     const errors = results.filter((result) => !result.ok);
@@ -68,7 +68,7 @@ export class PendingService {
     await this.#adapter.remove(this.#temporaryIdKey());
   }
 
-  async #resendOperation(operation) {
+  async #resendOperation(operation, options = {}) {
     const service = this.#client.service(operation.service);
 
     try {
@@ -92,6 +92,7 @@ export class PendingService {
       }
       return { ok: true, id: operation.id, response };
     } catch (error) {
+      if (options.throwAuthErrors && error?.status === 401) throw error;
       const errors = error.errors || error.response?.errors || null;
       await this.update(operation.id, { status: "error", message: error.message, errors });
       const localId = operation.localId ?? operation.id;

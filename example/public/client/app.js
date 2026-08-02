@@ -478,8 +478,13 @@ async function savePending(button) {
     const pending = state.pending.find((item) => Number(item.id) === id);
     if (!pending) return;
     const data = JSON.parse(row.querySelector('[name="data"]').value);
-    const service = client.service(pending.service);
-    await service.update(pending.localId ?? pending.id, data);
+    await client.updatePending(id, { data, status: "pending", message: "", errors: null });
+    if (pending.operation === "create" || pending.operation === "update") {
+      const localId = pending.localId ?? pending.id;
+      const records = await client.serviceData(pending.service);
+      const current = records.find((item) => String(item?.id) === String(localId)) || {};
+      await client.addServiceRecord(pending.service, { ...current, ...data, id: localId, pending: true, status: "pending", message: "", errors: null });
+    }
     state.editingPendingId = null;
     await refreshLocalState();
   });

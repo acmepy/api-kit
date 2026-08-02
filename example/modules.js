@@ -1,9 +1,3 @@
-export const auth = {
-  required: true,
-  strategies: ["bearer", "basic"],
-  tokenExpiresIn: "1h",
-};
-
 export const modules = [
   {
     mountPath: "/basic",

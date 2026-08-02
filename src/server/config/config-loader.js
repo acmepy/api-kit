@@ -8,7 +8,7 @@ export async function loadModules(input, baseDir) {
 }
 
 export async function loadModuleBundle(input, baseDir) {
-  const bundle = { modules: [], auth: undefined, staticModules: [] };
+  const bundle = { modules: [], staticModules: [] };
   if (!input) return bundle;
   const items = Array.isArray(input) ? input : [input];
   for (const item of items) {
@@ -29,20 +29,18 @@ export async function loadModuleBundle(input, baseDir) {
 
 async function loadModuleFile(resolved) {
   const mod = await importModuleNamespace(resolved);
-  const hasBundleExports = mod.modules !== undefined || mod.auth !== undefined || isModuleBundle(mod.default);
+  const hasBundleExports = mod.modules !== undefined || isModuleBundle(mod.default);
   if (!hasBundleExports) return mod.default || mod;
 
   const defaults = mod.default && typeof mod.default === "object" && !Array.isArray(mod.default) ? mod.default : {};
   return {
     ...defaults,
     modules: mod.modules ?? defaults.modules ?? (isModuleBundle(defaults) ? [] : mod.default),
-    auth: mod.auth ?? defaults.auth,
   };
 }
 
 function appendBundleItem(bundle, item) {
   if (isModuleBundle(item)) {
-    if (item.auth !== undefined) bundle.auth = item.auth;
     const modules = Array.isArray(item.modules) ? item.modules : [item.modules].filter(Boolean);
     appendModuleEntries(bundle, modules);
     return;

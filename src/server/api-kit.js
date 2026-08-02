@@ -65,7 +65,7 @@ export async function createApiKit(conf = {}) {
   const moduleBundle = await loadModuleBundle(config.modules, config.baseDir);
   config.staticModules.push(...moduleBundle.staticModules);
   config.installableApps = normalizeInstallableApps(config.staticModules, config.baseDir);
-  config.auth = normalizeGlobalAuth(mergeAuthConfig(moduleBundle.auth, config.auth));
+  config.auth = normalizeGlobalAuth(config.auth);
 
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
@@ -134,13 +134,6 @@ export async function createApiKit(conf = {}) {
 
   return {app, router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: auditEvents, auth: authContext, close: async () => { auditEvents.removeAllListeners(); },
   };
-}
-
-function mergeAuthConfig(base, override) {
-  if (override === undefined) return base;
-  if (override === false || override === null) return override;
-  if (base && typeof base === "object" && override && typeof override === "object") return { ...base, ...override };
-  return override;
 }
 
 function registerSeqModels(seq, modelClasses) {
