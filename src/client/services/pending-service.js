@@ -1,54 +1,39 @@
-export class PendingService {
-  #client;
-  #adapter;
-  #servicePrefix;
+import { ApiKitClientError } from "../errors.js";
+import { BaseService } from "./base-service.js";
 
-  constructor({ client, adapter, servicePrefix }) {
-    this.#client = client;
-    this.#adapter = adapter;
-    this.#servicePrefix = servicePrefix;
-  }
-
-  async list() {
-    return (await this.#adapter.get(this.#pendingKey())) || [];
-  }
-
-  async get(id) {
-    return (await this.list()).find((item) => Number(item.id) === Number(id)) || null;
+export class PendingService extends BaseService {
+  constructor({ client, servicePrefix }) {
+    super({ client, name: "pending", path: "", operations: {}, schemas: {}, servicePrefix });
   }
 
   async create(operation = {}) {
-    const pending = await this.list();
-    const nextPending = [...pending.filter((item) => Number(item.id) !== Number(operation.id)), operation];
-    await this.#adapter.set(this.#pendingKey(), nextPending);
-    return operation;
+    return super.create(operation, { isPending: true });
   }
 
   async update(id, patch = {}) {
-    const pending = await this.list();
-    const nextPending = pending.map((item) => (Number(item.id) === Number(id) ? { ...item, ...patch } : item));
-    await this.#adapter.set(this.#pendingKey(), nextPending);
-    return nextPending.find((item) => Number(item.id) === Number(id)) || null;
+    return super.update(id, patch, { isPending: true });
   }
 
   async remove(id) {
-    const pending = await this.list();
-    const nextPending = pending.filter((item) => Number(item.id) !== Number(id));
-    await this.#adapter.set(this.#pendingKey(), nextPending);
-    return nextPending;
+    return super.remove(id, { isPending: true });
   }
 
-  async nextTemporaryId() {
-    const key = this.#temporaryIdKey();
-    const nextId = Number((await this.#adapter.get(key)) || 0) - 1;
-    await this.#adapter.set(key, nextId);
-    return nextId;
+  async pull() {
+    throw new ApiKitClientError('No implemntado')
   }
 
-  async resend(id = null, options = {}) {
-    if (options.discover !== false && !this.#client.services().size) await this.#client.syncServices();
-    const pending = await this.list();
-    const targets = id === null ? pending : pending.filter((item) => Number(item.id) === Number(id));
+  async pullOne(id) {
+    return this.get(id);
+  }
+
+  async push(pendingId = null, options = {}) {
+    if (options.discover !== false && !this.client.services().size) await this.client.syncServices();
+    const pending = (await this.list()).data;
+    const targets = pending.filter((item) => {
+      if (options.service && item.service !== options.service) return false;
+      if (pendingId !== null && Number(item.id) !== Number(pendingId)) return false;
+      return true;
+    });
     const results = [];
 
     for (const operation of targets) {
@@ -59,17 +44,20 @@ export class PendingService {
     return { ok: errors.length === 0, results, errors };
   }
 
-  async resendAll() {
-    return this.resend();
+  async nextTemporaryId() {
+    const key = this.#temporaryIdKey();
+    const nextId = Number((await this.client.adapter.get(key)) || 0) - 1;
+    await this.client.adapter.set(key, nextId);
+    return nextId;
   }
 
   async clear() {
-    await this.#adapter.remove(this.#pendingKey());
-    await this.#adapter.remove(this.#temporaryIdKey());
+    await this.client.adapter.remove(this.#pendingKey());
+    await this.client.adapter.remove(this.#temporaryIdKey());
   }
 
   async #resendOperation(operation, options = {}) {
-    const service = this.#client.service(operation.service);
+    const service = this.client.service(operation.service);
 
     try {
       let response;
@@ -85,10 +73,12 @@ export class PendingService {
 
       await this.remove(operation.id);
       if (operation.operation === "create") {
-        await this.#client.removeServiceRecord(operation.service, operation.localId ?? operation.id);
-        if (response.data?.id !== undefined) await this.#client.addServiceRecord(operation.service, response.data);
+        await service.remove(operation.localId ?? operation.id, { isPending: true });
+        if (response.data?.id !== undefined) await service.create(response.data, { isPending: true });
       } else if (operation.operation === "update") {
-        if (response.data?.id !== undefined) await this.#client.addServiceRecord(operation.service, response.data);
+        if (response.data?.id !== undefined) await service.create(response.data, { isPending: true });
+      } else if (operation.operation === "remove") {
+        await service.remove(operation.localId, { isPending: true });
       }
       return { ok: true, id: operation.id, response };
     } catch (error) {
@@ -97,16 +87,16 @@ export class PendingService {
       await this.update(operation.id, { status: "error", message: error.message, errors });
       const localId = operation.localId ?? operation.id;
       const localRecord = { ...operation.data, id: localId, pending: true, status: "error", message: error.message, errors };
-      await this.#client.addServiceRecord(operation.service, localRecord);
+      await service.create(localRecord, { isPending: true });
       return { ok: false, id: operation.id, error: error.message, errors };
     }
   }
 
   #temporaryIdKey() {
-    return `${this.#servicePrefix}:temporaryId`;
+    return `${this.servicePrefix}:temporaryId`;
   }
 
   #pendingKey() {
-    return `${this.#servicePrefix}:pending`;
+    return `${this.servicePrefix}:pending`;
   }
 }

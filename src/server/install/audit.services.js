@@ -107,15 +107,7 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
 
-      const client = {
-        id: ++nextClientId,
-        req,
-        res,
-        sessionId: req.session?.id,
-        heartbeat: null,
-        expirationTimer: null,
-        closed: false,
-      };
+      const client = {id: ++nextClientId, req, res, sessionId: req.session?.id, heartbeat: null, expirationTimer: null, closed: false};
       clients.set(client.id, client);
 
       const closeClient = (event = "session-closed") => {
@@ -123,7 +115,9 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
         client.closed = true;
         try {
           res.write(`event: ${event}\ndata: {}\n\n`);
-        } catch {}
+        } catch (error) {
+          log("error", "audit.sse", error);
+        }
         res.end();
         cleanupSseClient(clients, client, config);
       };
@@ -318,9 +312,9 @@ function snapshot(model) {
 }
 
 function rowId(model, moduleConfig) {
-  if (!model || typeof model.getDataValue !== "function") return "";
+  if (!model || typeof model.get !== "function") return "";
   const pk = primaryKeyFor(moduleConfig);
-  const value = model.getDataValue(pk);
+  const value = model.get(pk);
   if (value !== undefined && value !== null) return String(value);
   return "";
 }

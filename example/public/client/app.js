@@ -24,6 +24,7 @@ const state = {
 const services = {
   clientes: null,
   ventas: null,
+  pending: client.service("pending"),
 };
 
 const app = document.querySelector("#app");
@@ -377,6 +378,7 @@ async function logout() {
     state.pending = [];
     services.clientes = null;
     services.ventas = null;
+    services.pending = client.service("pending");
     state.status = "Logout OK";
   });
 }
@@ -384,6 +386,7 @@ async function logout() {
 function assignServices() {
   services.clientes = client.service("clientes");
   services.ventas = client.service("ventas");
+  services.pending = client.service("pending");
 }
 
 function tryAssignServices() {
@@ -397,8 +400,8 @@ function tryAssignServices() {
 
 async function loadClientes(wrap = true) {
   const task = async () => {
-    await client.syncServices(true);
     assignServices();
+    await services.clientes.pull();
     await loadCachedLists();
   };
   return wrap ? run(task) : task();
@@ -415,8 +418,8 @@ async function createCliente(form) {
     if (formData.email) body.email = formData.email;
     await services.clientes.create(body);
     form.reset();
-    state.clientes = await client.serviceData("clientes");
-    state.pending = await client.pending();
+    state.clientes = (await services.clientes.list()).data;
+    state.pending = (await services.pending.list()).data;
   });
 }
 
@@ -445,8 +448,8 @@ async function saveCliente(button) {
     if (!body.email) delete body.email;
     await services.clientes.update(id, body);
     state.editingClienteId = null;
-    state.clientes = await client.serviceData("clientes");
-    state.pending = await client.pending();
+    state.clientes = (await services.clientes.list()).data;
+    state.pending = (await services.pending.list()).data;
   });
 }
 
@@ -454,8 +457,8 @@ async function deleteCliente(button) {
   await run(async () => {
     await services.clientes.remove(button.dataset.id);
     if (state.editingClienteId === button.dataset.id) state.editingClienteId = null;
-    state.clientes = await client.serviceData("clientes");
-    state.pending = await client.pending();
+    state.clientes = (await services.clientes.list()).data;
+    state.pending = (await services.pending.list()).data;
   });
 }
 
@@ -478,13 +481,7 @@ async function savePending(button) {
     const pending = state.pending.find((item) => Number(item.id) === id);
     if (!pending) return;
     const data = JSON.parse(row.querySelector('[name="data"]').value);
-    await client.updatePending(id, { data, status: "pending", message: "", errors: null });
-    if (pending.operation === "create" || pending.operation === "update") {
-      const localId = pending.localId ?? pending.id;
-      const records = await client.serviceData(pending.service);
-      const current = records.find((item) => String(item?.id) === String(localId)) || {};
-      await client.addServiceRecord(pending.service, { ...current, ...data, id: localId, pending: true, status: "pending", message: "", errors: null });
-    }
+    await services.pending.update(id, { data, status: "pending", message: "", errors: null });
     state.editingPendingId = null;
     await refreshLocalState();
   });
@@ -492,14 +489,17 @@ async function savePending(button) {
 
 async function sendPending(button) {
   await run(async () => {
-    await client.resendPending(Number(button.dataset.id));
+    const pending = state.pending.find((item) => Number(item.id) === Number(button.dataset.id));
+    const service = pending ? client.service(pending.service) : null;
+    if (service) await service.push(Number(button.dataset.id));
     await refreshLocalState();
   });
 }
 
 async function sendAllPending() {
   await run(async () => {
-    await client.resendAllPending();
+    if (services.clientes) await services.clientes.push();
+    if (services.ventas) await services.ventas.push();
     await refreshLocalState();
   });
 }
@@ -508,12 +508,7 @@ async function deletePending(button) {
   await run(async () => {
     const id = Number(button.dataset.id);
     const pending = state.pending.find((item) => Number(item.id) === id);
-    if (pending) {
-      const service = client.service(pending.service);
-      await service.remove(pending.localId ?? pending.id);
-    } else {
-      await client.removePending(id);
-    }
+    if (pending) await services.pending.remove(id);
     if (state.editingPendingId === button.dataset.id) state.editingPendingId = null;
     await refreshLocalState();
   });
@@ -521,17 +516,17 @@ async function deletePending(button) {
 
 async function loadVentas(wrap = true) {
   const task = async () => {
-    await client.syncServices(true);
     assignServices();
+    await services.ventas.pull();
     await loadCachedLists();
   };
   return wrap ? run(task) : task();
 }
 
 async function loadCachedLists() {
-  state.clientes = await client.serviceData("clientes");
-  state.ventas = await client.serviceData("ventas");
-  state.pending = await client.pending();
+  state.clientes = services.clientes ? (await services.clientes.list()).data : [];
+  state.ventas = services.ventas ? (await services.ventas.list()).data : [];
+  state.pending = (await services.pending.list()).data;
 }
 
 async function createVenta(form) {
@@ -546,8 +541,8 @@ async function createVenta(form) {
     };
     await services.ventas.create(body);
     form.reset();
-    state.ventas = await client.serviceData("ventas");
-    state.pending = await client.pending();
+    state.ventas = (await services.ventas.list()).data;
+    state.pending = (await services.pending.list()).data;
   });
 }
 
@@ -556,16 +551,16 @@ async function refreshLists() {
   try {
     await loadClientes(false);
     await loadVentas(false);
-    state.pending = await client.pending();
+    state.pending = (await services.pending.list()).data;
     render();
   } catch {
   }
 }
 
 async function refreshLocalState() {
-  state.clientes = await client.serviceData("clientes");
-  state.ventas = await client.serviceData("ventas");
-  state.pending = await client.pending();
+  state.clientes = services.clientes ? (await services.clientes.list()).data : [];
+  state.ventas = services.ventas ? (await services.ventas.list()).data : [];
+  state.pending = (await services.pending.list()).data;
 }
 
 async function refreshFromClient() {

@@ -192,7 +192,7 @@ describe("Etapa 1 - N�cleo", () => {
           fullName: {
             type: DataTypes.VIRTUAL(DataTypes.STRING(200), ["firstName", "lastName"]),
             get() {
-              return `${this.getDataValue("firstName")} ${this.getDataValue("lastName")}`;
+              return `${this.get("firstName")} ${this.get("lastName")}`;
             },
           },
         },

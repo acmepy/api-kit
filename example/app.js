@@ -75,29 +75,21 @@ async function seedIam(api) {
   }
 
   let role = await models.Role.findOne({ where: { role: "admin" } });
-  if (!role) {
-    role = await models.Role.create({ role: "admin", active: true });
-  }
+  if (!role) role = await models.Role.create({ role: "admin", active: true });
 
-  const userId = user.getDataValue("id");
-  const roleId = role.getDataValue("id");
+  const userId = user.get("id");
+  const roleId = role.get("id");
 
   const userRole = await models.UserRole.findOne({ where: { userId, roleId } });
-  if (!userRole) {
-    await models.UserRole.create({ userId, roleId, active: true });
-  }
+  if (!userRole) await models.UserRole.create({ userId, roleId, active: true });
 
   const permissionNames = new Set(api.routes.getAll().flatMap((route) => route.permissions || []));
   for (const permissionName of permissionNames) {
     let permission = await models.Permission.findOne({ where: { permission: permissionName } });
-    if (!permission) {
-      permission = await models.Permission.create({ permission: permissionName, active: true });
-    }
+    if (!permission) permission = await models.Permission.create({ permission: permissionName, active: true });
 
-    const permissionId = permission.getDataValue("id");
+    const permissionId = permission.get("id");
     const rolePermission = await models.RolePermission.findOne({ where: { roleId, permissionId } });
-    if (!rolePermission) {
-      await models.RolePermission.create({ roleId, permissionId, active: true });
-    }
+    if (!rolePermission) await models.RolePermission.create({ roleId, permissionId, active: true });
   }
 }

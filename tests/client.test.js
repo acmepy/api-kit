@@ -76,7 +76,7 @@ describe("client public API", () => {
 
       const listed = await clientes.list();
       assert.equal(listed.data.length, 1);
-      assert.equal(listed.pagination.total, 1);
+      assert.equal(listed.local, true);
 
       const got = await clientes.get(created.data.id);
       assert.equal(got.data.ruc, "123");
@@ -85,7 +85,7 @@ describe("client public API", () => {
       assert.equal(updated.data.activo, false);
 
       const removed = await clientes.remove(created.data.id);
-      assert.equal(removed.data.nombre, "Ana");
+      assert.equal(removed.data.id, created.data.id);
       assert.ok(events.some((event) => event.type === "online" && event.source === "login"));
 
       const restoredClient = createApiKitClient({ baseUrl, adapter });
@@ -579,20 +579,20 @@ describe("client public API", () => {
     await client.clearSession();
   });
 
-  it("exposes pending as a local service while keeping client delegates", async () => {
+  it("exposes pending as a discovered local service", async () => {
     const adapter = new MapAdapter();
     const client = createApiKitClient({ baseUrl: "http://server/api", adapter });
-    const pending = client.pendingService();
+    const pending = client.service("pending");
 
     assert.ok(pending instanceof PendingService);
     const id = await pending.nextTemporaryId();
     await pending.create({ id, service: "clientes", operation: "create", localId: id, data: { nombre: "Ana" } });
-    await client.updatePending(id, { status: "pending", message: "", errors: null });
+    await pending.update(id, { status: "pending", message: "", errors: null });
 
-    assert.deepEqual(await client.pending(), [
+    assert.deepEqual((await pending.list()).data, [
       { id: -1, service: "clientes", operation: "create", localId: -1, data: { nombre: "Ana" }, status: "pending", message: "", errors: null },
     ]);
-    assert.deepEqual(await pending.get(id), {
+    assert.deepEqual((await pending.get(id)).data, {
       id: -1,
       service: "clientes",
       operation: "create",
@@ -649,7 +649,7 @@ describe("client public API", () => {
     assert.equal(await adapter.get("api-kit:temporaryId"), -1);
   });
 
-  it("removes pending and temporary records after an online create succeeds", async () => {
+  it("removes pending and temporary records after pushing a create succeeds", async () => {
     const calls = [];
     const adapter = new MapAdapter();
     const client = createApiKitClient({
@@ -679,10 +679,13 @@ describe("client public API", () => {
     });
 
     await client.login({ username: "admin", password: "1234" });
-    const created = await client.service("clientes").create({ nombre: "Online" });
+    const clientes = client.service("clientes");
+    const created = await clientes.create({ nombre: "Online" });
+    const pushed = await clientes.push();
 
     assert.equal(created.ok, true);
-    assert.deepEqual(created.data, { id: 7, nombre: "Online" });
+    assert.deepEqual(created.data, { nombre: "Online", id: -1, pending: true, status: "pending", message: "", errors: null });
+    assert.equal(pushed.ok, true);
     assert.deepEqual(await adapter.get("api-kit:clientes"), [{ id: 7, nombre: "Online" }]);
     assert.deepEqual(await adapter.get("api-kit:pending"), []);
     assert.equal(await adapter.get("api-kit:temporaryId"), -1);
@@ -697,7 +700,7 @@ describe("client public API", () => {
     ]);
   });
 
-  it("keeps rejected creates pending with error status and message", async () => {
+  it("keeps rejected pushed creates pending with error status and message", async () => {
     const adapter = new MapAdapter();
     const client = createApiKitClient({
       baseUrl: "http://server/api",
@@ -727,15 +730,18 @@ describe("client public API", () => {
     });
 
     await client.login({ username: "admin", password: "1234" });
-    const created = await client.service("clientes").create({ nombre: "x" });
+    const clientes = client.service("clientes");
+    const created = await clientes.create({ nombre: "x" });
+    const pushed = await clientes.push();
+    const local = (await clientes.list()).data[0];
 
     assert.equal(created.ok, true);
     assert.equal(created.pending, true);
     assert.equal(created.data.id, -1);
-    assert.equal(created.data.status, "error");
-    assert.equal(created.data.message, "Nombre invalido");
-    assert.deepEqual(created.errors, { nombre: "Debe tener al menos 3 caracteres" });
-    assert.deepEqual(created.data.errors, { nombre: "Debe tener al menos 3 caracteres" });
+    assert.equal(pushed.ok, false);
+    assert.equal(local.status, "error");
+    assert.equal(local.message, "Nombre invalido");
+    assert.deepEqual(local.errors, { nombre: "Debe tener al menos 3 caracteres" });
     assert.deepEqual(await adapter.get("api-kit:clientes"), [
       {
         nombre: "x",
@@ -761,7 +767,7 @@ describe("client public API", () => {
     ]);
   });
 
-  it("falls back to local service data after create when the server drops while marked online", async () => {
+  it("keeps local service data after push fails when the server drops while marked online", async () => {
     let serverOnline = true;
     const adapter = new MapAdapter();
     const client = createApiKitClient({
@@ -795,11 +801,12 @@ describe("client public API", () => {
 
     const clientes = client.service("clientes");
     const created = await clientes.create({ nombre: "Cae server" });
+    const pushed = await clientes.push();
     const listed = await clientes.list();
 
     assert.equal(created.pending, true);
+    assert.equal(pushed.ok, false);
     assert.equal(listed.local, true);
-    assert.equal(listed.error, "Server offline");
     assert.deepEqual(listed.data, [
       { nombre: "Cae server", id: -1, pending: true, status: "error", message: "Server offline", errors: null },
     ]);
@@ -932,13 +939,16 @@ describe("client public API", () => {
         },
       },
     });
-    await client.addServiceRecord("clientes", { id: -1, nombre: "Uno", pending: true, status: "pending", message: "", errors: null });
-    await client.addServiceRecord("clientes", { id: -2, nombre: "Dos", pending: true, status: "pending", message: "", errors: null });
-    await client.addPending({ id: -1, service: "clientes", operation: "create", localId: -1, data: { nombre: "Uno" }, status: "pending", message: "", errors: null });
-    await client.addPending({ id: -2, service: "clientes", operation: "create", localId: -2, data: { nombre: "Dos" }, status: "pending", message: "", errors: null });
+    await adapter.set("api-kit:clientes", [
+      { id: -1, nombre: "Uno", pending: true, status: "pending", message: "", errors: null },
+      { id: -2, nombre: "Dos", pending: true, status: "pending", message: "", errors: null },
+    ]);
+    const pending = client.service("pending");
+    await pending.create({ id: -1, service: "clientes", operation: "create", localId: -1, data: { nombre: "Uno" }, status: "pending", message: "", errors: null });
+    await pending.create({ id: -2, service: "clientes", operation: "create", localId: -2, data: { nombre: "Dos" }, status: "pending", message: "", errors: null });
 
-    const one = await client.resendPending(-1);
-    const all = await client.resendAllPending();
+    const one = await pending.push(-1);
+    const all = await pending.push();
 
     assert.equal(one.ok, true);
     assert.equal(all.ok, true);
@@ -982,7 +992,7 @@ describe("client public API", () => {
       },
     });
 
-    const result = await client.resendAllPending();
+    const result = await client.service("pending").push();
 
     assert.equal(result.ok, true);
     assert.deepEqual(calls.map((call) => `${call.method} ${call.pathname}`), ["GET /api/ping", "PUT /api/clientes/7", "DELETE /api/clientes/8"]);
@@ -1506,11 +1516,11 @@ async function startApi() {
 async function seedIam(models, permissions) {
   const user = await models.User.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
   const role = await models.Role.create({ role: "admin", active: true });
-  await models.UserRole.create({ userId: user.getDataValue("id"), roleId: role.getDataValue("id"), active: true });
+  await models.UserRole.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
 
   for (const permissionName of permissions) {
     const permission = await models.Permission.create({ permission: permissionName, active: true });
-    await models.RolePermission.create({ roleId: role.getDataValue("id"), permissionId: permission.getDataValue("id"), active: true });
+    await models.RolePermission.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
   }
 }
 

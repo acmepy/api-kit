@@ -240,7 +240,7 @@ describe("BaseService list filters", () => {
     assert.equal(result.data.id, "SKU-2");
     assert.equal(result.data.name, "Renamed");
     assert.equal(await skuResource.model.findByPk("SKU-1"), null);
-    assert.equal((await skuResource.model.findByPk("SKU-2")).getDataValue("name"), "Renamed");
+    assert.equal((await skuResource.model.findByPk("SKU-2")).get("name"), "Renamed");
   });
 
   it("validates date strings through yep schemas", async () => {

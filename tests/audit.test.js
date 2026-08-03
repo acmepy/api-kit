@@ -63,11 +63,11 @@ describe("audit", () => {
     const rows = await Audit.findAll({ order: [["id", "ASC"]] });
 
     assert.equal(rows.length, 2);
-    assert.deepEqual(rows.map((row) => row.getDataValue("action")), ["create", "update"]);
-    assert.deepEqual(rows.map((row) => row.getDataValue("tableName")), ["clientes", "clientes"]);
-    assert.equal(rows[0].getDataValue("new").nombre, "Ana");
-    assert.equal(rows[1].getDataValue("old").activo, true);
-    assert.equal(rows[1].getDataValue("new").activo, false);
+    assert.deepEqual(rows.map((row) => row.get("action")), ["create", "update"]);
+    assert.deepEqual(rows.map((row) => row.get("tableName")), ["clientes", "clientes"]);
+    assert.equal(rows[0].get("new").nombre, "Ana");
+    assert.equal(rows[1].get("old").activo, true);
+    assert.equal(rows[1].get("new").activo, false);
   });
 
   it("exposes audit changes since a date", async () => {
@@ -499,11 +499,11 @@ async function seedAuditAuth(models, users) {
   for (const [userId, permissions] of Object.entries(users)) {
     const user = await models.User.create({ id: userId, password: "1234", name: userId, email: `${userId}@example.com`, active: true });
     const role = await models.Role.create({ role: userId, active: true });
-    await models.UserRole.create({ userId: user.getDataValue("id"), roleId: role.getDataValue("id"), active: true });
+    await models.UserRole.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
 
     for (const permissionName of permissions) {
       const permission = permissionModels.get(permissionName);
-      await models.RolePermission.create({ roleId: role.getDataValue("id"), permissionId: permission.getDataValue("id"), active: true });
+      await models.RolePermission.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
     }
   }
 }

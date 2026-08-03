@@ -185,7 +185,7 @@ export class BaseService {
     const saved = [];
     for (const [name, items] of details.entries()) {
       const descriptor = this.#detailDescriptor(name);
-      const parentId = parent.getDataValue(descriptor.parentPrimaryKey);
+      const parentId = parent.get(descriptor.parentPrimaryKey);
       const savedForDetail = [];
 
       for (const item of items) {
@@ -210,7 +210,7 @@ export class BaseService {
 
   async #removeMissingDetails(descriptor, parentId, savedDetails, transaction) {
     const ids = savedDetails
-      .map((item) => item.getDataValue(descriptor.primaryKey))
+      .map((item) => item.get(descriptor.primaryKey))
       .filter((value) => value !== undefined && value !== null);
     const where = { [descriptor.foreignKey]: parentId };
     if (ids.length > 0) where[descriptor.primaryKey] = { [Op.notIn]: ids };
@@ -267,7 +267,7 @@ export class BaseService {
     if (descriptors.length === 0) return instance.toJSON();
 
     const primaryKey = this.#primaryKeyAttribute();
-    const id = instance.getDataValue(primaryKey);
+    const id = instance.get(primaryKey);
     const fresh = await this.#model.findByPk(id, {
       include: descriptors.map((descriptor) => ({ model: descriptor.target, as: descriptor.as })),
       ...(transaction && { transaction }),
@@ -480,7 +480,7 @@ export class BaseService {
   #updatesPrimaryKey(instance, data) {
     const pk = this.#primaryKeyAttribute();
     if (!pk || !data || typeof data !== "object" || !(pk in data)) return false;
-    return data[pk] !== instance.getDataValue(pk);
+    return data[pk] !== instance.get(pk);
   }
 
   #validateBodyFields(schema, body) {

@@ -2,38 +2,36 @@ import yep from "yep";
 import { fillPath } from "../utils.js";
 
 export class BaseService {
-  constructor({ client, name, path, operations = {}, schemas = {} }) {
+  constructor({ client, name, path, operations = {}, schemas = {}, servicePrefix = "api-kit" }) {
     this.client = client;
     this.name = name;
     this.path = path;
     this.operations = operations;
     this.schemas = schemas;
+    this.servicePrefix = servicePrefix;
     this.yepSchemas = buildYepSchemas(schemas);
   }
 
-  async list(query = {}) {
-    if (!this.client.connected()) {
-      return { ok: true, data: await this.client.serviceData(this.name), local: true };
-    }
-
-    try {
-      const response = await this.#send("list", { query });
-      await this.client.setServiceData(this.name, response.data || []);
-      return response;
-    } catch (error) {
-      return { ok: true, data: await this.client.serviceData(this.name), local: true, error: error.message };
-    }
+  async list() {
+    return { ok: true, data: await this.#localList(), local: true };
   }
 
-  async get(id, query = {}) {
-    return this.#send("get", { params: { id }, query });
+  async get(id) {
+    const record = await this.#localGet(id);
+    return { ok: Boolean(record), data: record, local: true };
   }
 
-  async create(data = {}) {
+  async create(data = {}, options = {}) {
+    if (options.isPending) {
+      await this.#localCreate(data);
+      return { ok: true, data, local: true };
+    }
+
     const validation = await this.validate(data);
     if (!validation.ok) return validation;
 
-    const temporaryId = await this.client.nextTemporaryId();
+    const pendingService = this.client.service("pending");
+    const temporaryId = await pendingService.nextTemporaryId();
     const localRecord = { ...data, id: temporaryId, pending: true, status: "pending", message: "", errors: null };
     const pending = {
       id: temporaryId,
@@ -47,90 +45,72 @@ export class BaseService {
       createdAt: new Date().toISOString(),
     };
 
-    await this.client.addServiceRecord(this.name, localRecord);
-    await this.client.addPending(pending);
+    await this.#localCreate(localRecord);
+    await pendingService.create(pending, { isPending: true });
 
-    if (!this.client.connected()) {
-      return { ok: true, data: localRecord, pending: true, local: true };
-    }
-
-    try {
-      const response = await this.#send("create", { body: data });
-      await this.client.removePending(pending.id);
-      await this.client.removeServiceRecord(this.name, temporaryId);
-      if (response.data?.id !== undefined) {
-        await this.client.addServiceRecord(this.name, response.data);
-      }
-      return response;
-    } catch (error) {
-      const errors = error.errors || error.response?.errors || null;
-      const errorRecord = { ...localRecord, status: "error", message: error.message, errors };
-      await this.client.addServiceRecord(this.name, errorRecord);
-      await this.client.updatePending(pending.id, { status: "error", message: error.message, errors });
-      return { ok: true, data: errorRecord, pending: true, error: error.message, errors };
-    }
+    return { ok: true, data: localRecord, pending: true, local: true };
   }
 
-  async update(id, data = {}) {
+  async update(id, data = {}, options = {}) {
+    if (options.isPending) {
+      const record = await this.#localUpdate(id, data);
+      return { ok: true, data: record, local: true };
+    }
+
+    const pendingService = this.client.service("pending");
     const numericId = Number(id);
     if (numericId < 0) {
-      const records = await this.client.serviceData(this.name);
-      const current = records.find((item) => Number(item?.id) === numericId) || {};
-      const pending = (await this.client.pending()).find((item) => Number(item.id) === numericId) || {};
+      const current = await this.#localGet(numericId) || {};
+      const pending = (await pendingService.list()).data.find((item) => Number(item.id) === numericId) || {};
       const localRecord = { ...current, ...data, id: numericId, pending: true, status: "pending", message: "", errors: null };
-      await this.client.addServiceRecord(this.name, localRecord);
-      await this.client.updatePending(numericId, { data: { ...(pending.data || {}), ...data }, status: "pending", message: "", errors: null });
+      await this.#localCreate(localRecord);
+      await pendingService.update(numericId, { data: { ...(pending.data || {}), ...data }, status: "pending", message: "", errors: null }, { isPending: true });
       return { ok: true, data: localRecord, pending: true, local: true };
     }
 
-    const records = await this.client.serviceData(this.name);
-    const current = records.find((item) => Number(item?.id) === numericId) || {};
-    const pendingId = await this.client.nextTemporaryId();
+    const current = await this.#localGet(numericId) || {};
+    const existingPending = (await pendingService.list()).data.find((item) => item.service === this.name && item.operation === "update" && Number(item.localId) === numericId);
     const localRecord = { ...current, ...data, id: numericId, pending: true, status: "pending", message: "", errors: null };
-    const pending = {
-      id: pendingId,
-      service: this.name,
-      operation: "update",
-      localId: numericId,
-      data,
-      status: "pending",
-      message: "",
-      errors: null,
-      createdAt: new Date().toISOString(),
-    };
 
-    await this.client.addServiceRecord(this.name, localRecord);
-    await this.client.addPending(pending);
-
-    if (!this.client.connected()) {
-      return { ok: true, data: localRecord, pending: true, local: true };
+    await this.#localCreate(localRecord);
+    if (existingPending) {
+      await pendingService.update(existingPending.id, { data: { ...(existingPending.data || {}), ...data }, status: "pending", message: "", errors: null }, { isPending: true });
+    } else {
+      const pendingId = await pendingService.nextTemporaryId();
+      const pending = {
+        id: pendingId,
+        service: this.name,
+        operation: "update",
+        localId: numericId,
+        data,
+        status: "pending",
+        message: "",
+        errors: null,
+        createdAt: new Date().toISOString(),
+      };
+      await pendingService.create(pending, { isPending: true });
     }
 
-    try {
-      const response = await this.#send("update", { params: { id }, body: data });
-      await this.client.removePending(pending.id);
-      if (response.data?.id !== undefined) await this.client.addServiceRecord(this.name, response.data);
-      return response;
-    } catch (error) {
-      const errors = error.errors || error.response?.errors || null;
-      const errorRecord = { ...localRecord, status: "error", message: error.message, errors };
-      await this.client.addServiceRecord(this.name, errorRecord);
-      await this.client.updatePending(pending.id, { status: "error", message: error.message, errors });
-      return { ok: true, data: errorRecord, pending: true, error: error.message, errors };
-    }
+    return { ok: true, data: localRecord, pending: true, local: true };
   }
 
-  async remove(id) {
+  async remove(id, options = {}) {
+    if (options.isPending) {
+      const record = await this.#localGet(id);
+      await this.#localRemove(id);
+      return { ok: true, data: record || { id }, local: true };
+    }
+
+    const pendingService = this.client.service("pending");
     const numericId = Number(id);
     if (numericId < 0) {
-      await this.client.removePending(numericId);
-      await this.client.removeServiceRecord(this.name, numericId);
+      await pendingService.remove(numericId, { isPending: true });
+      await this.#localRemove(numericId);
       return { ok: true, data: { id: numericId }, local: true };
     }
 
-    const records = await this.client.serviceData(this.name);
-    const current = records.find((item) => Number(item?.id) === numericId) || { id: numericId };
-    const pendingId = await this.client.nextTemporaryId();
+    const current = await this.#localGet(numericId) || { id: numericId };
+    const pendingId = await pendingService.nextTemporaryId();
     const pending = {
       id: pendingId,
       service: this.name,
@@ -143,24 +123,27 @@ export class BaseService {
       createdAt: new Date().toISOString(),
     };
 
-    await this.client.removeServiceRecord(this.name, numericId);
-    await this.client.addPending(pending);
+    await this.#localRemove(numericId);
+    await pendingService.create(pending, { isPending: true });
 
-    if (!this.client.connected()) {
-      return { ok: true, data: current, pending: true, local: true };
-    }
+    return { ok: true, data: current, pending: true, local: true };
+  }
 
-    try {
-      const response = await this.#send("remove", { params: { id } });
-      await this.client.removePending(pending.id);
-      return response;
-    } catch (error) {
-      const errors = error.errors || error.response?.errors || null;
-      const errorRecord = { ...current, pending: true, status: "error", message: error.message, errors };
-      await this.client.addServiceRecord(this.name, errorRecord);
-      await this.client.updatePending(pending.id, { status: "error", message: error.message, errors });
-      return { ok: true, data: errorRecord, pending: true, error: error.message, errors };
-    }
+  async pull(query = {}) {
+    const response = await this.#send("list", { query });
+    await this.#localReplace(response.data || []);
+    return response;
+  }
+
+  async pullOne(id, query = {}) {
+    const response = await this.#send("get", { params: { id }, query });
+    if (response.data?.id !== undefined) await this.#localCreate(response.data);
+    return response;
+  }
+
+  async push(pendingId = null) {
+    const pendingService = this.client.service("pending");
+    return pendingService.push(pendingId, { discover: false, service: this.name });
   }
 
   async schema() {
@@ -195,6 +178,48 @@ export class BaseService {
     const operation = this.operations[operationName];
     if (!operation) throw new Error(`Operacion "${operationName}" no disponible en "${this.name}"`);
     return this.client.request(fillPath(operation.path, params), { method: operation.method, query, body });
+  }
+
+  async #localList() {
+    return (await this.client.adapter.get(this.#localKey())) || [];
+  }
+
+  async #localGet(id) {
+    return (await this.#localList()).find((item) => String(item?.id) === String(id)) || null;
+  }
+
+  async #localCreate(record = {}) {
+    const records = await this.#localList();
+    const nextRecords = [...records.filter((item) => String(item?.id) !== String(record.id)), record];
+    await this.#localReplace(nextRecords);
+    return record;
+  }
+
+  async #localUpdate(id, patch = {}) {
+    const current = await this.#localGet(id) || {};
+    const record = { ...current, ...patch, id: current.id ?? id };
+    await this.#localCreate(record);
+    return record;
+  }
+
+  async #localRemove(id) {
+    const records = await this.#localList();
+    const nextRecords = records.filter((item) => String(item?.id) !== String(id));
+    await this.#localReplace(nextRecords);
+    return nextRecords;
+  }
+
+  async #localReplace(records = []) {
+    await this.client.adapter.set(this.#localKey(), records);
+    return records;
+  }
+
+  async clear() {
+    await this.client.adapter.remove(this.#localKey());
+  }
+
+  #localKey() {
+    return `${this.servicePrefix}:${this.name}`;
   }
 }
 

@@ -273,5 +273,5 @@ function request(server, method, requestPath, options = {}) {
 async function seedIam(models) {
   const user = await models.User.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
   const role = await models.Role.create({ role: "admin", active: true });
-  await models.UserRole.create({ userId: user.getDataValue("id"), roleId: role.getDataValue("id"), active: true });
+  await models.UserRole.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
 }

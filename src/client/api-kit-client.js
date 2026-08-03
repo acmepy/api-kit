@@ -22,7 +22,6 @@ export class ApiKitClient {
   #adapter;
   #servicePrefix;
   #sessionKey;
-  #pendingService;
   #session = null;
   #services = new Map();
   #openapi = null;
@@ -44,7 +43,7 @@ export class ApiKitClient {
     this.#adapter = options.adapter || defaultAdapter(options);
     this.#servicePrefix = options.servicePrefix || DEFAULT_SERVICE_PREFIX;
     this.#sessionKey = options.sessionKey || (this.#servicePrefix === DEFAULT_SERVICE_PREFIX ? DEFAULT_SESSION_KEY : `${this.#servicePrefix}:session`);
-    this.#pendingService = new PendingService({ client: this, adapter: this.#adapter, servicePrefix: this.#servicePrefix });
+    this.#services.set("pending", new PendingService({ client: this, servicePrefix: this.#servicePrefix }));
     this.#pingInterval = normalizeTimeout(options.pingInterval ?? options.pingIntervalMs, DEFAULT_PING_INTERVAL);
     this.#pingTimeout = normalizeTimeout(options.pingTimeout ?? options.pingTimeoutMs, DEFAULT_PING_TIMEOUT);
     this.#sseWatchdogTimeout = normalizeTimeout(options.sseWatchdogTimeout ?? options.sseWatchdogTimeoutMs, DEFAULT_SSE_WATCHDOG_TIMEOUT);
@@ -86,7 +85,6 @@ export class ApiKitClient {
     const response = await this.request(this.#paths.logout, { method: "POST" });
     await this.#clearLocalSession();
     await this.#clearServiceCaches();
-    await this.#pendingService.clear();
     this.#stopPing();
     this.#closeSse();
     this.#clearWatchdog();
@@ -108,10 +106,13 @@ export class ApiKitClient {
   async discover(openapi) {
     this.#openapi = openapi || (await this.request(this.#paths.openapi, { method: "GET" }));
     if (!openapi) this.#markOnline("openapi", this.#openapi);
+    const pendingService = this.#pendingService();
     this.#services.clear();
+    this.#services.set("pending", pendingService);
 
     for (const descriptor of discoverServiceDescriptors(this.#openapi, this.#baseUrl)) {
-      this.#services.set(descriptor.name, new BaseService({ client: this, ...descriptor }));
+      if (descriptor.name === "pending") continue;
+      this.#services.set(descriptor.name, new BaseService({ client: this, servicePrefix: this.#servicePrefix, ...descriptor }));
     }
 
     return this;
@@ -136,61 +137,6 @@ export class ApiKitClient {
     } finally {
       if (this.#syncServicesPromise === promise) this.#syncServicesPromise = null;
     }
-  }
-
-  async serviceData(serviceName) {
-    return (await this.#adapter.get(this.#serviceCacheKey(serviceName))) || [];
-  }
-
-  async setServiceData(serviceName, data = []) {
-    await this.#adapter.set(this.#serviceCacheKey(serviceName), data);
-    return data;
-  }
-
-  async addServiceRecord(serviceName, record = {}) {
-    const records = await this.serviceData(serviceName);
-    const nextRecords = [...records.filter((item) => String(item?.id) !== String(record.id)), record];
-    await this.setServiceData(serviceName, nextRecords);
-    return record;
-  }
-
-  async removeServiceRecord(serviceName, id) {
-    const records = await this.serviceData(serviceName);
-    const nextRecords = records.filter((item) => String(item?.id) !== String(id));
-    await this.setServiceData(serviceName, nextRecords);
-    return nextRecords;
-  }
-
-  async nextTemporaryId() {
-    return this.#pendingService.nextTemporaryId();
-  }
-
-  async pending() {
-    return this.#pendingService.list();
-  }
-
-  async addPending(operation = {}) {
-    return this.#pendingService.create(operation);
-  }
-
-  async removePending(id) {
-    return this.#pendingService.remove(id);
-  }
-
-  async updatePending(id, patch = {}) {
-    return this.#pendingService.update(id, patch);
-  }
-
-  async resendPending(id = null) {
-    return this.#pendingService.resend(id);
-  }
-
-  async resendAllPending() {
-    return this.#pendingService.resendAll();
-  }
-
-  pendingService() {
-    return this.#pendingService;
   }
 
   connected() {
@@ -250,18 +196,13 @@ export class ApiKitClient {
     const headers = { Accept: "application/json", ...(options.headers || {}) };
     const body = encodeBody(options.body, headers);
     const token = options.token || this.#session?.token || null;
-    if (options.requireToken && !token) {
-      throw new ApiKitClientError("Sesion local requerida", { status: 401 });
-    }
+    if (options.requireToken && !token) throw new ApiKitClientError("Sesion local requerida", { status: 401 });
     if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`;
 
     const response = await this.#fetch(url, { method: options.method || "GET", headers, body, signal: options.signal });
     const contentType = response.headers?.get?.("content-type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : await response.text();
-
-    if (!response.ok || payload?.ok === false) {
-      throw new ApiKitClientError(payload?.message || response.statusText, { status: response.status, response: payload });
-    }
+    if (!response.ok || payload?.ok === false) throw new ApiKitClientError(payload?.message || response.statusText, { status: response.status, response: payload });
 
     return payload;
   }
@@ -299,8 +240,7 @@ export class ApiKitClient {
         continue;
       }
       try {
-        const response = await service.request("list");
-        await this.#adapter.set(cacheKey, response.data || []);
+        const response = await service.pull();
         results[service.name] = { ok: true, data: response.data || [] };
       } catch (error) {
         if (this.#isAuthExpiredError(error)) {
@@ -313,7 +253,7 @@ export class ApiKitClient {
 
     let pending = { ok: true, results: [], errors: [] };
     try {
-      pending = await this.#pendingService.resend(null, { discover: false, throwAuthErrors: true });
+      pending = await this.#pendingService().push(null, { discover: false, throwAuthErrors: true });
     } catch (error) {
       if (this.#isAuthExpiredError(error)) {
         await this.#expireSession(error);
@@ -361,9 +301,7 @@ export class ApiKitClient {
 
   #startPing() {
     if (this.#pingTimer) return;
-    this.#pingTimer = setInterval(() => {
-      this.#ping();
-    }, this.#pingInterval);
+    this.#pingTimer = setInterval(() => {this.#ping()}, this.#pingInterval);
     this.#pingTimer.unref?.();
     this.#ping();
   }
@@ -426,7 +364,9 @@ export class ApiKitClient {
     let data = dataLines.join("\n");
     try {
       data = JSON.parse(data);
-    } catch {}
+    } catch (error) {
+      console.error("[api-kit] [sse]", error);
+    }
     await this.#applySseData(data);
     this.#emitChange({ type: "sse", data, lastReceivedAt: receivedAt });
   }
@@ -435,6 +375,8 @@ export class ApiKitClient {
     if (!data || typeof data !== "object") return;
     const serviceName = data.service || data.serviceName || data.tableName;
     if (!serviceName || serviceName === "audit") return;
+    const service = this.#services.get(serviceName);
+    if (!service) return;
 
     const action = data.action || data.type;
     if (action === "create" || action === "update") {
@@ -442,14 +384,14 @@ export class ApiKitClient {
       if (!record) return;
       if (record.id === undefined && data.rowId !== undefined && data.rowId !== null) record.id = data.rowId;
       if (record.id === undefined || record.id === null) return;
-      await this.addServiceRecord(serviceName, record);
+      await service.create(record, { isPending: true });
       return;
     }
 
     if (action === "delete" || action === "remove") {
       const id = data.old?.id ?? data.rowId ?? data.id;
       if (id === undefined || id === null) return;
-      await this.removeServiceRecord(serviceName, id);
+      await service.remove(id, { isPending: true });
     }
   }
 
@@ -482,18 +424,14 @@ export class ApiKitClient {
 
   async #clearSession() {
     await this.#clearLocalSession();
+    await this.#clearServiceCaches();
     this.#stopPing();
     this.#closeSse();
     this.#clearWatchdog();
   }
 
   async #expireSession(error) {
-    await this.#clearLocalSession();
-    await this.#clearServiceCaches();
-    await this.#pendingService.clear();
-    this.#stopPing();
-    this.#closeSse();
-    this.#clearWatchdog();
+    await this.#clearSession()
     this.#markOffline("auth-expired", error?.response || null);
     this.#startPing();
   }
@@ -508,9 +446,9 @@ export class ApiKitClient {
   }
 
   async #clearServiceCaches() {
-    for (const serviceName of this.#services.keys()) {
+    for (const [serviceName, service] of this.#services.entries()) {
       if (serviceName === "audit") continue;
-      await this.#adapter.remove(this.#serviceCacheKey(serviceName));
+      await service.clear();
     }
   }
 
@@ -555,6 +493,10 @@ export class ApiKitClient {
 
   #serviceCacheKey(serviceName) {
     return `${this.#servicePrefix}:${serviceName}`;
+  }
+
+  #pendingService() {
+    return this.#services.get("pending");
   }
 
   #hasCachedServiceData(value) {

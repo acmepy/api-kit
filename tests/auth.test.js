@@ -172,11 +172,11 @@ describe("auth", () => {
 async function seedIam(models, permissions) {
   const user = await models.User.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
   const role = await models.Role.create({ role: "admin", active: true });
-  await models.UserRole.create({ userId: user.getDataValue("id"), roleId: role.getDataValue("id"), active: true });
+  await models.UserRole.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
 
   for (const permissionName of permissions) {
     const permission = await models.Permission.create({ permission: permissionName, active: true });
-    await models.RolePermission.create({ roleId: role.getDataValue("id"), permissionId: permission.getDataValue("id"), active: true });
+    await models.RolePermission.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
   }
 }
 
