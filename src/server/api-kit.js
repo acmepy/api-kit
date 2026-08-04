@@ -122,7 +122,7 @@ export async function createApiKit(conf = {}) {
   installAuthRoutes({ mainRouter, routeRegistry, config, authContext });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
-  installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
+  const auditSse = installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   installFrontendInstallRoutes({ mainRouter, routeRegistry, config, authorize });
   installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize });
   installPostmanRoute({ mainRouter, routeRegistry, modules, packageInfo, config, postman, authorize });
@@ -132,7 +132,7 @@ export async function createApiKit(conf = {}) {
   app.use(mainRouter);
   app.use(errorHandler);
 
-  return {app, router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: auditEvents, auth: authContext, close: async () => { auditEvents.removeAllListeners(); },
+  return {app, router: mainRouter, errorHandler, modules, models, services, routes: routeRegistry, schemas, events: auditEvents, audit: auditSse || { sseClients: () => [] }, auth: authContext, close: async () => { auditEvents.removeAllListeners(); },
   };
 }
 

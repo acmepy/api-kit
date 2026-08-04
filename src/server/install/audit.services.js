@@ -98,6 +98,10 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
   const clients = new Map();
   let nextClientId = 0;
 
+  const diagnostics = {
+    sseClients: () => [...clients.values()].map(sseClientInfo),
+  };
+
   installAuditRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }, {
     path: config.audit?.ssePath,
     operationId: "audit.sse",
@@ -107,7 +111,8 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
 
-      const client = {id: ++nextClientId, req, res, sessionId: req.session?.id, heartbeat: null, expirationTimer: null, closed: false};
+      const expiresAt = bearerTokenExpiresAt(req);
+      const client = {id: ++nextClientId, req, res, sessionId: req.session?.id, connectedAt: new Date().toISOString(), expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, heartbeat: null, expirationTimer: null, closed: false};
       clients.set(client.id, client);
 
       const closeClient = (event = "session-closed") => {
@@ -122,22 +127,29 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
         cleanupSseClient(clients, client, config);
       };
 
-      const validateClientSession = async () => {
+      const validateClientSession = async (options = {}) => {
         if (!client.sessionId || !authContext?.adapter?.findSessionById) return true;
-        const session = await authContext.adapter.findSessionById(client.sessionId);
+        const session = await findSessionById(authContext.adapter, client.sessionId, options);
         if (session && session.active !== false) return true;
         closeClient("session-closed");
         return false;
       };
 
-      client.sendChange = (change) => {
-        Promise.resolve(canViewAuditChange(change, { req, modules, authContext }))
-          .then((allowed) => {if (allowed && !client.closed) res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`)})
+      client.sendChange = (change, options = {}) => {
+        Promise.resolve(validateClientSession(options))
+          .then((active) => active && canViewAuditChange(change, { req, modules, authContext }))
+          .then((allowed) => {
+            if (!allowed || client.closed) return;
+            try {
+              res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`);
+            } catch (error) {
+              log("error", "audit.sse", error);
+            }
+          })
           .catch((error) => log("error", "audit.sse", error));
       };
       config.audit.events.on("change", client.sendChange);
 
-      const expiresAt = bearerTokenExpiresAt(req);
       if (expiresAt) {
         const timeout = Math.max(expiresAt - Date.now(), 0);
         client.expirationTimer = setTimeout(() => closeClient("auth-expired"), timeout);
@@ -151,11 +163,23 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
       }, config.audit.heartbeatTimeout);
       client.heartbeat.unref?.();
 
-      req.on("close", () => {
-        cleanupSseClient(clients, client, config);
-      });
+      req.on("close", () => {cleanupSseClient(clients, client, config)});
     },
   });
+
+  return diagnostics;
+}
+
+function sseClientInfo(client) {
+  return {
+    id: client.id,
+    sessionId: client.sessionId || null,
+    closed: Boolean(client.closed),
+    connectedAt: client.connectedAt,
+    expiresAt: client.expiresAt,
+    hasHeartbeat: Boolean(client.heartbeat),
+    hasExpirationTimer: Boolean(client.expirationTimer),
+  };
 }
 
 function cleanupSseClient(clients, client, config) {
@@ -299,7 +323,18 @@ async function writeAudit(AuditModel, auditConfig, moduleConfig, action, model, 
     },
     { hooks: false, ...(options.transaction && { transaction: options.transaction }) },
   );
-  if (options.emit !== false) auditConfig?.events?.emit("change", auditRow.toJSON());
+  if (options.emit !== false) auditConfig?.events?.emit("change", auditRow.toJSON(), { transaction: options.transaction });
+}
+
+async function findSessionById(adapter, sessionId, options = {}) {
+  if (options.transaction && adapter?.models?.Session?.findByPk) {
+    const session = await adapter.models.Session.findByPk(sessionId, { transaction: options.transaction });
+    if (!session) return null;
+    if (typeof session.get === "function") return session.get();
+    if (typeof session.toJSON === "function") return session.toJSON();
+    return session;
+  }
+  return adapter.findSessionById(sessionId);
 }
 
 function isModelInstance(value) {
@@ -312,9 +347,9 @@ function snapshot(model) {
 }
 
 function rowId(model, moduleConfig) {
-  if (!model || typeof model.get !== "function") return "";
+  if (!model || (typeof model.get !== "function" && typeof model.getDataValue !== "function")) return "";
   const pk = primaryKeyFor(moduleConfig);
-  const value = model.get(pk);
+  const value = typeof model.get === "function" ? model.get(pk) : model.getDataValue(pk);
   if (value !== undefined && value !== null) return String(value);
   return "";
 }
@@ -345,6 +380,7 @@ function jsonSafe(value) {
 function plainAuditModel(change) {
   return {
     toJSON: () => ({ id: change.rowId, ...(change.new || {}) }),
+    get: (key) => (key === "id" ? change.rowId : change.new?.[key]),
     getDataValue: (key) => (key === "id" ? change.rowId : change.new?.[key]),
   };
 }

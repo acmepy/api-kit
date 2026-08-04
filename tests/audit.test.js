@@ -241,6 +241,47 @@ describe("audit", () => {
     }
   });
 
+  it("exposes basic active sse client information", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+    assert.deepEqual(api.audit.sseClients(), []);
+    const stream = openSse(server, "/api/sse");
+
+    try {
+      await stream.connected;
+
+      const clients = api.audit.sseClients();
+      assert.equal(clients.length, 1);
+      assert.equal(clients[0].sessionId, null);
+      assert.equal(clients[0].closed, false);
+      assert.equal(typeof clients[0].id, "number");
+      assert.doesNotThrow(() => new Date(clients[0].connectedAt).toISOString());
+      assert.equal(clients[0].expiresAt, null);
+      assert.equal(clients[0].hasHeartbeat, true);
+      assert.equal(clients[0].hasExpirationTimer, false);
+
+      stream.close();
+      await timeoutAfter(stream.closed, 500, "SSE did not close");
+      await waitFor(() => assert.deepEqual(api.audit.sseClients(), []));
+    } finally {
+      stream.close();
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("streams audit updates over sse", async () => {
     const adapter = new SQLiteAdapter({ database: ":memory:" });
     const seq = new Seq({ adapter, logging: false });
@@ -626,6 +667,22 @@ function timeoutAfter(promise, timeout, message) {
   });
   timer.unref?.();
   return Promise.race([promise.finally(() => clearTimeout(timer)), timeoutPromise]);
+}
+
+async function waitFor(assertion, timeout = 500) {
+  const deadline = Date.now() + timeout;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  assertion();
+  throw lastError;
 }
 
 function parseSseComment(rawEvent) {
