@@ -1,6 +1,6 @@
 # api-kit
 
-`api-kit` es un middleware para Express que arma APIs REST a partir de modulos declarativos, modelos de `seq`, schemas de validacion, auth, auditoria, OpenAPI y apps estaticas.
+`api-kit` arma APIs REST sobre Express a partir de modulos declarativos, modelos de `seq`, validaciones, IAM, auditoria, OpenAPI/Postman y apps estaticas. Tambien incluye un cliente browser/Node con cache local, operaciones pendientes, `changes` y SSE.
 
 ## Instalacion
 
@@ -8,18 +8,29 @@
 npm install
 ```
 
-Para correr el ejemplo local:
+Para correr el ejemplo:
 
 ```bash
 npm run dev
 ```
 
-La demo basica queda disponible en `http://localhost:3000/basic`.
-La demo con `api-kit/client` queda disponible en `http://localhost:3000/client`.
+El server queda en `http://localhost:3000`:
+
+- `http://localhost:3000/basic`: ejemplo simple que usa `fetch` directo.
+- `http://localhost:3000/client`: ejemplo con `api-kit/client`, cache local, pending, push, changes y SSE.
+- `http://localhost:3000/api`: API generada.
+- `http://localhost:3000/api/openapi.json`: OpenAPI.
+- `http://localhost:3000/api/postman.json`: coleccion Postman.
+
+Usuario del ejemplo:
+
+```txt
+admin / 1234
+```
 
 ## Entrypoints
 
-El paquete se consume por subpath explicito:
+El paquete se importa por subpath explicito:
 
 ```js
 import { createApiKit } from "api-kit/server";
@@ -27,34 +38,23 @@ import { createApiKitClient } from "api-kit/client";
 import { runApiKitCli } from "api-kit/cli";
 ```
 
-El import raiz `api-kit` no exporta la API publica.
+El import raiz `api-kit` no exporta API publica.
 
-## Client
-
-`api-kit/client` expone `createApiKitClient()` para consumir un server de `api-kit` desde frontends o procesos Node. El cliente usa `login()`, `logout()` y `session()` del server, guarda la sesion local mediante adapters y envia el token guardado como Bearer en los servicios descubiertos por OpenAPI.
-
-Metodos publicos de conexion:
-
-- `client.connected()` / `client.isConnected()`: indica si el server responde al ping.
-- `client.startConnection()` / `client.stopConnection()`: inicia o detiene el monitoreo por ping, changes y SSE.
-- `client.changes(since)`: consulta `/changes`; si no recibe `since`, usa la ultima recepcion registrada y, si no existe, la fecha/hora actual.
-- `client.lastReceivedAt()`: devuelve el ISO string de la ultima recepcion de datos por `/changes` o `/sse`, o `null` si aun no hubo recepcion.
-- `client.onChange(listener)`: escucha eventos `online`, `offline` y `sse`; los eventos relacionados a `/changes` y `/sse` incluyen `lastReceivedAt`.
-
-## Uso Basico
+## Server Basico
 
 ```js
 import { createApiKit } from "api-kit/server";
 import { Seq, SQLiteAdapter } from "seq";
 
 const adapter = new SQLiteAdapter({
-  database: ":memory:",
+  database: "./data/app.sqlite",
   naming: {
     tables: "snake_case",
     columns: "snake_case",
   },
 });
-const seq = new Seq({ adapter });
+
+const seq = new Seq({ adapter, logging: false });
 
 const logger = {
   info: (...args) => console.info(...args),
@@ -83,79 +83,127 @@ await seq.sync();
 api.app.listen(3000);
 ```
 
-`naming` pertenece al adapter de `seq`; no es una opcion de `createApiKit`.
-`createApiKit` crea una instancia de Express si no recibe `app`, monta las rutas y el `errorHandler`, e instala `express.json()` por defecto. Se puede pasar una app existente con `app` y desactivar o configurar JSON con `json: false` u opciones en `json`.
-El `basePath` responde con un saludo del backend usando el `name` del `package.json`; por ejemplo `GET /api`.
+`createApiKit()` devuelve:
 
-## Middlewares HTTP
+- `app`: instancia Express.
+- `router`: router principal montado.
+- `errorHandler`: middleware de errores.
+- `modules`, `models`, `services`, `schemas`: mapas internos generados.
+- `routes`: registro de rutas.
+- `events`: `EventEmitter` de audit.
+- `audit.sseClients()`: lista basica de clientes SSE activos.
+- `auth`: contexto IAM, si auth esta habilitado.
+- `close()`: limpia listeners internos.
 
-`createApiKit` puede instalar middlewares comunes de Express desde la configuracion. Cada opcion acepta `true` para usar defaults, un objeto con opciones del middleware, o `false` para desactivar.
+Si pasas `app`, `api-kit` usa tu instancia Express. Si no, crea una. `json` esta activo por defecto y monta `express.json()`.
+
+## Seq
+
+`api-kit` usa `seq` como ORM. La configuracion de naming pertenece al adapter de `seq`, no a `createApiKit`.
 
 ```js
+const adapter = new SQLiteAdapter({
+  database: ":memory:",
+  naming: {
+    tables: "snake_case",
+    columns: "snake_case",
+  },
+});
+
+const seq = new Seq({ adapter, logging: false });
+```
+
+Los modelos creados desde modulos declarativos se registran en `seq`, se sincronizan con `seq.sync()` y se usan para generar CRUD, schemas, audit y relaciones maestro-detalle.
+
+## IAM
+
+La autenticacion se delega a `iam`. Con `auth` habilitado, `api-kit` registra bajo `basePath`:
+
+- `POST /login`
+- `GET /session`
+- `POST /logout`
+
+Con `basePath: "/api"`, quedan como:
+
+```http
+POST /api/login
+GET /api/session
+POST /api/logout
+```
+
+Configuracion tipica:
+
+```js
+auth: {
+  secret: process.env.IAM_SECRET || "dev-secret",
+  strategies: ["bearer", "basic"],
+  tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",
+}
+```
+
+`tokenExpiresIn` controla la vigencia del Bearer JWT. Las rutas protegidas usan permisos generados por ruta, por ejemplo `clientes.list`, `clientes.create` o `audit.sse`.
+
+## Logger
+
+`logging` puede ser `false`, `true`, una funcion o un objeto tipo logger.
+
+```js
+const logger = {
+  info: (...args) => console.info(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args),
+};
+
 const api = await createApiKit({
   seq,
-  cors: { origin: "https://app.example.com" },
-  helmet: true,
-  compression: { threshold: 0 },
-  rateLimit: {
-    windowMs: 60_000,
-    limit: 100,
-  },
-  trustProxy: 1,
-  json: { limit: "1mb" },
-  text: {
-    type: "text/plain",
-    limit: "10mb",
-  },
+  modules,
+  logging: logger,
 });
 ```
 
-Notas:
-
-- `json` esta activo por defecto y monta `express.json()`.
-- `text: true` monta `express.text()` con `{ type: "text/plain", limit: "10mb" }`.
-- `cors`, `helmet`, `compression` y `rateLimit` estan desactivados por defecto.
-- `trustProxy` configura `app.set("trust proxy", value)` cuando se recibe un valor distinto de `false`.
+Con `true`, `api-kit` usa `console`. Con objeto, llama `logger.info`, `logger.warn` y `logger.error` cuando existan.
 
 ## Modulos
 
-`modules` es el punto de entrada para recursos API y apps estaticas.
+`modules` define recursos REST y apps estaticas.
 
 ```js
 export const modules = [
+  {
+    mountPath: "/client",
+    path: "./example/public/client",
+  },
   {
     modelName: "Cliente",
     tableName: "clientes",
     timestamps: true,
     attributes: {
       id: { type: "integer", primaryKey: true, autoIncrement: true },
+      ruc: { type: "string", maxLength: 20, unique: true },
       nombre: { type: "string", maxLength: 100, allowNull: false },
+      email: { type: "string", maxLength: 150, allowNull: true, unique: true, email: true },
       activo: { type: "boolean", defaultValue: true },
     },
   },
 ];
 ```
 
-## CRUD Generado
-
-Cada modulo declarativo crea un CRUD REST bajo `basePath` usando el nombre de la tabla o del modulo.
-
-Para el ejemplo anterior, con `basePath: "/api"` y `tableName: "clientes"`, se exponen:
+Para un recurso `clientes`, se generan:
 
 | Metodo | Path | Accion |
 | --- | --- | --- |
-| `GET` | `/api/clientes` | Lista registros |
-| `GET` | `/api/clientes/:id` | Obtiene un registro por ID |
-| `POST` | `/api/clientes` | Crea un registro |
-| `PUT` | `/api/clientes/:id` | Actualiza un registro |
-| `DELETE` | `/api/clientes/:id` | Elimina un registro |
-| `GET` | `/api/clientes/schema` | Devuelve los schemas del recurso |
+| `GET` | `/api/clientes` | Listar |
+| `GET` | `/api/clientes/:id` | Obtener por ID |
+| `POST` | `/api/clientes` | Crear |
+| `PUT` | `/api/clientes/:id` | Actualizar |
+| `DELETE` | `/api/clientes/:id` | Eliminar |
+| `GET` | `/api/clientes/schema` | Schema |
 
-`POST` y `PUT` validan el body contra los schemas generados desde los attributes del modulo. Los campos no declarados se rechazan por defecto.
+Los bodies de `POST` y `PUT` se validan con schemas generados desde `attributes`. Los campos no declarados se rechazan.
 
-## Maestro-Detalle
+## Maestro Detalle
 
-El ejemplo local incluye una venta con dos detalles: `items` y `cobros`. El maestro se declara como recurso normal y los detalles se pueden definir inline en `details`.
+El ejemplo incluye `ventas` con detalles `items` y `cobros`.
 
 ```js
 {
@@ -178,21 +226,8 @@ El ejemplo local incluye una venta con dos detalles: `items` y `cobros`. El maes
         id: { type: "integer", primaryKey: true, autoIncrement: true },
         ventaId: { type: "integer", allowNull: false, create: false, update: false },
         producto: { type: "string", allowNull: false },
-        cantidad: { type: "integer", allowNull: false },
-        precio: { type: "decimal", precision: 12, scale: 2, allowNull: false },
-      },
-      removeMissing: true,
-    },
-    {
-      name: "cobros",
-      foreignKey: "ventaId",
-      modelName: "VentaCobro",
-      tableName: "venta_cobros",
-      attributes: {
-        id: { type: "integer", primaryKey: true, autoIncrement: true },
-        ventaId: { type: "integer", allowNull: false, create: false, update: false },
-        medio: { type: "string", allowNull: false },
-        monto: { type: "decimal", precision: 12, scale: 2, allowNull: false },
+        cantidad: { type: "integer", allowNull: false, min: 1 },
+        precio: { type: "decimal", precision: 12, scale: 2, allowNull: false, min: 0 },
       },
       removeMissing: true,
     },
@@ -200,11 +235,7 @@ El ejemplo local incluye una venta con dos detalles: `items` y `cobros`. El maes
 }
 ```
 
-`api-kit` crea la asociacion `hasMany` automaticamente. Si el detalle declara `foreignKey`, usa ese atributo para relacionarlo con el maestro. Si no lo declara, intenta usar el nombre derivado del maestro, por ejemplo `Venta` -> `ventaId`; si ese atributo no existe, toma el primer atributo del detalle que termine en `Id`.
-
-El nombre del detalle tambien se puede controlar con `name`, `as` o `association`. Si no se declara, se deriva de la tabla del detalle; por ejemplo, `venta_items` queda como `items`.
-
-Crear una venta completa:
+Al crear o actualizar el maestro puedes enviar los detalles en el mismo body. Si `removeMissing: true`, los detalles omitidos en update se eliminan.
 
 ```http
 POST /api/ventas
@@ -212,11 +243,10 @@ Content-Type: application/json
 
 {
   "cliente": "Ana",
-  "fecha": "2026-07-31T12:00:00.000Z",
+  "fecha": "2026-08-04T12:00:00.000Z",
   "total": 150000,
   "items": [
-    { "producto": "Mouse", "cantidad": 1, "precio": 50000 },
-    { "producto": "Teclado", "cantidad": 1, "precio": 100000 }
+    { "producto": "Mouse", "cantidad": 1, "precio": 50000 }
   ],
   "cobros": [
     { "medio": "efectivo", "monto": 150000 }
@@ -224,45 +254,17 @@ Content-Type: application/json
 }
 ```
 
-Actualizar el maestro y reemplazar los detalles omitidos, porque el ejemplo usa `removeMissing: true`:
-
-```http
-PUT /api/ventas/1
-Content-Type: application/json
-
-{
-  "cliente": "Ana Maria",
-  "items": [
-    { "id": 1, "producto": "Mouse gamer", "cantidad": 1, "precio": 75000 }
-  ],
-  "cobros": [
-    { "medio": "tarjeta", "monto": 75000 }
-  ]
-}
-```
-
-Tambien se puede operar un detalle puntual con los endpoints genericos, que se habilitan automaticamente cuando el modulo tiene `details`:
+Tambien se generan endpoints de detalle:
 
 ```http
 POST /api/ventas/1/items
 PUT /api/ventas/1/items/1
 DELETE /api/ventas/1/items/1
-
-POST /api/ventas/1/cobros
-PUT /api/ventas/1/cobros/1
-DELETE /api/ventas/1/cobros/1
 ```
 
-### Query De List
+## Filtros y Paginacion
 
 `GET /api/clientes` soporta paginacion y filtros por query string.
-
-Paginacion:
-
-- `page`: pagina actual; default `1`.
-- `limit`: cantidad por pagina; default `20`; maximo `100` salvo configuracion del recurso.
-
-Ejemplos:
 
 ```http
 GET /api/clientes?page=1&limit=20
@@ -271,7 +273,19 @@ GET /api/clientes?nombre[in]=Ana,Jose
 GET /api/clientes?createdAt[between]=2026-01-01,2026-01-31
 ```
 
-Los operadores se pueden escribir con cualquiera de estas formas:
+Operadores soportados:
+
+| Operador | Alias | Uso |
+| --- | --- | --- |
+| `eq` | `equal`, `igual` | Igualdad |
+| `gt` | `greater`, `mayor` | Mayor que |
+| `gte` | `greaterOrEqual`, `mayorIgual` | Mayor o igual |
+| `lt` | `less`, `menor` | Menor que |
+| `lte` | `lessOrEqual`, `menorIgual` | Menor o igual |
+| `in` | `incluido` | Lista separada por comas |
+| `between` | - | Rango con dos valores |
+
+Tambien se aceptan variantes:
 
 ```http
 GET /api/productos?precio[mayor]=10
@@ -279,55 +293,223 @@ GET /api/productos?precio.mayor=10
 GET /api/productos?precio__mayor=10
 ```
 
-Operadores soportados:
+## Audit, Changes y SSE
 
-| Operador | Alias | Uso |
-| --- | --- | --- |
-| `eq` | `equal`, `igual` | Igualdad. Tambien es el default: `?activo=true` |
-| `gt` | `greater`, `mayor` | Mayor que |
-| `gte` | `greaterOrEqual`, `mayorIgual` | Mayor o igual |
-| `lt` | `less`, `menor` | Menor que |
-| `lte` | `lessOrEqual`, `menorIgual` | Menor o igual |
-| `in` | `incluido` | Valor incluido en una lista separada por comas |
-| `between` | - | Rango con dos valores separados por coma |
+Con `audit: true`, `api-kit` registra cambios de recursos auditables en la tabla `audit`.
 
-Los valores se convierten segun el tipo del atributo (`integer`, `number`, `decimal`, `boolean`, `date`, `string`). Los operadores de rango (`gt`, `gte`, `lt`, `lte`, `between`) solo aplican a tipos comparables como numeros, fechas y strings.
+Rutas generadas:
+
+- `GET /api/changes?since=ISO_DATE`
+- `GET /api/sse`
+
+`changes` devuelve cambios desde una fecha. `sse` mantiene una conexion `text/event-stream` y envia eventos en vivo:
+
+```txt
+event: audit
+data: {"tableName":"clientes","rowId":"1","action":"update","old":{},"new":{}}
+```
+
+Si auth esta habilitado:
+
+- `changes` y `sse` requieren permisos (`audit.changes`, `audit.sse`).
+- Cada cambio se filtra por permisos de lectura del recurso, por ejemplo `clientes.list`.
+- Las conexiones SSE autenticadas se cierran si expira el Bearer JWT o si la sesion IAM queda inactiva.
+
+Puedes inspeccionar clientes SSE activos con informacion basica:
+
+```js
+api.audit.sseClients();
+```
+
+Devuelve:
+
+```js
+[
+  {
+    id: 1,
+    sessionId: "session-id",
+    closed: false,
+    connectedAt: "2026-08-04T12:00:00.000Z",
+    expiresAt: "2026-08-04T13:00:00.000Z",
+    hasHeartbeat: true,
+    hasExpirationTimer: true,
+  },
+]
+```
+
+No expone `req`, `res` ni callbacks internos.
+
+## Cliente
+
+`api-kit/client` descubre servicios desde OpenAPI, guarda sesion local, usa Bearer token y mantiene cache local mediante adapters.
+
+```js
+import { createApiKitClient, LocalStorageAdapter } from "api-kit/client";
+
+const client = createApiKitClient({
+  baseUrl: "/api",
+  adapter: new LocalStorageAdapter(),
+  pingInterval: 5000,
+  pingTimeout: 3000,
+  sseWatchdogTimeout: 20000,
+});
+
+client.onChange((event) => {
+  console.log(event.type, event);
+});
+
+await client.login({ username: "admin", password: "1234" });
+
+const clientes = client.service("clientes");
+const ventas = client.service("ventas");
+const pending = client.service("pending");
+```
+
+Metodos publicos principales:
+
+- `login(credentials)`: login server, guarda sesion, sincroniza servicios, trae changes y abre SSE.
+- `logout()`: llama `POST /logout`, limpia sesion/cache/pending local y vuelve a ping.
+- `session()`: carga sesion local.
+- `clearSession()`: limpia solo sesion local.
+- `discover(openapi?)`: descubre servicios desde OpenAPI.
+- `service(name)`: obtiene un servicio descubierto.
+- `services()`: devuelve un `Map` de servicios.
+- `syncServices(force = false)`: descubre servicios, hace pull de caches faltantes y empuja pending.
+- `connected()` / `isConnected()`: estado online.
+- `getSession()`: sesion en memoria.
+- `token()`: Bearer token actual.
+- `lastReceivedAt()`: ultimo timestamp recibido por `changes` o SSE.
+- `onChange(listener)` / `offChange(listener)`: eventos del cliente.
+- `changes(since?)`: consulta `/changes`.
+- `stopConnection()`: hace logout.
+- `request(path, options)`: request autenticado.
+- `url(path, query?)`: arma URL absoluta.
+
+Si `syncServices()` o `changes()` reciben `401`, el cliente hace logout local por expiracion: limpia sesion, caches y pending, cierra SSE, marca offline y vuelve a ping. No llama `POST /logout` en ese caso.
+
+## Servicios del Cliente
+
+Cada recurso descubierto se usa como servicio:
+
+```js
+const productos = client.service("productos");
+```
+
+Metodos locales:
+
+```js
+await productos.list();              // lee cache local
+await productos.get(id);             // lee cache local por id
+await productos.create(data);        // crea local + pending create
+await productos.update(id, data);    // actualiza local + pending update
+await productos.remove(id);          // elimina local + pending remove
+```
+
+Metodos remotos:
+
+```js
+await productos.pull(query);         // GET remoto list -> reemplaza cache local
+await productos.pullOne(id, query);  // GET remoto by id -> actualiza cache local
+await productos.push();              // envia pending del servicio
+await productos.push(pendingId);     // envia un pending puntual
+await productos.request("list", { query });
+await productos.schema();
+await productos.validate(data);
+await productos.validateAt("nombre", data);
+await productos.permissions("list");
+```
+
+`create`, `update` y `remove` del cliente son offline-first: no escriben directo al server. Para enviar al server usa `push()`.
+
+## Pending
+
+`pending` es un servicio mas:
+
+```js
+const pending = client.service("pending");
+
+await pending.list();
+await pending.get(id);
+await pending.update(id, { status: "pending" });
+await pending.remove(id);
+await pending.push();
+```
+
+Tambien puedes empujar pendientes desde el servicio real:
+
+```js
+await clientes.push();
+await clientes.push(pendingId);
+```
+
+El ejemplo `/client` muestra:
+
+- creacion local con ID temporal negativo;
+- edicion local;
+- eliminacion local;
+- lista de pendientes;
+- reintento de pendientes;
+- errores de validacion/persistencia guardados en pending.
+
+## Adapters del Cliente
+
+Exports disponibles:
+
+```js
+import {
+  BaseAdapter,
+  MapAdapter,
+  LocalStorageAdapter,
+  IndexedDbAdapter,
+} from "api-kit/client";
+```
+
+El adapter guarda:
+
+- `api-kit:session`
+- caches por servicio, por ejemplo `api-kit:clientes`
+- `api-kit:pending`
+- `api-kit:temporaryId`
+
+Puedes cambiar el prefijo con `servicePrefix`.
 
 ## Apps Estaticas
 
-Las apps estaticas tambien se declaran dentro de `modules`.
+Las apps estaticas tambien van dentro de `modules`.
 
 ```js
 export const modules = [
   {
     mountPath: "/basic",
-    root: "./example/public/basic",
-    spa: true,
+    path: "./example/public/basic",
+  },
+  {
+    mountPath: "/client",
+    path: "./example/public/client",
   },
 ];
 ```
 
-Opciones soportadas:
+Opciones:
 
-- `mountPath`: path publico donde se monta la app.
-- `root`, `path`, `dir` o `directory`: carpeta local de archivos.
+- `mountPath`: path publico.
+- `root`, `path`, `dir` o `directory`: carpeta local.
 - `appName`: alternativa para resolver `./public/{appName}` y `/{appName}`.
-- `spa`: habilita fallback al `index.html`; default `true`.
-- `index`: archivo usado para el fallback SPA; default `index.html`.
-- `options`: opciones pasadas a `express.static`.
+- `spa`: fallback a `index.html`; default `true`.
+- `index`: archivo de fallback; default `index.html`.
+- `options`: opciones para `express.static`.
 
-`staticFiles` y `static` no son parametros soportados en `createApiKit`; usar siempre `modules`.
+No uses `staticFiles` ni exports `static` dentro de modules: `createApiKit` los ignora.
 
 ## Instalador de Frontends
 
-Un modulo estatico se vuelve instalable cuando declara `repo`.
+Un modulo estatico se vuelve instalable si declara `repo`.
 
 ```js
 export const modules = [
   {
     mountPath: "/portal",
     root: "./public/portal",
-    spa: true,
     repo: "acmepy/sifen-portal",
     version: "latest",
     dist: "www",
@@ -335,58 +517,39 @@ export const modules = [
 ];
 ```
 
-Reglas:
+Si existe al menos una app instalable, se habilitan:
 
-- `repo` debe tener formato `owner/repo`.
-- `version` es opcional; default `latest`.
-- `dist` es opcional; default `www`.
-- El target debe resolver dentro de `public/`.
-- El token de GitHub se toma de `process.env.GITHUB_TOKEN`.
-- `POST /install/:app` acepta `{ "token": "..." }` para una ejecucion puntual, sin devolverlo en la respuesta.
+- `GET /install/`
+- `POST /install/:app`
 
-Si hay al menos una app instalable, `api-kit` habilita:
+El token de GitHub se toma de `process.env.GITHUB_TOKEN` o del body `{ "token": "..." }`.
 
-- `GET /install/`: pagina HTML con todas las apps instalables y un boton para actualizar cada una.
-- `POST /install/:app`: instala una app especifica.
+## Middlewares HTTP
 
-El id `:app` sale del `mountPath`:
+Opciones soportadas:
 
-- `/portal` -> `portal`
-- `/admin/portal` -> `admin-portal`
-
-Respuesta de instalacion:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "mountPath": "/portal",
-    "app": "portal",
-    "repo": "acmepy/sifen-portal",
-    "tag": "v1.2.0",
-    "target": "public/portal",
-    "status": "updated"
-  }
-}
+```js
+const api = await createApiKit({
+  seq,
+  cors: { origin: "https://app.example.com" },
+  helmet: true,
+  compression: { threshold: 0 },
+  rateLimit: {
+    windowMs: 60_000,
+    limit: 100,
+  },
+  trustProxy: 1,
+  json: { limit: "1mb" },
+  text: {
+    type: "text/plain",
+    limit: "10mb",
+  },
+});
 ```
 
-Estados posibles:
+`cors`, `helmet`, `compression` y `rateLimit` son dependencias peer opcionales. Si las activas, deben estar instaladas.
 
-- `updated`: se descargo y reemplazo la app.
-- `skipped`: el tag instalado ya coincide con el remoto.
-- `failed`: la instalacion fallo; la respuesta incluye `error`.
-
-La pagina HTML de `/install/` consume el JSON de `POST /install/:app` y muestra `status`, `tag` y `error` por fila.
-
-## Auth y OpenAPI
-
-La autenticacion y autorizacion se delegan al middleware Express de `iam`: `auth()` valida Basic/Bearer y maneja sesiones, y `can()` valida permisos por ruta. Cuando `auth.required` esta habilitado, `api-kit` auto registra las rutas de IAM bajo el `basePath`: `POST /login`, `GET /session` y `POST /logout`. Con `basePath: "/api"`, quedan en `/api/login`, `/api/session` y `/api/logout`.
-
-Si `auth` global esta habilitado, las rutas del instalador tambien requieren auth.
-
-Si `openapi` esta habilitado y existen apps instalables, `/install/{app}` aparece en el documento OpenAPI.
-
-Si `postman` esta habilitado, `api-kit` expone una coleccion Postman en `/postman.json` dentro del `basePath`.
+## OpenAPI y Postman
 
 ```js
 const api = await createApiKit({
@@ -398,7 +561,12 @@ const api = await createApiKit({
 });
 ```
 
-La coleccion queda disponible en `/api/postman.json` y agrupa las rutas como `api > modulo > endpoints`.
+Rutas:
+
+- `GET /api/openapi.json`
+- `GET /api/postman.json`
+
+El cliente usa OpenAPI para descubrir servicios y operaciones.
 
 ## Scripts
 
