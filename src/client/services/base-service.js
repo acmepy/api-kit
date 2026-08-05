@@ -47,6 +47,8 @@ export class BaseService {
 
     await this.#localCreate(localRecord);
     await pendingService.create(pending, { isPending: true });
+    const pushedData = await this.#pushIfOnlineData(pending.id);
+    if (pushedData) return { ok: true, data: pushedData, pending: false, local: true };
 
     return { ok: true, data: localRecord, pending: true, local: true };
   }
@@ -65,6 +67,8 @@ export class BaseService {
       const localRecord = { ...current, ...data, id: numericId, pending: true, status: "pending", message: "", errors: null };
       await this.#localCreate(localRecord);
       await pendingService.update(numericId, { data: { ...(pending.data || {}), ...data }, status: "pending", message: "", errors: null }, { isPending: true });
+      const pushedData = await this.#pushIfOnlineData(numericId);
+      if (pushedData) return { ok: true, data: pushedData, pending: false, local: true };
       return { ok: true, data: localRecord, pending: true, local: true };
     }
 
@@ -75,6 +79,8 @@ export class BaseService {
     await this.#localCreate(localRecord);
     if (existingPending) {
       await pendingService.update(existingPending.id, { data: { ...(existingPending.data || {}), ...data }, status: "pending", message: "", errors: null }, { isPending: true });
+      const pushedData = await this.#pushIfOnlineData(existingPending.id);
+      if (pushedData) return { ok: true, data: pushedData, pending: false, local: true };
     } else {
       const pendingId = await pendingService.nextTemporaryId();
       const pending = {
@@ -89,6 +95,8 @@ export class BaseService {
         createdAt: new Date().toISOString(),
       };
       await pendingService.create(pending, { isPending: true });
+      const pushedData = await this.#pushIfOnlineData(pending.id);
+      if (pushedData) return { ok: true, data: pushedData, pending: false, local: true };
     }
 
     return { ok: true, data: localRecord, pending: true, local: true };
@@ -125,6 +133,8 @@ export class BaseService {
 
     await this.#localRemove(numericId);
     await pendingService.create(pending, { isPending: true });
+    const pushedData = await this.#pushIfOnlineData(pending.id);
+    if (pushedData) return { ok: true, data: pushedData, pending: false, local: true };
 
     return { ok: true, data: current, pending: true, local: true };
   }
@@ -178,6 +188,13 @@ export class BaseService {
     const operation = this.operations[operationName];
     if (!operation) throw new Error(`Operacion "${operationName}" no disponible en "${this.name}"`);
     return this.client.request(fillPath(operation.path, params), { method: operation.method, query, body });
+  }
+
+  async #pushIfOnlineData(pendingId) {
+    if (!this.client.connected?.()) return null;
+    const result = await this.push(pendingId);
+    const response = result?.results?.find((item) => item?.ok)?.response;
+    return response?.data || null;
   }
 
   async #localList() {

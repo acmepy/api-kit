@@ -649,7 +649,7 @@ describe("client public API", () => {
     assert.equal(await adapter.get("api-kit:temporaryId"), -1);
   });
 
-  it("removes pending and temporary records after pushing a create succeeds", async () => {
+  it("automatically pushes created records while online", async () => {
     const calls = [];
     const adapter = new MapAdapter();
     const client = createApiKitClient({
@@ -681,11 +681,10 @@ describe("client public API", () => {
     await client.login({ username: "admin", password: "1234" });
     const clientes = client.service("clientes");
     const created = await clientes.create({ nombre: "Online" });
-    const pushed = await clientes.push();
 
     assert.equal(created.ok, true);
-    assert.deepEqual(created.data, { nombre: "Online", id: -1, pending: true, status: "pending", message: "", errors: null });
-    assert.equal(pushed.ok, true);
+    assert.equal(created.pending, false);
+    assert.deepEqual(created.data, { id: 7, nombre: "Online" });
     assert.deepEqual(await adapter.get("api-kit:clientes"), [{ id: 7, nombre: "Online" }]);
     assert.deepEqual(await adapter.get("api-kit:pending"), []);
     assert.equal(await adapter.get("api-kit:temporaryId"), -1);
@@ -697,6 +696,52 @@ describe("client public API", () => {
       "GET /api/changes",
       "GET /api/sse",
       "POST /api/clientes",
+    ]);
+  });
+
+  it("automatically pushes updates and removes while online", async () => {
+    const calls = [];
+    const adapter = new MapAdapter();
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url, options = {}) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push({ pathname, method: options.method || "GET", body: options.body ? JSON.parse(options.body) : null });
+        if (pathname === "/api/login") return jsonResponse({ ok: true, data: { token: "token", user: { id: "admin" } } });
+        if (pathname === "/api/openapi.json") {
+          return jsonResponse({
+            openapi: "3.0.3",
+            paths: {
+              "/api/clientes": {
+                get: { tags: ["clientes"], operationId: "clientes_list", "x-permissions": ["clientes.list"] },
+              },
+              "/api/clientes/{id}": {
+                put: { tags: ["clientes"], operationId: "clientes_update", "x-permissions": ["clientes.update"] },
+                delete: { tags: ["clientes"], operationId: "clientes_remove", "x-permissions": ["clientes.remove"] },
+              },
+            },
+          });
+        }
+        if (pathname === "/api/clientes" && (options.method || "GET") === "GET") return jsonResponse({ ok: true, data: [{ id: 7, nombre: "Ana" }, { id: 8, nombre: "Beto" }] });
+        if (pathname === "/api/clientes/7" && options.method === "PUT") return jsonResponse({ ok: true, data: { id: 7, nombre: "Ana Online" } });
+        if (pathname === "/api/clientes/8" && options.method === "DELETE") return jsonResponse({ ok: true, data: { id: 8, nombre: "Beto" } });
+        if (pathname === "/api/changes") return jsonResponse({ ok: true, data: [] });
+        if (pathname === "/api/sse") return sseResponse('data: {"ok":true}\n\n');
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+
+    await client.login({ username: "admin", password: "1234" });
+    const clientes = client.service("clientes");
+    await clientes.update(7, { nombre: "Ana Online" });
+    await clientes.remove(8);
+
+    assert.deepEqual(await adapter.get("api-kit:pending"), []);
+    assert.deepEqual(await adapter.get("api-kit:clientes"), [{ id: 7, nombre: "Ana Online" }]);
+    assert.deepEqual(calls.map((call) => `${call.method} ${call.pathname}`).filter((call) => call.includes("/api/clientes/")), [
+      "PUT /api/clientes/7",
+      "DELETE /api/clientes/8",
     ]);
   });
 

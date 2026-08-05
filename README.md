@@ -417,7 +417,7 @@ await productos.validateAt("nombre", data);
 await productos.permissions("list");
 ```
 
-`create`, `update` y `remove` del cliente son offline-first: no escriben directo al server. Para enviar al server usa `push()`.
+`create`, `update` y `remove` del cliente son offline-first: primero escriben cache local y pending. Si el cliente esta online, intentan enviar automaticamente ese pending al server; si falla, queda guardado para reintentar con `push()`.
 
 ## Pending
 
@@ -508,12 +508,14 @@ export const modules = [
   {
     mountPath: "/portal",
     root: "./public/portal",
-    repo: "acmepy/sifen-portal",
+    repo: "github:acmepy/sifen-portal",
     version: "latest",
     dist: "www",
   },
 ];
 ```
+
+`repo` usa formato `provider:owner/repo`. Actualmente el proveedor soportado es `github`; el formato explicito deja lugar para agregar otros proveedores mas adelante.
 
 Si existe al menos una app instalable, se habilitan:
 

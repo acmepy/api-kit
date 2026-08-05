@@ -39,13 +39,13 @@ export function installFrontendInstallRoutes({ mainRouter, routeRegistry, config
 
 export async function installApp(app, { token, fetch: fetchImpl = globalThis.fetch } = {}) {
   try {
-    const githubToken = stringValue(token) || process.env.GITHUB_TOKEN;
-    const tag = app.version === "latest" ? await getLatestTag({ repo: app.repo, token: githubToken, fetch: fetchImpl }) : app.version;
+    const tokenValue = stringValue(token) || tokenForProvider(app.provider);
+    const tag = app.version === "latest" ? await getLatestTag({ app, token: tokenValue, fetch: fetchImpl }) : app.version;
     const installedTag = readInstalledTag(app.target);
 
     if (installedTag === tag) return installResult(app, tag, "skipped");
 
-    const archive = await downloadArchive({ repo: app.repo, tag, token: githubToken, fetch: fetchImpl });
+    const archive = await downloadArchive({ app, tag, token: tokenValue, fetch: fetchImpl });
     await extractAndReplace({ app, archive, tag });
     return installResult(app, tag, "updated");
   } catch (error) {
@@ -134,7 +134,7 @@ export function renderInstallScript() {
 }
 
 function normalizeInstallableApp(staticModule, baseDir) {
-  assertRepo(staticModule.repo);
+  const repo = parseRepo(staticModule.repo);
 
   const mountPath = normalizeMountPath(staticModule.mountPath || staticModule.pathPrefix || (staticModule.appName ? `/${staticModule.appName}` : null));
   if (!mountPath) throw new ValidationError("Static module instalable requiere mountPath", { errors: { mountPath: "Requerido" } });
@@ -149,7 +149,9 @@ function normalizeInstallableApp(staticModule, baseDir) {
   return {
     app: appIdForMountPath(mountPath),
     mountPath,
-    repo: staticModule.repo,
+    repo: repo.id,
+    provider: repo.provider,
+    repository: repo.repository,
     version: stringValue(staticModule.version) || "latest",
     dist: stringValue(staticModule.dist) || "www",
     target,
@@ -158,15 +160,17 @@ function normalizeInstallableApp(staticModule, baseDir) {
   };
 }
 
-async function getLatestTag({ repo, token, fetch }) {
-  const res = await githubFetch(`https://api.github.com/repos/${repo}/tags?per_page=1`, token, fetch);
+async function getLatestTag({ app, token, fetch }) {
+  assertGithubApp(app);
+  const res = await githubFetch(`https://api.github.com/repos/${app.repository}/tags?per_page=1`, token, fetch);
   const tags = await res.json();
   if (!tags.length) throw new AppError("El repositorio no tiene tags.", { status: 404, code: "TAG_NOT_FOUND" });
   return tags[0].name;
 }
 
-async function downloadArchive({ repo, tag, token, fetch }) {
-  const res = await githubFetch(`https://api.github.com/repos/${repo}/zipball/${encodeURIComponent(tag)}`, token, fetch);
+async function downloadArchive({ app, tag, token, fetch }) {
+  assertGithubApp(app);
+  const res = await githubFetch(`https://api.github.com/repos/${app.repository}/zipball/${encodeURIComponent(tag)}`, token, fetch);
   return Buffer.from(await res.arrayBuffer());
 }
 
@@ -271,10 +275,25 @@ function appIdForMountPath(mountPath) {
   return mountPath.replace(/^\/+|\/+$/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "root";
 }
 
-function assertRepo(repo) {
-  if (!/^[^/\s]+\/[^/\s]+$/.test(String(repo || ""))) {
-    throw new ValidationError("Repo debe tener formato owner/repo", { errors: { repo: "Formato invalido" } });
+function parseRepo(repo) {
+  const value = stringValue(repo);
+  const match = value.match(/^([a-z][a-z0-9+.-]*):([^:\s]+\/[^/\s]+)$/i);
+  if (!match) {
+    throw new ValidationError("Repo debe tener formato provider:owner/repo", { errors: { repo: "Formato invalido" } });
   }
+  const provider = match[1].toLowerCase();
+  const repository = match[2];
+  if (provider !== "github") throw new ValidationError(`Proveedor de repo "${provider}" no soportado`, { errors: { repo: "Proveedor no soportado" } });
+  return { id: `${provider}:${repository}`, provider, repository };
+}
+
+function assertGithubApp(app) {
+  if (app.provider !== "github") throw new ValidationError(`Proveedor de repo "${app.provider}" no soportado`, { errors: { repo: "Proveedor no soportado" } });
+}
+
+function tokenForProvider(provider) {
+  if (provider === "github") return process.env.GITHUB_TOKEN;
+  return "";
 }
 
 function assertInsidePublic(target, publicRoot) {

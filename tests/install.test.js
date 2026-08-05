@@ -15,8 +15,8 @@ describe("installable static modules", () => {
     const baseDir = await tempBaseDir();
     const apps = normalizeInstallableApps(
       [
-        { mountPath: "/portal", root: "./public/portal", repo: "acmepy/sifen-portal" },
-        { mountPath: "/admin/app", root: "./public/admin-app", repo: "acmepy/sifen-admin", version: "v1.0.0", dist: "build" },
+        { mountPath: "/portal", root: "./public/portal", repo: "github:acmepy/sifen-portal" },
+        { mountPath: "/admin/app", root: "./public/admin-app", repo: "github:acmepy/sifen-admin", version: "v1.0.0", dist: "build" },
         { mountPath: "/plain", root: "./public/plain" },
       ],
       baseDir,
@@ -24,6 +24,9 @@ describe("installable static modules", () => {
 
     assert.equal(apps.length, 2);
     assert.equal(apps[0].app, "portal");
+    assert.equal(apps[0].repo, "github:acmepy/sifen-portal");
+    assert.equal(apps[0].provider, "github");
+    assert.equal(apps[0].repository, "acmepy/sifen-portal");
     assert.equal(apps[0].version, "latest");
     assert.equal(apps[0].dist, "www");
     assert.equal(apps[1].app, "admin-app");
@@ -35,11 +38,15 @@ describe("installable static modules", () => {
     const baseDir = await tempBaseDir();
 
     assert.throws(
-      () => normalizeInstallableApps([{ mountPath: "/portal", root: "./public/portal", repo: "sifen-portal" }], baseDir),
-      /owner\/repo/,
+      () => normalizeInstallableApps([{ mountPath: "/portal", root: "./public/portal", repo: "acmepy/sifen-portal" }], baseDir),
+      /provider:owner\/repo/,
     );
     assert.throws(
-      () => normalizeInstallableApps([{ mountPath: "/portal", root: "./private/portal", repo: "acmepy/sifen-portal" }], baseDir),
+      () => normalizeInstallableApps([{ mountPath: "/portal", root: "./public/portal", repo: "gitlab:acmepy/sifen-portal" }], baseDir),
+      /no soportado/,
+    );
+    assert.throws(
+      () => normalizeInstallableApps([{ mountPath: "/portal", root: "./private/portal", repo: "github:acmepy/sifen-portal" }], baseDir),
       /public/,
     );
   });
@@ -50,7 +57,7 @@ describe("installable static modules", () => {
     await mkdir(target, { recursive: true });
     await writeFile(path.join(target, "package.json"), JSON.stringify({ apiKitInstall: { tag: "v1.2.0" } }));
 
-    const [app] = normalizeInstallableApps([{ mountPath: "/portal", root: "./public/portal", repo: "acmepy/sifen-portal" }], baseDir);
+    const [app] = normalizeInstallableApps([{ mountPath: "/portal", root: "./public/portal", repo: "github:acmepy/sifen-portal" }], baseDir);
     const calls = [];
     const result = await installApp(app, {
       fetch: async (url) => {
@@ -76,7 +83,7 @@ describe("installable static modules", () => {
       "repo-root/www/index.html": "<h1>updated</h1>",
       "repo-root/www/app.js": "console.log('updated')",
     });
-    const [app] = normalizeInstallableApps([{ mountPath: "/portal", root: "./public/portal", repo: "acmepy/sifen-portal" }], baseDir);
+    const [app] = normalizeInstallableApps([{ mountPath: "/portal", root: "./public/portal", repo: "github:acmepy/sifen-portal" }], baseDir);
     const result = await installApp(app, {
       fetch: async (url) => String(url).includes("/tags") ? jsonResponse([{ name: "v1.2.0" }]) : bufferResponse(archive),
     });
@@ -89,12 +96,12 @@ describe("installable static modules", () => {
     assert.equal(result.target, "public/portal");
     assert.match(index, /updated/);
     assert.equal(pkg.name, "sifen-portal");
-    assert.equal(pkg.apiKitInstall.repo, "acmepy/sifen-portal");
+    assert.equal(pkg.apiKitInstall.repo, "github:acmepy/sifen-portal");
     assert.equal(pkg.apiKitInstall.tag, "v1.2.0");
   });
 
   it("renders html that posts and displays status, tag, and errors", async () => {
-    const html = renderInstallHtml([{ app: "portal", mountPath: "/portal", repo: "acmepy/sifen-portal", version: "latest" }]);
+    const html = renderInstallHtml([{ app: "portal", mountPath: "/portal", repo: "github:acmepy/sifen-portal", version: "latest" }]);
     const script = renderInstallScript();
 
     assert.match(html, /data-install="portal"/);
@@ -129,7 +136,7 @@ describe("install routes", () => {
     const api = await testApi({
       basePath: "/api",
       openapi: {},
-      modules: [{ mountPath: "/portal", root: "./public/portal", repo: "acmepy/sifen-portal" }],
+      modules: [{ mountPath: "/portal", root: "./public/portal", repo: "github:acmepy/sifen-portal" }],
     });
     const server = await testServer(api);
 
@@ -166,7 +173,7 @@ describe("install routes", () => {
       basePath: "/api",
       auth: { required: true, secret: "test-secret" },
       openapi: {},
-      modules: [{ mountPath: "/portal", root: "./public/portal", repo: "acmepy/sifen-portal" }],
+      modules: [{ mountPath: "/portal", root: "./public/portal", repo: "github:acmepy/sifen-portal" }],
     });
     await seedIam(api.auth.models);
     const server = await testServer(api);
