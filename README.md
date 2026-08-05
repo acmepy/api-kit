@@ -1,6 +1,6 @@
 # api-kit
 
-`api-kit` arma APIs REST sobre Express a partir de modulos declarativos, modelos de `seq`, validaciones, IAM, auditoria, OpenAPI/Postman y apps estaticas. Tambien incluye un cliente browser/Node con cache local, operaciones pendientes, `changes` y SSE.
+`api-kit` arma APIs REST sobre Express a partir de modulos declarativos, modelos de `seq`, validaciones, IAM, auditoria, OpenAPI/Postman y apps estaticas. Tambien incluye un cliente browser/Node con cache local, operaciones pendientes, actualizaciones incrementales via `changes` e instantaneas por SSE.
 
 ## Instalacion
 
