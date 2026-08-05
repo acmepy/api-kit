@@ -203,7 +203,7 @@ Los bodies de `POST` y `PUT` se validan con schemas generados desde `attributes`
 
 ## Maestro Detalle
 
-El ejemplo incluye `ventas` con detalles `items` y `cobros`.
+El ejemplo incluye `ventas` con detalles `items`.
 
 ```js
 {
@@ -336,8 +336,6 @@ Devuelve:
   },
 ]
 ```
-
-No expone `req`, `res` ni callbacks internos.
 
 ## Cliente
 
