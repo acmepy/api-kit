@@ -70,6 +70,33 @@ describe("audit", () => {
     assert.equal(rows[1].get("new").activo, false);
   });
 
+  it("audits upsert creates and updates", async () => {
+    const adapter = new SQLiteAdapter({ database: ":memory:" });
+    const seq = new Seq({ adapter, logging: false });
+    const api = await createApiKit({ seq, audit: true, modules });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const Cliente = api.models.get("clientes");
+    const [created] = await Cliente.upsert({ id: 10, nombre: "Ana", activo: true }, { where: { id: 10 } });
+    await Cliente.upsert({ id: created.get("id"), nombre: "Ana Maria", activo: false }, { where: { id: created.get("id") } });
+
+    const Audit = api.models.get("audit");
+    const rows = await Audit.findAll({ order: [["id", "ASC"]] });
+
+    assert.equal(rows.length, 2);
+    assert.deepEqual(rows.map((row) => row.get("action")), ["create", "update"]);
+    assert.equal(rows[0].get("rowId"), "10");
+    assert.equal(rows[0].get("new").nombre, "Ana");
+    assert.deepEqual(rows[0].get("old"), {});
+    assert.equal(rows[1].get("old").nombre, "Ana");
+    assert.equal(rows[1].get("new").nombre, "Ana Maria");
+    assert.equal(rows[1].get("old").activo, true);
+    assert.equal(rows[1].get("new").activo, false);
+  });
+
   it("exposes audit changes since a date", async () => {
     const adapter = new SQLiteAdapter({ database: ":memory:" });
     const seq = new Seq({ adapter, logging: false });

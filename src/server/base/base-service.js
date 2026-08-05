@@ -250,16 +250,8 @@ export class BaseService {
   async #upsertDetail(model, payload, options = {}) {
     const primaryKey = model.primaryKeyAttribute || "id";
     if (payload[primaryKey] === undefined || payload[primaryKey] === null) return model.create(payload, options);
-
-    const instance = await model.findByPk(payload[primaryKey], options);
-    if (instance) return instance.update(payload, options);
-
-    if (typeof model.upsert === "function") {
-      const result = await model.upsert(payload, { ...options, where: { [primaryKey]: payload[primaryKey] } });
-      return Array.isArray(result) ? result[0] : result;
-    }
-
-    return model.create(payload, options);
+    const result = await model.upsert(payload, { ...options, where: { [primaryKey]: payload[primaryKey] } });
+    return Array.isArray(result) ? result[0] : result;
   }
 
   async #toJsonWithDetails(instance, transaction) {

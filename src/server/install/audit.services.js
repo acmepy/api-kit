@@ -33,6 +33,12 @@ export function installAuditHooks(moduleConfigs, auditConfig) {
     appendHook(hooks, "beforeDestroy", function beforeAuditDestroy(payload) {
       if (isModelInstance(payload)) previousData.set(payload, snapshot(payload));
     });
+    appendHook(hooks, "beforeUpsert", async function beforeAuditUpsert(values, options = {}) {
+      const where = upsertWhereFor(this, moduleConfig, values, options);
+      if (!where) return;
+      const existing = await this.findOne({ where, ...(options.transaction && { transaction: options.transaction }) });
+      if (existing) options.auditOld = snapshot(existing);
+    });
     appendHook(hooks, "afterCreate", async function auditCreate(payload, options = {}) {
       await writeAudit(AuditModel, auditConfig, moduleConfig, "create", payload, {}, snapshot(payload), { transaction: options.transaction });
     });
@@ -49,6 +55,10 @@ export function installAuditHooks(moduleConfigs, auditConfig) {
         return;
       }
       await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-delete", null, options.where || {}, {}, { transaction: options.transaction });
+    });
+    appendHook(hooks, "afterUpsert", async function auditUpsert(result, options = {}) {
+      const [model, created] = Array.isArray(result) ? result : [result, false];
+      await writeAudit(AuditModel, auditConfig, moduleConfig, created ? "create" : "update", model, created ? {} : options.auditOld || {}, snapshot(model), { transaction: options.transaction });
     });
     appendHook(hooks, "afterBulkCreate", async function auditBulkCreate(models, options = {}) {
       for (const model of models || []) await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-create", model, {}, snapshot(model), { transaction: options.transaction });
@@ -357,6 +367,33 @@ function rowId(model, moduleConfig) {
 function primaryKeyFor(moduleConfig) {
   const definitions = moduleConfig?.resource?.definition || {};
   return Object.entries(definitions).find(([, definition]) => definition?.primaryKey)?.[0] || "id";
+}
+
+function upsertWhereFor(ModelClass, moduleConfig, values = {}, options = {}) {
+  if (options.where && typeof options.where === "object" && !Array.isArray(options.where)) return options.where;
+
+  const conflictFields = Array.isArray(options.conflictFields) ? options.conflictFields : [];
+  if (conflictFields.length > 0 && conflictFields.every((field) => values[field] !== undefined && values[field] !== null)) {
+    return Object.fromEntries(conflictFields.map((field) => [field, values[field]]));
+  }
+
+  const pk = ModelClass?.primaryKeyAttribute || primaryKeyFor(moduleConfig);
+  if (pk && values[pk] !== undefined && values[pk] !== null) return { [pk]: values[pk] };
+
+  const uniqueFields = uniqueFieldSets(moduleConfig, ModelClass);
+  const fields = uniqueFields.find((fieldSet) => fieldSet.every((field) => values[field] !== undefined && values[field] !== null));
+  return fields ? Object.fromEntries(fields.map((field) => [field, values[field]])) : null;
+}
+
+function uniqueFieldSets(moduleConfig, ModelClass) {
+  const definitions = moduleConfig?.resource?.definition || ModelClass?.resourceDefinition?.attributes || ModelClass?.rawAttributes || {};
+  const singleFieldSets = Object.entries(definitions)
+    .filter(([, definition]) => definition?.unique === true)
+    .map(([field]) => [field]);
+  const schemaFieldSets = (ModelClass?._schema?.uniqueConstraints || [])
+    .map((unique) => unique.columns || unique.fields || [])
+    .filter((fields) => fields.length > 0);
+  return [...singleFieldSets, ...schemaFieldSets];
 }
 
 function rowIdFromWhere(where = {}) {
