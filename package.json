@@ -1,6 +1,6 @@
 {
   "name": "api-kit",
-  "version": "0.8.91",
+  "version": "0.9.1",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -35,7 +35,8 @@
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "express-rate-limit": "^8.6.0",
-    "helmet": "^8.3.0"
+    "helmet": "^8.3.0", 
+    "logger": "github:acmepy/logger-js"
   },
   "peerDependenciesMeta": {
     "compression": {
