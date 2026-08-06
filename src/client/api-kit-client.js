@@ -30,7 +30,9 @@ export class ApiKitClient {
   #lastReceivedAt = null;
   #syncServicesPromise = null;
   #pingTimer = null;
+  #pingAbort = null;
   #sseAbort = null;
+  #sseReader = null;
   #watchdogTimer = null;
   #pingInterval;
   #pingTimeout;
@@ -270,11 +272,14 @@ export class ApiKitClient {
 
   async #ping() {
     const controller = new AbortController();
+    this.#pingAbort = controller;
     const timeout = setTimeout(() => controller.abort(), this.#pingTimeout);
+    timeout.unref?.();
     try {
       await this.#pingRequest(controller.signal);
     } catch {
       this.#markOffline("ping");
+      if (this.#pingAbort === controller) this.#pingAbort = null;
       clearTimeout(timeout);
       return;
     }
@@ -289,6 +294,7 @@ export class ApiKitClient {
     } catch {
       this.#closeSse();
     } finally {
+      if (this.#pingAbort === controller) this.#pingAbort = null;
       clearTimeout(timeout);
     }
   }
@@ -307,6 +313,9 @@ export class ApiKitClient {
   }
 
   #stopPing() {
+    const abort = this.#pingAbort;
+    this.#pingAbort = null;
+    abort?.abort();
     if (!this.#pingTimer) return;
     clearInterval(this.#pingTimer);
     this.#pingTimer = null;
@@ -339,16 +348,22 @@ export class ApiKitClient {
   async #readSse(response) {
     if (!response.body?.getReader) return;
     const reader = response.body.getReader();
+    this.#sseReader = reader;
     const decoder = new TextDecoder();
     let buffer = "";
 
-    while (this.#sseAbort) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split(/\r?\n\r?\n/);
-      buffer = parts.pop() || "";
-      for (const part of parts) await this.#handleSseMessage(part);
+    try {
+      while (this.#sseAbort) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split(/\r?\n\r?\n/);
+        buffer = parts.pop() || "";
+        for (const part of parts) await this.#handleSseMessage(part);
+      }
+    } finally {
+      if (this.#sseReader === reader) this.#sseReader = null;
+      reader.releaseLock?.();
     }
   }
 
@@ -418,8 +433,11 @@ export class ApiKitClient {
 
   #closeSse() {
     const abort = this.#sseAbort;
+    const reader = this.#sseReader;
     this.#sseAbort = null;
+    this.#sseReader = null;
     abort?.abort();
+    reader?.cancel?.().catch?.(() => {});
   }
 
   async #clearSession() {

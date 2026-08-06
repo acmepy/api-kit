@@ -40,7 +40,7 @@ const modules = [
 
 describe("client public API", () => {
   it("uses server login, session and bearer token for discovered service CRUD", async () => {
-    const { api, server, baseUrl } = await startApi();
+    const { api, server, baseUrl, seq } = await startApi();
 
     try {
       const adapter = new MapAdapter();
@@ -96,6 +96,7 @@ describe("client public API", () => {
       const logout = await restoredClient.logout();
       assert.equal(logout.ok, true);
       assert.equal(restoredClient.connected(), false);
+      await client.clearSession();
     } finally {
       await api.close();
       await close(server);
@@ -581,7 +582,13 @@ describe("client public API", () => {
 
   it("exposes pending as a discovered local service", async () => {
     const adapter = new MapAdapter();
-    const client = createApiKitClient({ baseUrl: "http://server/api", adapter });
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url) => {
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
     const pending = client.service("pending");
 
     assert.ok(pending instanceof PendingService);
@@ -860,7 +867,13 @@ describe("client public API", () => {
 
   it("updates and removes local pending records through service methods", async () => {
     const adapter = new MapAdapter();
-    const client = createApiKitClient({ baseUrl: "http://server/api", adapter });
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url) => {
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
     await client.discover({
       openapi: "3.0.3",
       paths: {
@@ -894,7 +907,13 @@ describe("client public API", () => {
     const adapter = new MapAdapter(new Map([
       ["api-kit:clientes", [{ id: 7, nombre: "Ana", email: "ana@example.com" }]],
     ]));
-    const client = createApiKitClient({ baseUrl: "http://server/api", adapter });
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url) => {
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
     await client.discover({
       openapi: "3.0.3",
       paths: {
@@ -930,7 +949,13 @@ describe("client public API", () => {
     const adapter = new MapAdapter(new Map([
       ["api-kit:clientes", [{ id: 7, nombre: "Ana" }]],
     ]));
-    const client = createApiKitClient({ baseUrl: "http://server/api", adapter });
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url) => {
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
     await client.discover({
       openapi: "3.0.3",
       paths: {
@@ -1555,7 +1580,7 @@ async function startApi() {
   app.use(api.errorHandler);
   const server = await listen(app);
   const { port } = server.address();
-  return { api, server, baseUrl: `http://localhost:${port}/api` };
+  return { api, server, baseUrl: `http://localhost:${port}/api`, seq };
 }
 
 async function seedIam(models, permissions) {
