@@ -28,8 +28,8 @@
     "adm-zip": "^0.6.0",
     "express": "^5.1.0",
     "iam": "github:acmepy/iam",
-    "seq": "file:../seq",
-    "yep": "file:../yep"
+    "seq": "github:acmepy/seq",
+    "yep": "github:acmepy/yep"
   },
   "peerDependencies": {
     "compression": "^1.8.1",
