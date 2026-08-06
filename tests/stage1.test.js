@@ -115,7 +115,7 @@ after(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-describe("Etapa 1 - N�cleo", () => {
+describe("Etapa 1 - Nucleo", () => {
   describe("createApiKit()", () => {
     it("returns router", () => {
       assert.ok(api.router);
