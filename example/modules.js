@@ -13,7 +13,7 @@ export const modules = [
     timestamps: true,
     attributes: {
       id: { type: "integer", primaryKey: true, autoIncrement: true },
-      ruc: { type: "string", maxLength: 20, unique: true, title: "RUC" },
+      ruc: { type: "string", maxLength: 20, unique: true, title: "RUC", pattern: "^\\d+-\\d$" },
       nombre: { type: "string", maxLength: 100, allowNull: false, title: "Nombre" },
       email: { type: "string", maxLength: 150, allowNull: true, unique: true, title: "Email", email: true },
       activo: { type: "boolean", defaultValue: true, title: "Activo" },
@@ -80,3 +80,5 @@ export const modules = [
     },
   },
 ];
+
+

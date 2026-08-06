@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import packageInfo from "../package.json" with { type: "json" };
+import yep from "yep";
 import { createApiKit, defineResource } from "../src/server/index.js";
 import { getContext } from "../src/server/index.js";
 import { normalizeModule } from "../src/server/config/config-normalizer.js";
@@ -246,6 +247,63 @@ describe("Etapa 1 - Nucleo", () => {
       assert.equal(invalid.errors.descripcion, "Nombre es requerido");
       assert.ok(invalid.errors.precio);
     });
+    it("supports yep validation rules in declarative attributes", async () => {
+      const rulesResource = defineResource({
+        modelName: "RuleExample",
+        requiredOneOf: ["email", "telefono"],
+        attributes: {
+          id: { type: "integer", primaryKey: true, autoIncrement: true },
+          codigo: { type: "string", title: "Codigo", required: true, in: ["A", "B"], pattern: /^[AB]$/, default: "A" },
+          nombre: { type: "string", title: "Nombre", min: 3, maxLength: 8 },
+          email: { type: "string", title: "Email", nullable: true, email: true, notOneOf: ["blocked@test.com"] },
+          telefono: { type: "string", title: "Telefono", pattern: /^09\d{8}$/ },
+          edad: { type: "integer", title: "Edad", positive: true, between: [1, 120] },
+        },
+      });
+
+      const valid = await rulesResource.schemas.create.validate({
+        nombre: "Cliente",
+        telefono: "0981123456",
+        edad: 30,
+      });
+      assert.equal(valid.codigo, "A");
+
+      const invalid = await rulesResource.schemas.create.validate({
+        codigo: "C",
+        nombre: "AB",
+        email: "blocked@test.com",
+        telefono: "123",
+        edad: 0,
+      }, { safe: true });
+      assert.ok(invalid.errors.codigo);
+      assert.ok(invalid.errors.nombre);
+      assert.ok(invalid.errors.email);
+      assert.ok(invalid.errors.telefono);
+      assert.ok(invalid.errors.edad);
+
+      const missingContact = await rulesResource.schemas.create.validate({ codigo: "A", nombre: "Cliente", edad: 20 }, { safe: true });
+      assert.ok(missingContact.errors.email);
+      assert.ok(missingContact.errors.telefono);
+    });
+
+    it("supports custom yep validation methods in declarative attributes", async () => {
+      if (typeof yep.string().rucDeclarativoTest !== "function") {
+        yep.addTest("rucDeclarativoTest", (value) => value === undefined || /^\d+-\d$/.test(value), {
+          message: ({ title }) => `${title} no tiene un formato valido`,
+        });
+      }
+
+      const rucResource = defineResource({
+        modelName: "RucExample",
+        attributes: {
+          ruc: { type: "string", title: "RUC", rucDeclarativoTest: true },
+        },
+      });
+
+      assert.deepEqual(await rucResource.schemas.create.validate({ ruc: "123-4" }), { ruc: "123-4" });
+      const invalid = await rucResource.schemas.create.validate({ ruc: "abc" }, { safe: true });
+      assert.equal(invalid.errors.ruc, "RUC no tiene un formato valido");
+    });
   describe("module endpoints", () => {
     it("creates list/get/create/update/remove by default", () => {
       const mod = normalizeModule({ name: "items" });
@@ -345,6 +403,8 @@ describe("Etapa 1 - Nucleo", () => {
       assert.notDeepEqual(res.body.paths["/api/clientes"].get.tags, ["Clientes"]);
       assert.equal(res.body.paths["/api/clientes"].post.requestBody.content["application/json"].schema.$ref, "#/components/schemas/clientes_create");
       assert.ok(res.body.components.schemas.clientes_create);
+      assert.equal(res.body.components.schemas.clientes_create.properties.nombre.maxLength, 100);
+      assert.equal(res.body.components.schemas.clientes_update.properties.email.maxLength, 150);
     });
 
     it("downloads Postman collection with module folders", async () => {
@@ -413,12 +473,12 @@ describe("Etapa 1 - Nucleo", () => {
   describe("CRUD - create", () => {
     it("creates a record", async () => {
       const res = await request("POST", "/api/clientes", {
-        nombre: "Juan P�rez",
+        nombre: "Juan Pï¿½rez",
         email: "juan@test.com",
       });
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
-      assert.equal(res.body.data.nombre, "Juan P�rez");
+      assert.equal(res.body.data.nombre, "Juan Pï¿½rez");
       assert.equal(typeof res.body.data.id, "number");
     });
 
@@ -439,7 +499,7 @@ describe("Etapa 1 - Nucleo", () => {
       const res = await request("GET", "/api/clientes/1");
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
-      assert.equal(res.body.data.nombre, "Juan P�rez");
+      assert.equal(res.body.data.nombre, "Juan Pï¿½rez");
     });
 
     it("returns 404 for missing record", async () => {
@@ -542,6 +602,9 @@ describe("Etapa 1 - Nucleo", () => {
     });
   });
 });
+
+
+
 
 
 

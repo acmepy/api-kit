@@ -194,9 +194,47 @@ function schemaComponents(mod) {
   const result = {};
   for (const [name, schema] of Object.entries(mod.schemas || {})) {
     const jsonSchema = toJsonSchema(schema);
-    if (jsonSchema) result[name] = jsonSchema;
+    if (jsonSchema) result[name] = enrichJsonSchema(jsonSchema, mod, name);
   }
   return result;
+}
+
+function enrichJsonSchema(schema, mod, operation) {
+  if (!schema?.properties) return schema;
+  const enriched = { ...schema, properties: { ...schema.properties } };
+  const definitions = mod.config?.resource?.definition || mod.model?.resourceDefinition?.attributes || mod.model?.attributes || {};
+
+  for (const [field, property] of Object.entries(enriched.properties)) {
+    const definition = definitions[field];
+    if (!definition) continue;
+    if (operation === "create" && definition.create === false) continue;
+    if (operation === "update" && definition.update === false) continue;
+    enriched.properties[field] = enrichPropertySchema(property, definition);
+  }
+
+  return enriched;
+}
+
+function enrichPropertySchema(property, definition) {
+  const enriched = { ...property };
+  const type = definition.type;
+  const typeName = type?.key || type?.constructor?.name || definition.type || "";
+  const normalized = String(typeName).toLowerCase();
+  const options = type?.options || {};
+
+  if (normalized.includes("string")) {
+    const maxLength = options.length ?? definition.maxLength;
+    if (maxLength !== undefined) enriched.maxLength = maxLength;
+  }
+
+  if (normalized.includes("decimal") || normalized.includes("number")) {
+    const precision = options.precision ?? definition.precision;
+    const scale = options.scale ?? definition.scale;
+    if (precision !== undefined) enriched.precision = precision;
+    if (scale !== undefined) enriched.scale = scale;
+  }
+
+  return enriched;
 }
 
 function componentName(moduleName, schemaName) {

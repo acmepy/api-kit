@@ -10,7 +10,7 @@ const DEFAULT_SERVICE_PREFIX = "api-kit";
 const DEFAULT_SESSION_KEY = `${DEFAULT_SERVICE_PREFIX}:session`;
 const DEFAULT_PING_INTERVAL = 5000;
 const DEFAULT_PING_TIMEOUT = 3000;
-const DEFAULT_SSE_WATCHDOG_TIMEOUT = 20000;
+const DEFAULT_SSE_WATCHDOG_TIMEOUT = 25000;
 
 export function createApiKitClient(options = {}) {
   return new ApiKitClient(options);
@@ -87,6 +87,7 @@ export class ApiKitClient {
     const response = await this.request(this.#paths.logout, { method: "POST" });
     await this.#clearLocalSession();
     await this.#clearServiceCaches();
+    await this.#clearCachedOpenapi();
     this.#stopPing();
     this.#closeSse();
     this.#clearWatchdog();
@@ -106,8 +107,25 @@ export class ApiKitClient {
   }
 
   async discover(openapi) {
-    this.#openapi = openapi || (await this.request(this.#paths.openapi, { method: "GET" }));
-    if (!openapi) this.#markOnline("openapi", this.#openapi);
+    let source = openapi ? "provided" : "openapi";
+    if (openapi) {
+      this.#openapi = openapi;
+      await this.#persistOpenapi();
+    } else {
+      try {
+        this.#openapi = await this.request(this.#paths.openapi, { method: "GET" });
+        await this.#persistOpenapi();
+        this.#markOnline("openapi", this.#openapi);
+      } catch (error) {
+        if (this.#isAuthExpiredError(error)) throw error;
+        const cached = await this.#loadCachedOpenapi();
+        if (!cached) throw error;
+        this.#openapi = cached;
+        source = "openapi-cache";
+        this.#markOffline(source, { message: error.message });
+      }
+    }
+
     const pendingService = this.#pendingService();
     this.#services.clear();
     this.#services.set("pending", pendingService);
@@ -117,9 +135,19 @@ export class ApiKitClient {
       this.#services.set(descriptor.name, new BaseService({ client: this, servicePrefix: this.#servicePrefix, ...descriptor }));
     }
 
+    await this.#preloadServiceSchemas();
+
+    if (source === "openapi-cache") this.#emitChange({ type: "discover", source, data: this.#openapi });
     return this;
   }
 
+
+  async #preloadServiceSchemas() {
+    for (const service of this.#services.values()) {
+      if (service.name === "pending" || typeof service.loadSchema !== "function") continue;
+      await service.loadSchema();
+    }
+  }
   service(name) {
     const service = this.#services.get(name);
     if (!service) throw new Error(`Servicio "${name}" no descubierto`);
@@ -443,6 +471,7 @@ export class ApiKitClient {
   async #clearSession() {
     await this.#clearLocalSession();
     await this.#clearServiceCaches();
+    await this.#clearCachedOpenapi();
     this.#stopPing();
     this.#closeSse();
     this.#clearWatchdog();
@@ -509,8 +538,24 @@ export class ApiKitClient {
     if (this.#session) await this.#adapter.set(this.#sessionKey, this.#session);
   }
 
+
+  async #loadCachedOpenapi() {
+    return (await this.#adapter.get(this.#openapiCacheKey())) || null;
+  }
+
+  async #persistOpenapi() {
+    if (this.#openapi) await this.#adapter.set(this.#openapiCacheKey(), this.#openapi);
+  }
+
+  async #clearCachedOpenapi() {
+    await this.#adapter.remove(this.#openapiCacheKey());
+  }
   #serviceCacheKey(serviceName) {
     return `${this.#servicePrefix}:${serviceName}`;
+  }
+
+  #openapiCacheKey() {
+    return `${this.#servicePrefix}:openapi`;
   }
 
   #pendingService() {
@@ -523,3 +568,4 @@ export class ApiKitClient {
   }
 
 }
+

@@ -118,9 +118,10 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
     serviceMethod: "sse",
     summary: "Cambios en vivo",
     handler: ({ config, modules, authContext }) => (req, res) => {
+      const [ip, session, userAgent] = [req.ip || req.socket?.remoteAddress || "", req.session?.id || "no-session", req.headers["user-agent"] || ""];
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
-
+      log("info", "audit.sse", session, ip, req.method, req.originalUrl, res.statusCode, 0, res.getHeader("content-length") || 0, userAgent);
       const expiresAt = bearerTokenExpiresAt(req);
       const client = {id: ++nextClientId, req, res, sessionId: req.session?.id, connectedAt: new Date().toISOString(), expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, heartbeat: null, expirationTimer: null, closed: false};
       clients.set(client.id, client);

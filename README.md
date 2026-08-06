@@ -349,7 +349,7 @@ const client = createApiKitClient({
   adapter: new LocalStorageAdapter(),
   pingInterval: 5000,
   pingTimeout: 3000,
-  sseWatchdogTimeout: 20000,
+  sseWatchdogTimeout: 25000,
 });
 
 client.onChange((event) => {

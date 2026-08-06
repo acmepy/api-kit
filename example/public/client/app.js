@@ -3,9 +3,9 @@ import { createApiKitClient, LocalStorageAdapter } from "api-kit/client";
 const client = createApiKitClient({
   baseUrl: "/api",
   adapter: new LocalStorageAdapter(),
-  pingInterval: 3000,
-  pingTimeout: 1500,
-  sseWatchdogTimeout: 15000,
+  pingInterval: 5000,
+  pingTimeout: 3000,
+  sseWatchdogTimeout: 25000,
 });
 
 const state = {
@@ -31,8 +31,8 @@ const app = document.querySelector("#app");
 
 client.onChange((event) => {
   state.connectionSource = event.source || event.type;
-  if (event.type === "sync") refreshFromClient().catch(() => {});
-  if (event.type === "changes" || event.type === "sse") refreshLocalState().then(() => render()).catch(() => {});
+  if (event.type === "sync") refreshFromClient({ background: true }).catch(() => {});
+  if (event.type === "changes" || event.type === "sse") refreshLocalState().then(() => renderFromBackground()).catch(() => {});
   updateStatusIndicators();
 });
 
@@ -563,9 +563,18 @@ async function refreshLocalState() {
   state.pending = (await services.pending.list()).data;
 }
 
-async function refreshFromClient() {
+async function refreshFromClient(options = {}) {
   tryAssignServices();
   await refreshLocalState();
+  if (options.background) renderFromBackground();
+  else render();
+}
+
+function renderFromBackground() {
+  if (document.activeElement?.closest?.("form")) {
+    updateStatusIndicators();
+    return;
+  }
   render();
 }
 

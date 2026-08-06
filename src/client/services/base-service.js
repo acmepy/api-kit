@@ -157,11 +157,17 @@ export class BaseService {
   }
 
   async schema() {
-    if (this.operations.schema) return this.#send("schema");
-    return { ok: true, data: this.schemas };
+    await this.loadSchema();
+    return { ok: true, data: this.schemas, local: !this.#hasSchemas() };
+  }
+
+  async loadSchema() {
+    await this.#ensureSchemas({ force: true });
+    return this.schemas;
   }
 
   async validate(data = {}, operation = "create") {
+    await this.#ensureSchemas();
     const schema = this.yepSchemas[operation] || this.yepSchemas.body || this.yepSchemas.create;
     if (!schema) return { ok: true, message: "Sin schema", errors: null };
     const result = await schema.validate(data, { safe: true });
@@ -169,6 +175,7 @@ export class BaseService {
   }
 
   async validateAt(attribute, data = {}, operation = "create") {
+    await this.#ensureSchemas();
     const schema = this.yepSchemas[operation] || this.yepSchemas.body || this.yepSchemas.create;
     if (!schema) return { ok: true, error: null };
     const result = await schema.validateAt(attribute, data, { safe: true });
@@ -233,10 +240,62 @@ export class BaseService {
 
   async clear() {
     await this.client.adapter.remove(this.#localKey());
+    await this.#removeCachedSchema();
+  }
+
+  async #ensureSchemas(options = {}) {
+    if (!options.force && this.#hasSchemas()) return;
+
+    if (this.operations.schema) {
+      try {
+        const response = await this.#send("schema");
+        this.#setSchemas(response.data || {});
+        await this.#setCachedSchema(this.schemas);
+        return;
+      } catch {
+        const fallback = await this.#getCachedSchema();
+        if (fallback) this.#setSchemas(fallback);
+        return;
+      }
+    }
+
+    const cached = await this.#getCachedSchema();
+    if (cached) this.#setSchemas(cached);
+  }
+  #setSchemas(schemas = {}) {
+    this.schemas = schemas || {};
+    this.yepSchemas = buildYepSchemas(this.schemas);
+  }
+
+  #hasSchemas() {
+    return Object.keys(this.schemas || {}).length > 0;
   }
 
   #localKey() {
     return `${this.servicePrefix}:${this.name}`;
+  }
+
+  async #getCachedSchema() {
+    const schemas = await this.client.adapter.get(this.#schemasKey());
+    return schemas?.[this.name] || null;
+  }
+
+  async #setCachedSchema(schema) {
+    const schemas = await this.client.adapter.get(this.#schemasKey()) || {};
+    await this.client.adapter.set(this.#schemasKey(), { ...schemas, [this.name]: schema });
+  }
+
+  async #removeCachedSchema() {
+    const schemas = await this.client.adapter.get(this.#schemasKey());
+    if (!schemas || !(this.name in schemas)) return;
+    const nextSchemas = { ...schemas };
+    delete nextSchemas[this.name];
+    if (Object.keys(nextSchemas).length === 0) await this.client.adapter.remove(this.#schemasKey());
+    else await this.client.adapter.set(this.#schemasKey(), nextSchemas);
+  }
+
+  #schemasKey() {
+    return `${this.servicePrefix}:schema`;
   }
 }
 
@@ -254,3 +313,10 @@ function validationResult(result) {
 function isValidationSummary(result) {
   return result && typeof result === "object" && "errors" in result;
 }
+
+
+
+
+
+
+

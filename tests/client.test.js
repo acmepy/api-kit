@@ -277,6 +277,122 @@ describe("client public API", () => {
     assert.deepEqual(await adapter.get("api-kit:clientes"), [{ id: 1 }]);
   });
 
+  it("persists discovered openapi and reuses it when offline", async () => {
+    const calls = [];
+    const openapi = {
+      openapi: "3.0.3",
+      paths: {
+        "/api/clientes": {
+          get: { tags: ["clientes"], operationId: "clientes_list", "x-permissions": ["clientes.list"] },
+          post: { tags: ["clientes"], operationId: "clientes_create", "x-permissions": ["clientes.create"] },
+        },
+      },
+    };
+    const adapter = new MapAdapter();
+    const onlineClient = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push(pathname);
+        if (pathname === "/api/openapi.json") return jsonResponse(openapi);
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+
+    await onlineClient.discover();
+
+    assert.deepEqual(await adapter.get("api-kit:openapi"), openapi);
+    assert.deepEqual(calls, ["/api/openapi.json", "/api/ping"]);
+
+    const offlineEvents = [];
+    const offlineClient = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push(pathname);
+        if (pathname === "/api/openapi.json") throw new Error("Offline");
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+    offlineClient.onChange((event) => offlineEvents.push(event));
+
+    await offlineClient.discover();
+    const clientes = offlineClient.service("clientes");
+
+    assert.ok(clientes instanceof BaseService);
+    assert.deepEqual(clientes.permissions("list"), ["clientes.list"]);
+    assert.ok(offlineEvents.some((event) => event.type === "discover" && event.source === "openapi-cache"));
+    await offlineClient.clearSession();
+  });
+
+  it("loads service schemas from schema endpoint and falls back to cached schemas", async () => {
+    const cachedSchema = {
+      create: {
+        type: "object",
+        required: ["nombre"],
+        properties: { nombre: { type: "string", title: "Nombre" } },
+      },
+    };
+    const adapter = new MapAdapter(new Map([["api-kit:schema", { clientes: cachedSchema }]]));
+    const calls = [];
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push(pathname);
+        if (pathname === "/api/openapi.json") {
+          return jsonResponse({
+            openapi: "3.0.3",
+            paths: {
+              "/api/clientes/schema": { get: { tags: ["clientes"], operationId: "clientes_schema" } },
+              "/api/clientes": { post: { tags: ["clientes"], operationId: "clientes_create" } },
+            },
+          });
+        }
+        if (pathname === "/api/clientes/schema") throw new Error("Offline");
+        if (pathname === "/api/ping") return jsonResponse({ ok: true, data: { pong: true } });
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+
+    await client.discover();
+    const invalid = await client.service("clientes").validate({});
+
+    assert.equal(invalid.ok, false);
+    assert.equal(invalid.errors.nombre, "Nombre es requerido");
+    assert.ok(calls.includes("/api/clientes/schema"));
+    assert.deepEqual(await adapter.get("api-kit:schema"), { clientes: cachedSchema });
+    await client.clearSession();
+  });
+  it("does not use cached openapi when discover receives 401", async () => {
+    const adapter = new MapAdapter(new Map([
+      ["api-kit:openapi", {
+        openapi: "3.0.3",
+        paths: {
+          "/api/clientes": { get: { tags: ["clientes"], operationId: "clientes_list" } },
+        },
+      }],
+    ]));
+    const client = createApiKitClient({
+      baseUrl: "http://server/api",
+      adapter,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/api/openapi.json") return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+
+    await assert.rejects(() => client.discover(), (error) => {
+      assert.equal(error.status, 401);
+      return true;
+    });
+    assert.throws(() => client.service("clientes"), /no descubierto/);
+    await client.clearSession();
+  });
   it("downloads services with empty cache when syncing", async () => {
     const calls = [];
     const adapter = new MapAdapter(new Map([
@@ -1572,7 +1688,7 @@ async function startApi() {
   await seq.authenticate();
   await seq.init();
   await seq.sync({ force: true });
-  await seedIam(api.auth.models, ["clientes.list", "clientes.create", "clientes.get", "clientes.update", "clientes.remove", "openapi.read", "audit.changes"]);
+  await seedIam(api.auth.models, ["clientes.list", "clientes.schema", "clientes.create", "clientes.get", "clientes.update", "clientes.remove", "openapi.read", "audit.changes"]);
 
   const app = express();
   app.use(express.json());
@@ -1633,3 +1749,6 @@ function silentSseResponse() {
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+
+

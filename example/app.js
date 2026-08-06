@@ -41,7 +41,7 @@ async function main() {
   });
 
   api.app.use("/api-kit/client", express.static(path.join(rootDir, "src/client")));
-  api.app.use("/vendor/yep", express.static(path.join(rootDir, "node_modules/yep/src")));
+  api.app.use("/vendor/yep", express.static(path.join(rootDir, "node_modules/yep/dist")));
 
   await seq.authenticate();
   await seq.sync();

@@ -3,6 +3,8 @@ import { Model, DataTypes } from "seq";
 
 const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks"]);
 const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
+const DECLARATIVE_RULE_KEYS = new Set(["title", "required", "nullable", "default", "defaultValue", "oneOf", "notOneOf", "in", "pattern", "regex", "matches", "email", "positive", "min", "max", "maxLength", "between"]);
+const ATTRIBUTE_METADATA_KEYS = new Set([...ATTRIBUTE_OPTION_KEYS, ...DECLARATIVE_RULE_KEYS, "schema", "create", "update", "precision", "scale", "itemType", "items", "of", "returnType", "fields"]);
 const STRING_TYPE_NORMALIZERS = {
   integer: () => DataTypes.INTEGER,
   int: () => DataTypes.INTEGER,
@@ -23,11 +25,9 @@ export function defineResource(definition = {}) {
   const modelOptions = pickModelOptions(definition);
   const normalizedAttributes = normalizeAttributes(attributes);
   const modelAttributes = buildModelAttributes(normalizedAttributes);
-  const generatedSchemas = buildSchemas(normalizedAttributes, schemas);
+  const generatedSchemas = buildSchemas(normalizedAttributes, schemas, definition);
   const ResourceModel = CustomModel || class extends Model {
-    static define(seq) {
-      return this.init(modelAttributes, { ...modelOptions, seq });
-    }
+    static define(seq) {return this.init(modelAttributes, { ...modelOptions, seq })}
   };
 
   ResourceModel.attributes = modelAttributes;
@@ -45,11 +45,7 @@ function pickModelOptions(definition) {
 
 function normalizeAttributes(attributes) {
   const normalized = {};
-
-  for (const [name, definition] of Object.entries(attributes)) {
-    normalized[name] = { ...definition, type: normalizeDataType(definition, name)};
-  }
-
+  for (const [name, definition] of Object.entries(attributes)) normalized[name] = { ...definition, type: normalizeDataType(definition, name)};
   return normalized;
 }
 
@@ -105,12 +101,15 @@ function buildModelAttributes(attributes) {
   return modelAttributes;
 }
 
-function buildSchemas(attributes, explicitSchemas) {
-  return {
+function buildSchemas(attributes, explicitSchemas, definition = {}) {
+  const generated = {
     create: explicitSchemas.create || yep.object(buildShape(attributes, "create")),
     update: explicitSchemas.update || yep.object(buildShape(attributes, "update")),
     ...explicitSchemas,
   };
+  applyObjectRules(generated.create, definition, "create");
+  applyObjectRules(generated.update, definition, "update");
+  return generated;
 }
 
 function buildShape(attributes, operation) {
@@ -148,15 +147,65 @@ function resolveValidation(definition, operation) {
 
 function applyDeclarativeRules(schema, definition) {
   if (!schema) return schema;
-  if (definition.title && typeof schema.title === "function") schema.title(definition.title);
-  if (definition.min !== undefined && typeof schema.min === "function") schema.min(definition.min);
-  if (definition.max !== undefined && typeof schema.max === "function") schema.max(definition.max);
-  if (definition.oneOf && typeof schema.oneOf === "function") schema.oneOf(definition.oneOf);
-  if (definition.notOneOf && typeof schema.notOneOf === "function") schema.notOneOf(definition.notOneOf);
-  if (definition.regex && typeof schema.regex === "function") schema.regex(definition.regex);
-  if (definition.matches && typeof schema.matches === "function") schema.matches(definition.matches);
-  if (definition.email === true && typeof schema.email === "function") schema.email();
+  applySchemaRule(schema, "title", definition.title);
+  if (definition.required === true) applySchemaRule(schema, "required", true);
+  if (definition.nullable === true) applySchemaRule(schema, "nullable", true);
+  applySchemaRule(schema, "default", definition.default);
+  applySchemaRule(schema, "oneOf", definition.oneOf);
+  applySchemaRule(schema, "notOneOf", definition.notOneOf);
+  applySchemaRule(schema, "in", definition.in);
+  applySchemaRule(schema, "pattern", normalizePattern(definition.pattern));
+  applySchemaRule(schema, "regex", normalizePattern(definition.regex));
+  applySchemaRule(schema, "matches", normalizePattern(definition.matches));
+  if (definition.email === true) applySchemaRule(schema, "email", true);
+  if (definition.positive === true) applySchemaRule(schema, "positive", true);
+  applySchemaRule(schema, "min", definition.min);
+  applySchemaRule(schema, "max", definition.max);
+  applySchemaRule(schema, "max", definition.maxLength);
+  applySchemaRule(schema, "between", normalizeBetweenArgs(definition.between));
+  applyCustomSchemaRules(schema, definition);
   return schema;
+}
+
+function applyObjectRules(schema, definition, operation) {
+  if (!schema || typeof schema.requiredOneOf !== "function") return;
+  const value = operation === "create" ? definition.requiredOneOfCreate ?? definition.requiredOneOf : definition.requiredOneOfUpdate ?? definition.requiredOneOf;
+  applySchemaRule(schema, "requiredOneOf", value);
+}
+
+function applyCustomSchemaRules(schema, definition) {
+  for (const [key, value] of Object.entries(definition)) {
+    if (ATTRIBUTE_METADATA_KEYS.has(key)) continue;
+    applySchemaRule(schema, key, value);
+  }
+}
+
+function applySchemaRule(schema, method, value) {
+  if (value === undefined || value === false || typeof schema[method] !== "function") return;
+  if (value === true) {
+    schema[method]();
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (method === "between") schema[method](...value);
+    else schema[method](value);
+    return;
+  }
+  if (value && typeof value === "object" && Array.isArray(value.args)) {
+    schema[method](...value.args);
+    return;
+  }
+  schema[method](value);
+}
+
+function normalizeBetweenArgs(value) {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return [value.min, value.max];
+  return value;
+}
+
+function normalizePattern(value) {
+  return typeof value === "string" ? new RegExp(value) : value;
 }
 
 function inferValidation(definition) {
@@ -171,3 +220,9 @@ function inferValidation(definition) {
   if (normalized.includes("object") || normalized.includes("json")) return yep.objectType();
   return null;
 }
+
+
+
+
+
+
