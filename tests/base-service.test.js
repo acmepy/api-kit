@@ -406,6 +406,21 @@ describe("BaseService details", () => {
     assert.equal(await cobroResource.model.count(), 1);
   });
 
+  it("returns plain objects for included details when reloading a master record", async () => {
+    const result = await service.create({
+      body: {
+        cliente: "Ana",
+        total: 150,
+        items: [{ producto: "Mouse", cantidad: 1 }],
+      },
+    });
+
+    assert.equal(result.data.items[0].constructor.name, "Object");
+    assert.equal(result.data.items[0].dataValues, undefined);
+    assert.equal(result.data.items[0].producto, "Mouse");
+    assert.equal(result.data.items[0].ventaId, result.data.id);
+  });
+
   it("rolls back the master when a detail is invalid", async () => {
     await assert.rejects(
       () =>

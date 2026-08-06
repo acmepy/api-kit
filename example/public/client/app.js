@@ -240,7 +240,7 @@ function ventasTable() {
   if (!state.ventas.length) return `<p class="muted">Sin ventas.</p>`;
   return `
     <table>
-      <thead><tr><th>ID</th><th>Cliente</th><th>Fecha</th><th>Total</th></tr></thead>
+      <thead><tr><th>ID</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Items</th><th>Cobros</th></tr></thead>
       <tbody>
         ${state.ventas.map((venta) => `
           <tr>
@@ -248,6 +248,8 @@ function ventasTable() {
             <td>${escapeHtml(venta.cliente)}</td>
             <td>${escapeHtml(formatDate(venta.fecha))}</td>
             <td>${escapeHtml(formatNumber(venta.total))}</td>
+            <td>${escapeHtml(String((venta.items || []).length))}</td>
+            <td>${escapeHtml(String((venta.cobros || []).length))}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -539,9 +541,15 @@ async function createVenta(form) {
       items: collectItems(formData),
       cobros: collectCobros(formData),
     };
-    await services.ventas.create(body);
+    const created = await services.ventas.create(body);
     form.reset();
-    state.ventas = (await services.ventas.list()).data;
+    const ventas = (await services.ventas.list()).data;
+    if (created?.data?.id !== undefined) {
+      const existingIndex = ventas.findIndex((item) => String(item.id) === String(created.data.id));
+      if (existingIndex === -1) ventas.unshift(created.data);
+      else ventas[existingIndex] = created.data;
+    }
+    state.ventas = ventas;
     state.pending = (await services.pending.list()).data;
   });
 }

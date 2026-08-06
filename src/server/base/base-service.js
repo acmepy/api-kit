@@ -54,18 +54,16 @@ export class BaseService {
     const limit = Math.min(maxSize, Math.max(1, parseInt(query?.limit, 10) || 20));
     const offset = (page - 1) * limit;
     const where = this.#buildWhere(query);
-    const { count, rows } = await this.#model.findAndCountAll({where, limit, offset, order: this.#config.defaultOrder || [],...(transaction && { transaction })});
+    const include = this.#detailDescriptors().map((descriptor) => ({ model: descriptor.target, as: descriptor.as }));
+    const { count, rows } = await this.#model.findAndCountAll({where, limit, offset, order: this.#config.defaultOrder || [], include: include.length ? include : undefined, distinct: Boolean(include.length), plain: true, ...(transaction && { transaction })});
     const pages = Math.ceil(count / limit);
-    return {
-      data: rows.map((r) => r.toJSON()),
-      pagination: this.#buildPagination({ page, limit, offset, total: count, pages, baseUrl: context?.baseUrl }),
-    };
+    return { data: rows, pagination: this.#buildPagination({ page, limit, offset, total: count, pages, baseUrl: context?.baseUrl }) };
   }
 
   async get({ params, query, body, context, transaction } = {}) {
-    const instance = await this.#model.findByPk(params.id, {...(transaction && { transaction })});
+    const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#resourceName());
-    return { data: instance.toJSON() };
+    return { data: instance };
   }
 
   async schema() {
@@ -262,17 +260,10 @@ export class BaseService {
     const id = instance.get(primaryKey);
     const fresh = await this.#model.findByPk(id, {
       include: descriptors.map((descriptor) => ({ model: descriptor.target, as: descriptor.as })),
+      plain: true,
       ...(transaction && { transaction }),
     });
-    return this.#plainModel(fresh || instance);
-  }
-
-  #plainModel(value) {
-    if (Array.isArray(value)) return value.map((item) => this.#plainModel(item));
-    if (value instanceof Date) return value;
-    if (!value || typeof value !== "object") return value;
-    if (value.dataValues && typeof value.dataValues === "object") return this.#plainModel(value.dataValues);
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, this.#plainModel(item)]));
+    return fresh || instance.toJSON();
   }
 
   #detailDescriptors() {
