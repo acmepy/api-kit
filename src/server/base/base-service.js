@@ -2,6 +2,7 @@ import { NotFoundError } from "../errors/not-found-error.js";
 import { ValidationError } from "../errors/validation-error.js";
 import { normalizeJsonSchema } from "../utils/normalize.js";
 import { Op } from "seq";
+import { getContext } from "../context/request-context.js";
 
 const FILTER_OPERATORS = {eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between};
 const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
@@ -48,7 +49,8 @@ export class BaseService {
     return this.#services;
   }
 
-  async list({ params, query, body, context, transaction } = {}) {
+  async list({ params, query, body, transaction=null } = {}) {
+    const context = getContext();
     const page = Math.max(1, parseInt(query?.page, 10) || 1);
     const maxSize = this.#config.maxSize || 100;
     const limit = Math.min(maxSize, Math.max(1, parseInt(query?.limit, 10) || 20));
@@ -60,7 +62,8 @@ export class BaseService {
     return { data: rows, pagination: this.#buildPagination({ page, limit, offset, total: count, pages, baseUrl: context?.baseUrl }) };
   }
 
-  async get({ params, query, body, context, transaction } = {}) {
+  async get({ params, query, body, transaction =null } = {}) {
+    const context = getContext();
     const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#resourceName());
     return { data: instance };
@@ -74,7 +77,8 @@ export class BaseService {
     };
   }
 
-  async create({ params, query, body, context, transaction } = {}) {
+  async create({ params, query, body, transaction=null } = {}) {
+    const context = getContext();
     const { body: masterBody, details } = this.#splitDetailsFromBody(body);
     const data = await this.#validateBody("create", masterBody);
 
@@ -89,7 +93,8 @@ export class BaseService {
     });
   }
 
-  async update({ params, query, body, context, transaction } = {}) {
+  async update({ params, query, body, transaction=null } = {}) {
+    const context = getContext();
     const { body: masterBody, details } = this.#splitDetailsFromBody(body);
     const data = await this.#validateBody("update", masterBody);
 
@@ -114,7 +119,8 @@ export class BaseService {
     });
   }
 
-  async createDetail({ params, query, body, context, transaction } = {}) {
+  async createDetail({ params, query, body, transaction=null } = {}) {
+    const context = getContext();
     return this.#mutateDetail({ params, body, transaction }, async ({ descriptor, parentId, activeTransaction }) => {
       const payload = await this.#validateDetailBody(descriptor, "create", body, { [descriptor.foreignKey]: parentId });
       const instance = await this.#upsertDetail(descriptor.target, payload, { transaction: activeTransaction });
@@ -122,7 +128,8 @@ export class BaseService {
     });
   }
 
-  async updateDetail({ params, query, body, context, transaction } = {}) {
+  async updateDetail({ params, query, body, transaction=null } = {}) {
+    const context = getContext();
     return this.#mutateDetail({ params, body, transaction, detailIdRequired: true }, async ({ descriptor, parentId, detailId, activeTransaction }) => {
       await this.#assertDetailBelongsToParent(descriptor, parentId, detailId, activeTransaction);
       const payload = await this.#validateDetailBody(descriptor, "update", body, { [descriptor.primaryKey]: detailId, [descriptor.foreignKey]: parentId });
@@ -131,7 +138,8 @@ export class BaseService {
     });
   }
 
-  async removeDetail({ params, query, body, context, transaction } = {}) {
+  async removeDetail({ params, query, body, transaction=null } = {}) {
+    const context = getContext();
     return this.#mutateDetail({ params, body, transaction, detailIdRequired: true }, async ({ descriptor, parentId, detailId, activeTransaction }) => {
       const instance = await this.#assertDetailBelongsToParent(descriptor, parentId, detailId, activeTransaction);
       const auditOld = instance.toJSON();
@@ -140,7 +148,8 @@ export class BaseService {
     });
   }
 
-  async remove({ params, query, body, context, transaction } = {}) {
+  async remove({ params, query, body, transaction=null } = {}) {
+    const context = getContext();
     const instance = await this.#model.findByPk(params.id, {...(transaction && { transaction })});
     if (!instance) throw new NotFoundError(this.#resourceName());
     const auditOld = instance.toJSON();
@@ -207,9 +216,7 @@ export class BaseService {
   }
 
   async #removeMissingDetails(descriptor, parentId, savedDetails, transaction) {
-    const ids = savedDetails
-      .map((item) => item.get(descriptor.primaryKey))
-      .filter((value) => value !== undefined && value !== null);
+    const ids = savedDetails.map((item) => item.get(descriptor.primaryKey)).filter((value) => value !== undefined && value !== null);
     const where = { [descriptor.foreignKey]: parentId };
     if (ids.length > 0) where[descriptor.primaryKey] = { [Op.notIn]: ids };
     await descriptor.target.destroy({ where, ...(transaction && { transaction }) });
@@ -331,16 +338,11 @@ export class BaseService {
     const typeName = type?.key || type?.constructor?.name || "";
     const normalized = typeName.toLowerCase();
     const options = type?.options || {};
-
-    if (normalized.includes("string") && options.length !== undefined) {
-      enriched.maxLength = options.length;
-    }
-
+    if (normalized.includes("string") && options.length !== undefined) enriched.maxLength = options.length;
     if ((normalized.includes("decimal") || normalized.includes("number")) && options.precision !== undefined) {
       enriched.precision = options.precision;
       if (options.scale !== undefined) enriched.scale = options.scale;
     }
-
     return enriched;
   }
 

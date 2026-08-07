@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Seq, SQLiteAdapter } from "seq";
-import { BaseService, defineResource, ValidationError } from "../src/server/index.js";
+import { BaseService, defineResource, ValidationError, runWithContext } from "../src/server/index.js";
 
 describe("BaseService list filters", () => {
   let service;
@@ -55,10 +55,11 @@ describe("BaseService list filters", () => {
   });
 
   it("adds pagination links when baseUrl is available", async () => {
-    const result = await service.list({
+    const result = await runInRequestContext({
+      originalUrl: "/api/products?page=2&limit=1&active=true",
+    }, () => service.list({
       query: { page: "2", limit: "1", active: "true" },
-      context: { baseUrl: "http://localhost/api/products?page=2&limit=1&active=true" },
-    });
+    }));
 
     assert.deepEqual(result.pagination.links, {
       self: "http://localhost/api/products?page=2&limit=1&active=true",
@@ -316,6 +317,26 @@ describe("BaseService list filters", () => {
     );
   });
 });
+
+function runInRequestContext(reqOverrides, callback) {
+  const req = {
+    headers: {},
+    ip: "127.0.0.1",
+    protocol: "http",
+    originalUrl: "/",
+    socket: {},
+    get(name) {
+      return name.toLowerCase() === "host" ? "localhost" : undefined;
+    },
+    ...reqOverrides,
+  };
+
+  return new Promise((resolve, reject) => {
+    runWithContext(req, {}, () => {
+      Promise.resolve(callback()).then(resolve, reject);
+    });
+  });
+}
 
 describe("BaseService details", () => {
   let seq;

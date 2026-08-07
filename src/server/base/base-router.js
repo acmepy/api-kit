@@ -81,8 +81,8 @@ export class BaseRouter {
 
     handlers.push(async (req, res, next) => {
       try {
-        const context = { ...getContext(), baseUrl: `${req.protocol}://${req.get("host")}${req.originalUrl}` };
-        const args = { params: req.params, query: req.query, body: req.body, context, transaction: null};
+        const {params, query, body} = req;
+        const args = { params, query, body};
 
         const result = await this.#service[serviceMethod](args);
         if (result.pagination)  return res.json(list(result.data, result.pagination));
