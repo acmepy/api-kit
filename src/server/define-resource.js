@@ -154,9 +154,9 @@ function applyDeclarativeRules(schema, definition) {
   applySchemaRule(schema, "oneOf", definition.oneOf);
   applySchemaRule(schema, "notOneOf", definition.notOneOf);
   applySchemaRule(schema, "in", definition.in);
-  applySchemaRule(schema, "regex", normalizePattern(definition.pattern));
+  applySchemaRule(schema, "patern", normalizePattern(definition.pattern));
   applySchemaRule(schema, "regex", normalizePattern(definition.regex));
-  applySchemaRule(schema, "regex", normalizePattern(definition.matches));
+  applySchemaRule(schema, "matches", normalizePattern(definition.matches));
   if (definition.email === true) applySchemaRule(schema, "email", true);
   if (definition.positive === true) applySchemaRule(schema, "positive", true);
   applySchemaRule(schema, "min", definition.min);
