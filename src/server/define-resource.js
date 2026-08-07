@@ -3,7 +3,7 @@ import { Model, DataTypes } from "seq";
 
 const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks"]);
 const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
-const DECLARATIVE_RULE_KEYS = new Set(["title", "required", "nullable", "default", "defaultValue", "oneOf", "notOneOf", "in", "pattern", "regex", "matches", "email", "positive", "min", "max", "maxLength", "between"]);
+const DECLARATIVE_RULE_KEYS = new Set(["title", "required", "nullable", "default", "defaultValue", "oneOf", "notOneOf", "in", "pattern", "regexp", "matches", "email", "positive", "min", "max", "maxLength", "between"]);
 const ATTRIBUTE_METADATA_KEYS = new Set([...ATTRIBUTE_OPTION_KEYS, ...DECLARATIVE_RULE_KEYS, "schema", "create", "update", "precision", "scale", "itemType", "items", "of", "returnType", "fields"]);
 const STRING_TYPE_NORMALIZERS = {
   integer: () => DataTypes.INTEGER,
@@ -154,8 +154,8 @@ function applyDeclarativeRules(schema, definition) {
   applySchemaRule(schema, "oneOf", definition.oneOf);
   applySchemaRule(schema, "notOneOf", definition.notOneOf);
   applySchemaRule(schema, "in", definition.in);
-  applySchemaRule(schema, "patern", normalizePattern(definition.pattern));
-  applySchemaRule(schema, "regex", normalizePattern(definition.regex));
+  applySchemaRule(schema, "pattern", normalizePattern(definition.pattern));
+  applySchemaRule(schema, "regexp", normalizePattern(definition.regexp));
   applySchemaRule(schema, "matches", normalizePattern(definition.matches));
   if (definition.email === true) applySchemaRule(schema, "email", true);
   if (definition.positive === true) applySchemaRule(schema, "positive", true);
