@@ -459,7 +459,7 @@ describe("BaseService details", () => {
     assert.equal(await itemResource.model.count(), 0);
   });
 
-  it("upserts sent details and keeps omitted details by default", async () => {
+  it("replaces details on update using seq native include handling", async () => {
     const created = await service.create({
       body: {
         cliente: "Ana",
@@ -471,26 +471,26 @@ describe("BaseService details", () => {
       },
     });
 
-    const firstItem = created.data.items[0];
     const updated = await service.update({
       params: { id: created.data.id },
       body: {
         cliente: "Ana Maria",
         items: [
-          { id: firstItem.id, producto: "Mouse gamer", cantidad: 3 },
+          { producto: "Mouse gamer", cantidad: 3 },
           { producto: "Monitor", cantidad: 1 },
         ],
       },
     });
 
     assert.equal(updated.data.cliente, "Ana Maria");
-    assert.equal(updated.data.items.length, 3);
+    assert.equal(updated.data.items.length, 2);
     assert.ok(updated.data.items.some((item) => item.producto === "Mouse gamer" && item.cantidad === 3));
-    assert.ok(updated.data.items.some((item) => item.producto === "Teclado"));
     assert.ok(updated.data.items.some((item) => item.producto === "Monitor"));
+    assert.equal(updated.data.items.some((item) => item.producto === "Teclado"), false);
+    assert.equal(await itemResource.model.count(), 2);
   });
 
-  it("removes omitted details when removeMissing is true", async () => {
+  it("creates replacement details on update without explicit foreign keys", async () => {
     service = new BaseService({
       model: ventaResource.model,
       schemas: ventaResource.schemas,
@@ -498,7 +498,7 @@ describe("BaseService details", () => {
       config: {
         resource: ventaResource,
         details: {
-          items: { association: "items", removeMissing: true },
+          items: { association: "items" },
         },
       },
     });
@@ -514,16 +514,16 @@ describe("BaseService details", () => {
       },
     });
 
-    const firstItem = created.data.items[0];
     const updated = await service.update({
       params: { id: created.data.id },
       body: {
-        items: [{ id: firstItem.id, producto: "Mouse", cantidad: 5 }],
+        items: [{ producto: "Mouse", cantidad: 5 }],
       },
     });
 
     assert.equal(updated.data.items.length, 1);
     assert.equal(updated.data.items[0].cantidad, 5);
+    assert.equal(updated.data.items[0].ventaId, created.data.id);
     assert.equal(await itemResource.model.count(), 1);
   });
 

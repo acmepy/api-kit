@@ -1,6 +1,6 @@
 {
   "name": "api-kit",
-  "version": "0.9.82",
+  "version": "0.9.83",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -28,7 +28,7 @@
     "adm-zip": "^0.6.0",
     "express": "^5.1.0",
     "iam": "github:acmepy/iam",
-    "seq": "github:acmepy/seq",
+    "seq": "file:../seq",
     "yep": "github:acmepy/yep"
   },
   "peerDependencies": {

@@ -81,11 +81,12 @@ export class BaseService {
     const context = getContext();
     const { body: masterBody, details } = this.#splitDetailsFromBody(body);
     const data = await this.#validateBody("create", masterBody);
+    const payload = await this.#buildNestedPayload(data, details, "create");
+    const include = this.#detailIncludes(details);
 
     return this.#withTransaction(transaction, async (activeTransaction) => {
       try {
-        const instance = await this.#model.create(data, { ...(activeTransaction && { transaction: activeTransaction })});
-        await this.#saveDetails(instance, details, { operation: "create", transaction: activeTransaction });
+        const instance = await this.#model.create(payload, { ...(include.length && { include }), ...(activeTransaction && { transaction: activeTransaction })});
         return { data: await this.#toJsonWithDetails(instance, activeTransaction) };
       } catch (error) {
         throw this.#normalizePersistenceError(error);
@@ -103,15 +104,24 @@ export class BaseService {
       if (!instance)  throw new NotFoundError(this.#resourceName());
       const auditOld = instance.toJSON();
       try {
-        let updated = instance;
-        if (this.#updatesPrimaryKey(instance, data)) {
-          const pk = this.#primaryKeyAttribute();
-          await this.#model.update(data, { where: { [pk]: auditOld[pk] }, auditOld, ...(activeTransaction && { transaction: activeTransaction }) });
-          updated = await this.#model.findByPk(data[pk], { ...(activeTransaction && { transaction: activeTransaction }) });
-        } else if (Object.keys(data || {}).length > 0) {
-          await instance.update(data, { auditOld, ...(activeTransaction && { transaction: activeTransaction }) });
+        if (!details || details.size === 0) {
+          let updated = instance;
+          if (this.#updatesPrimaryKey(instance, data)) {
+            const pk = this.#primaryKeyAttribute();
+            await this.#model.update(data, { where: { [pk]: auditOld[pk] }, auditOld, ...(activeTransaction && { transaction: activeTransaction }) });
+            updated = await this.#model.findByPk(data[pk], { ...(activeTransaction && { transaction: activeTransaction }) });
+          } else if (Object.keys(data || {}).length > 0) {
+            await instance.update(data, { auditOld, ...(activeTransaction && { transaction: activeTransaction }) });
+          }
+          return { data: await this.#toJsonWithDetails(updated, activeTransaction) };
         }
-        await this.#saveDetails(updated, details, { operation: "update", transaction: activeTransaction });
+
+        const pk = this.#primaryKeyAttribute();
+        if (!(pk in data)) data[pk] = params.id;
+        const payload = await this.#buildNestedPayload(data, details, "update", params.id);
+        const include = this.#detailIncludes(details);
+        const updatedRows = await this.#model.update(payload, { where: { [pk]: auditOld[pk] }, auditOld, ...(include.length && { include }), ...(activeTransaction && { transaction: activeTransaction }) });
+        const updated = Array.isArray(updatedRows) && updatedRows.length > 0 ? updatedRows[0] : await this.#model.findByPk(data[pk] ?? params.id, { ...(activeTransaction && { transaction: activeTransaction }) });
         return { data: await this.#toJsonWithDetails(updated, activeTransaction) };
       } catch (error) {
         throw this.#normalizePersistenceError(error);
@@ -186,40 +196,14 @@ export class BaseService {
     return this.#seq.transaction((activeTransaction) => callback(activeTransaction));
   }
 
-  async #saveDetails(parent, details, { operation, transaction } = {}) {
-    if (!parent || !details || details.size === 0) return [];
-
-    const saved = [];
+  async #buildNestedPayload(data, details, operation, parentId = null) {
+    if (!details || details.size === 0) return data;
+    const payload = { ...data };
     for (const [name, items] of details.entries()) {
       const descriptor = this.#detailDescriptor(name);
-      const parentId = parent.get(descriptor.parentPrimaryKey);
-      const savedForDetail = [];
-
-      for (const item of items) {
-        if (!item || typeof item !== "object" || Array.isArray(item)) throw new ValidationError(`Detalle "${name}" debe contener objetos`);
-        const hasPrimaryKey = item[descriptor.primaryKey] !== undefined && item[descriptor.primaryKey] !== null;
-        const detailOperation = operation === "update" && hasPrimaryKey ? "update" : "create";
-        const forceFields = { [descriptor.foreignKey]: parentId };
-        if (detailOperation === "update") forceFields[descriptor.primaryKey] = item[descriptor.primaryKey];
-        const payload = await this.#validateDetailBody(descriptor, detailOperation, item, forceFields);
-        const instance = await this.#upsertDetail(descriptor.target, payload, { transaction });
-        saved.push(instance);
-        savedForDetail.push(instance);
-      }
-
-      if (operation === "update" && descriptor.removeMissing) {
-        await this.#removeMissingDetails(descriptor, parentId, savedForDetail, transaction);
-      }
+      payload[descriptor.as] = await Promise.all(items.map((item) => this.#validateNestedDetailBody(descriptor, operation, item, parentId)));
     }
-
-    return saved;
-  }
-
-  async #removeMissingDetails(descriptor, parentId, savedDetails, transaction) {
-    const ids = savedDetails.map((item) => item.get(descriptor.primaryKey)).filter((value) => value !== undefined && value !== null);
-    const where = { [descriptor.foreignKey]: parentId };
-    if (ids.length > 0) where[descriptor.primaryKey] = { [Op.notIn]: ids };
-    await descriptor.target.destroy({ where, ...(transaction && { transaction }) });
+    return payload;
   }
 
   async #mutateDetail({ params = {}, transaction, detailIdRequired = false }, callback) {
@@ -277,6 +261,11 @@ export class BaseService {
     return Object.keys(this.#detailsConfig()).map((name) => this.#detailDescriptor(name));
   }
 
+  #detailIncludes(details = null) {
+    const descriptors = details ? [...details.keys()].map((name) => this.#detailDescriptor(name)) : this.#detailDescriptors();
+    return descriptors.map((descriptor) => ({ model: descriptor.target, as: descriptor.as }));
+  }
+
   #detailDescriptor(name) {
     const detailsConfig = this.#detailsConfig();
     const config = detailsConfig[name];
@@ -294,7 +283,6 @@ export class BaseService {
       foreignKey: association.foreignKey,
       primaryKey: association.target?.primaryKeyAttribute || "id",
       parentPrimaryKey: association.source?.primaryKeyAttribute || this.#primaryKeyAttribute(),
-      removeMissing: config?.removeMissing === true,
     };
   }
 
@@ -370,6 +358,22 @@ export class BaseService {
       schemas: descriptor.target?.resourceSchemas || {},
       definitions: descriptor.target?.resourceDefinition?.attributes || descriptor.target?.rawAttributes || {},
     });
+  }
+
+  async #validateNestedDetailBody(descriptor, operation, body = {}, parentId = null) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new ValidationError(`Detalle "${descriptor.name}" debe contener objetos`);
+    const forceFields = { [descriptor.foreignKey]: parentId ?? this.#dummyFieldValue(descriptor.foreignKey, descriptor.target?.resourceDefinition?.attributes || descriptor.target?.rawAttributes || {}) };
+    const payload = await this.#validateDetailBody(descriptor, "create", body, forceFields);
+    delete payload[descriptor.foreignKey];
+    return payload;
+  }
+
+  #dummyFieldValue(field, definitions = {}) {
+    const type = this.#filterType(definitions[field]);
+    if (type === "integer" || type === "decimal" || type === "number") return 1;
+    if (type === "boolean") return true;
+    if (type === "date") return new Date();
+    return "__parent__";
   }
 
   async #validatePayload({ operation, body = {}, forceFields = {}, schemas = {}, definitions = {} }) {
