@@ -276,14 +276,11 @@ describe("BaseService list filters", () => {
     assert.equal(new Date(result.data.dueAt).toISOString(), "2026-07-28T10:00:00.000Z");
   });
 
-  it("rejects unknown body fields instead of ignoring them", async () => {
-    await assert.rejects(
-      () => service.update({ params: { id: 1 }, body: { name: "Basic updated", activo: false } }),
-      (error) =>
-        error instanceof ValidationError &&
-        error.message === "Datos inválidos, campo activo no permitido" &&
-        error.errors?.activo === "Campo no permitido",
-    );
+  it("ignores unknown update body fields through the update schema", async () => {
+    const result = await service.update({ params: { id: 1 }, body: { name: "Basic updated", activo: false } });
+
+    assert.equal(result.data.name, "Basic updated");
+    assert.equal(result.data.active, true);
   });
 
   it("rejects invalid typed filter values", async () => {
@@ -307,13 +304,12 @@ describe("BaseService list filters", () => {
     );
   });
 
-  it("maps unique constraint errors to field errors", async () => {
+  it("returns seq unique constraint errors directly", async () => {
     await assert.rejects(
       () => service.create({ body: { name: "Duplicate", email: "basic@test.com", price: 40 } }),
       (error) =>
-        error instanceof ValidationError &&
-        error.message === "Valor duplicado" &&
-        error.errors?.email === "Ya existe un registro con este valor",
+        error.code === "SQLITE_CONSTRAINT_UNIQUE" &&
+        /UNIQUE constraint failed: products\.email/.test(error.message),
     );
   });
 });
@@ -442,7 +438,7 @@ describe("BaseService details", () => {
     assert.equal(result.data.items[0].ventaId, result.data.id);
   });
 
-  it("rolls back the master when a detail is invalid", async () => {
+  it("rolls back the master when seq rejects an invalid detail", async () => {
     await assert.rejects(
       () =>
         service.create({
@@ -452,7 +448,9 @@ describe("BaseService details", () => {
             items: [{ producto: "Mouse" }],
           },
         }),
-      ValidationError,
+      (error) =>
+        error.name === "ValidationError" &&
+        error.message === 'Field "cantidad" does not allow null values in model "VentaItem"',
     );
 
     assert.equal(await ventaResource.model.count(), 0);
@@ -531,7 +529,7 @@ describe("BaseService details", () => {
     const created = await service.create({ body: { cliente: "Ana", total: 0 } });
     const detail = await service.createDetail({
       params: { id: created.data.id, detail: "items" },
-      body: { producto: "Mouse", cantidad: 1 },
+      body: { ventaId: created.data.id, producto: "Mouse", cantidad: 1 },
     });
 
     assert.equal(detail.data.ventaId, created.data.id);

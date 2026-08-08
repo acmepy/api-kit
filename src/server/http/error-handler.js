@@ -8,13 +8,11 @@ export function errorHandler(err, req, res, _next) {
   const ctx = getContext();
   const txId = ctx?.txId || req.headers["x-transaction-id"] || null;
 
-  if (err instanceof AppError) {
+  if (err instanceof AppError || (err.status && err.code)) {
     errorLogger(err, req, { txId, status: err.status, code: err.code, errors: err.errors });
-    const body = err.toJSON();
+    const body = { ok: false, code: err.code, message: err.message, errors: err.errors || null };
     if (txId) body.txId = txId;
-    if (err.headers) {
-      for (const [name, value] of Object.entries(err.headers)) res.setHeader(name, value);
-    }
+    if (process.env.NODE_ENV !== "production" && err.stack) body.stack = err.stack;
     return res.status(err.status).json(body);
   }
 

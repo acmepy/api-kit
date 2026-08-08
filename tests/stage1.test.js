@@ -494,6 +494,7 @@ describe("Etapa 1 - Nucleo", () => {
       assert.equal(res.status, 400);
       assert.equal(res.body.ok, false);
       assert.equal(res.body.code, "VALIDATION_ERROR");
+      assert.equal(res.body.message, "Se han producido 2 errores");
       assert.equal(res.body.errors.nombre, "Nombre es requerido");
       assert.ok(res.body.errors.email);
     });
