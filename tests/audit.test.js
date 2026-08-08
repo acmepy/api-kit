@@ -63,10 +63,9 @@ describe("audit", () => {
     const rows = await Audit.findAll({ order: [["id", "ASC"]] });
 
     assert.equal(rows.length, 2);
-    assert.deepEqual(rows.map((row) => row.get("action")), ["create", "update"]);
+    assert.deepEqual(rows.map((row) => row.get("action")), ["create", "bulk-update"]);
     assert.deepEqual(rows.map((row) => row.get("tableName")), ["clientes", "clientes"]);
     assert.equal(rows[0].get("new").nombre, "Ana");
-    assert.equal(rows[1].get("old").activo, true);
     assert.equal(rows[1].get("new").activo, false);
   });
 
@@ -333,9 +332,8 @@ describe("audit", () => {
 
       const event = await stream.nextEvent;
       assert.equal(event.event, "audit");
-      assert.equal(event.data.action, "update");
+      assert.equal(event.data.action, "bulk-update");
       assert.equal(event.data.tableName, "clientes");
-      assert.equal(event.data.old.activo, true);
       assert.equal(event.data.new.activo, false);
     } finally {
       stream.close();

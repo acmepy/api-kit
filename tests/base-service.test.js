@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Seq, SQLiteAdapter } from "seq";
-import { BaseService, defineResource, ValidationError, runWithContext } from "../src/server/index.js";
+import { BaseService, defineResource, NotFoundError, ValidationError, runWithContext } from "../src/server/index.js";
 
 describe("BaseService list filters", () => {
   let service;
@@ -527,12 +527,14 @@ describe("BaseService details", () => {
     assert.equal(await itemResource.model.count(), 1);
   });
 
-  it("creates, updates, and removes individual details through generic methods", async () => {
+  it("creates, updates, and removes individual details through seq methods", async () => {
     const created = await service.create({ body: { cliente: "Ana", total: 0 } });
     const detail = await service.createDetail({
       params: { id: created.data.id, detail: "items" },
       body: { producto: "Mouse", cantidad: 1 },
     });
+
+    assert.equal(detail.data.ventaId, created.data.id);
 
     const updated = await service.updateDetail({
       params: { id: created.data.id, detail: "items", detailId: detail.data.id },
@@ -540,11 +542,41 @@ describe("BaseService details", () => {
     });
 
     assert.equal(updated.data.cantidad, 4);
+    assert.equal(await itemResource.model.count(), 1);
 
-    await service.removeDetail({
+    await assert.rejects(
+      () =>
+        service.updateDetail({
+          params: { id: created.data.id, detail: "items", detailId: 9999 },
+          body: { producto: "Ghost", cantidad: 1 },
+        }),
+      NotFoundError,
+    );
+    assert.equal(await itemResource.model.count(), 1);
+
+    const other = await service.create({ body: { cliente: "Beto", total: 0 } });
+    await assert.rejects(
+      () =>
+        service.updateDetail({
+          params: { id: other.data.id, detail: "items", detailId: detail.data.id },
+          body: { producto: "Otro", cantidad: 2 },
+        }),
+      NotFoundError,
+    );
+
+    const removed = await service.removeDetail({
       params: { id: created.data.id, detail: "items", detailId: detail.data.id },
     });
 
+    assert.equal(removed.data.producto, "Mouse");
     assert.equal(await itemResource.model.count(), 0);
+
+    await assert.rejects(
+      () =>
+        service.removeDetail({
+          params: { id: other.data.id, detail: "items", detailId: detail.data.id },
+        }),
+      NotFoundError,
+    );
   });
 });
