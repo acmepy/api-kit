@@ -1,6 +1,6 @@
 import path from "node:path";
 import { importModuleNamespace, fileExists } from "../utils/import-module.js";
-import { defineResource } from "../define-resource.js";
+import { defineResource } from "./config-resource.js";
 import { camelCase } from "../utils/naming.js";
 
 export async function loadModules(input, baseDir) {

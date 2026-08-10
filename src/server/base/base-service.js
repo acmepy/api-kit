@@ -2,11 +2,14 @@ import { NotFoundError } from "../errors/not-found-error.js";
 import { ValidationError } from "../errors/validation-error.js";
 import { normalizeJsonSchema } from "../utils/normalize.js";
 import { Op } from "seq";
+import yep from 'yep'
 import { getContext } from "../context/request-context.js";
 
 const FILTER_OPERATORS = {eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between};
 const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
 const RANGE_OPERATORS = new Set([Op.gt, Op.gte, Op.lt, Op.lte, Op.between]);
+const TYPES_COMPARABLES = ["integer", "decimal", "number", "date", "string"]
+const isComparable = (type)=>TYPES_COMPARABLES.includes(type);
 
 export class BaseService {
   #model;
@@ -55,8 +58,9 @@ export class BaseService {
     const maxSize = this.#config.maxSize || 100;
     const limit = Math.min(maxSize, Math.max(1, parseInt(query?.limit, 10) || 20));
     const offset = (page - 1) * limit;
-    const where = this.#buildWhere(query);
-    const include = this.#detailDescriptors().map((descriptor) => ({ model: descriptor.target, as: descriptor.as }));
+    const where = await this.#buildWhere(query);
+    //const include = this.#detailDescriptors().map((descriptor) => ({ model: descriptor.target, as: descriptor.as }));
+    const include = this.#model.getAssociationIncludes();
     const { count, rows } = await this.#model.findAndCountAll({where, limit, offset, order: this.#config.defaultOrder || [], include: include.length ? include : undefined, distinct: Boolean(include.length), plain: true, ...(transaction && { transaction })});
     const pages = Math.ceil(count / limit);
     return { data: rows, pagination: this.#buildPagination({ page, limit, offset, total: count, pages, baseUrl: context?.baseUrl }) };
@@ -65,7 +69,8 @@ export class BaseService {
   async get({ params, query, body, transaction =null } = {}) {
     const context = getContext();
     const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
-    if (!instance) throw new NotFoundError(this.#resourceName());
+    //if (!instance) throw new NotFoundError(this.#resourceName());
+    if (!instance) throw new NotFoundError(this.#model.modelName)
     return { data: instance };
   }
 
@@ -89,7 +94,8 @@ export class BaseService {
   async update({ params, query, body, transaction=null } = {}) {
     const context = getContext();
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
-    const pk = this.#primaryKeyAttribute();
+    //const pk = this.#primaryKeyAttribute();
+    const pk = this.#model.primaryKeyAttribute;
     const data = await this.#schemas.update.validate(masterBody);
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
     const [instance] = await this.#model.update(payload, { where:{[pk]:params.id}, ...(hasDetails && { include }), ...(transaction && { transaction })});
@@ -99,14 +105,16 @@ export class BaseService {
   async remove({ params, query, body, transaction=null } = {}) {
     const context = getContext();
     const instance = await this.#model.findByPk(params.id, {...(transaction && { transaction })});
-    if (!instance) throw new NotFoundError(this.#resourceName());
+    //if (!instance) throw new NotFoundError(this.#resourceName());
+    if (!instance) throw new NotFoundError(this.#model.modelName)
     await instance.destroy({...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
   async createDetail({ params, query, body, transaction=null } = {}) {
     const context = getContext();
-    const {target, foreignKey} = this.#detailDescriptor(params.detail);
+    //const {target, foreignKey} = this.#detailDescriptor(params.detail);
+    const {model:target, foreignKey} = this.#model.getAssociationIncludes().find(a=>a.as==params.detail);
     const parentId = Number.isNaN(Number(params.id)) ? params.id : Number(params.id);
     const data = await target.resourceSchemas.create.validate(body)
     const instance = await target.create({...data, [foreignKey]:parentId}, {...(transaction&&{transaction})})
@@ -115,7 +123,9 @@ export class BaseService {
 
   async updateDetail({ params, query, body, transaction=null } = {}) {
     const context = getContext();
-    const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
+    //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
+    const {model:target, foreignKey} = this.#model.getAssociationIncludes().find(a=>a.as==params.detail)
+    const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute||id];
     const data = await target.resourceSchemas.update.validate(body)
     const where = {[primaryKey]:params.detailId||body[primaryKey], [foreignKey]:params.id}
     const [instance] = await target.update(data, {where, ...(transaction&&{transaction})})
@@ -125,7 +135,9 @@ export class BaseService {
 
   async removeDetail({ params, query, body, transaction=null } = {}) {
     const context = getContext();
-    const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
+    //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
+    const {model:target, foreignKey} = this.#model.getAssociationIncludes().find(a=>a.as==params.detail)
+    const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute||id];
     const where = {[primaryKey]:params.detailId||body?.[primaryKey], [foreignKey]:params.id}
     const instance = await target.findOne({where, ...(transaction&&{transaction})})
     if (!instance) throw new NotFoundError(name);
@@ -146,17 +158,18 @@ export class BaseService {
 
     const masterBody = { ...body };
     for (const key of detailNames) delete masterBody[key];
-    const descriptors = detailNames ? detailNames.map((name) => this.#detailDescriptor(name)) : this.#detailDescriptors();
-    const include = descriptors.map((descriptor) => ({ model: descriptor.target, as: descriptor.as }))
+    //const descriptors = detailNames ? detailNames.map((name) => this.#detailDescriptor(name)) : this.#detailDescriptors();
+    //const include = descriptors.map((descriptor) => ({ model: descriptor.target, as: descriptor.as }))
+    const include = this.#model.getAssociationIncludes();
     
     return { masterBody, include, hasDetails: true };
   }
 
-  #detailDescriptors() {
+  /*#detailDescriptors() {
     return Object.keys(this.#detailsConfig()).map((name) => this.#detailDescriptor(name));
-  }
+  }*/
 
-  #detailDescriptor(name) {
+  /*#detailDescriptor(name) {
     const detailsConfig = this.#detailsConfig();
     const config = detailsConfig[name];
     if (!config) throw new ValidationError(`Detalle "${name}" no estÃ¡ configurado`, { errors: { detail: "No configurado" } });
@@ -175,12 +188,13 @@ export class BaseService {
       parentPrimaryKey: association.source?.primaryKeyAttribute || this.#primaryKeyAttribute(),
     };
   }
-
+*/
+/*
   #association(name) {
     if (this.#model?.associations?.[name]) return this.#model.associations[name];
     return [...new Set(Object.values(this.#model?.associations || {}))].find((association) => association?.as === name) || null;
   }
-
+*/
   #detailsConfig() {
     if (!this.#config.details || typeof this.#config.details !== "object" || Array.isArray(this.#config.details)) return {};
     return this.#config.details;
@@ -189,9 +203,10 @@ export class BaseService {
   #toJsonSchema(schema, operation) {
     if (!schema) return {};
     if (typeof schema.toJsonSchema !== "function") return {};
-    return this.#enrichJsonSchema(normalizeJsonSchema(schema.toJsonSchema()), operation);
+    return schema.toJsonSchema()
+    //return this.#enrichJsonSchema(normalizeJsonSchema(schema.toJsonSchema()), operation);
   }
-
+/*
   #enrichJsonSchema(schema, operation) {
     if (!schema?.properties) return schema;
 
@@ -209,7 +224,8 @@ export class BaseService {
 
     return enriched;
   }
-
+*/
+/*
   #enrichPropertySchema(property, definition) {
     const enriched = { ...property };
     const type = definition.type;
@@ -223,13 +239,15 @@ export class BaseService {
     }
     return enriched;
   }
-
+*/
+  /*
   #resourceName() {
     if (typeof this.#config.resourceName === "string") return this.#config.resourceName;
     if (typeof this.#config.title === "string") return this.#config.title;
     if (typeof this.#config.resource === "string") return this.#config.resource;
     return this.#model?.modelName || this.#config.name || "Recurso";
   }
+  */
 
   #buildPagination({ page, limit, offset, total, pages, baseUrl }) {
     const pagination = { page, limit, offset, total, pages };
@@ -251,31 +269,27 @@ export class BaseService {
     return url.toString();
   }
 
-  #buildWhere(query) {
+  async #buildWhere(query) {
     if (!query) return {};
     const where = {};
     const andFilters = [];
     const whitelist = this.#config.filterWhitelist || [];
-    const definitions = this.#filterDefinitions();
-
+    const definitions = this.#model.attributes;
     for (const [key, value] of Object.entries(query)) {
-      if (key === "page" || key === "limit") continue;
-      const filters = this.#queryFilters(key, value);
-
+      if (["page", "limit"].includes(key)) continue;
+      //const filters = this.#queryFilters(key, value);
+      const [tmp, attribute, operator='eq'] = key.match(/^([a-zA-Z0-9]+)\[([a-zA-Z0-9]+)\]$/)||['', key];
+      if (!FILTER_OPERATORS[operator]) throw new ValidationError(`Operador de filtro "${operator}" no está soportado`);
+      const filters = [{field:attribute, operator: FILTER_OPERATORS[operator], value}]
       for (const filter of filters) {
         if (whitelist.length > 0 && !whitelist.includes(filter.field)) continue;
-
         const definition = definitions[filter.field];
-        if (!definition && Object.keys(definitions).length > 0) {
-          throw new ValidationError(`Filtro "${filter.field}" no está permitido`);
-        }
-
-        const parsedValue = this.#parseFilterValue(filter.field, filter.operator, filter.value, definition);
+        if (!definition && Object.keys(definitions).length > 0) throw new ValidationError(`Filtro "${filter.field}" no está permitido`);
+        const parsedValue = await this.#parseFilterValue(filter.field, filter.operator, filter.value, definition);
         if (filter.operator === Op.eq) {
           where[filter.field] = parsedValue;
           continue;
         }
-
         andFilters.push({ [filter.field]: { [filter.operator]: parsedValue } });
       }
     }
@@ -284,7 +298,7 @@ export class BaseService {
     return where;
   }
 
-  #queryFilters(key, value) {
+  /*#queryFilters(key, value) {
     if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
       const symbolFilters = Object.getOwnPropertySymbols(value).map((operator) => ({ field: key, operator, value: value[operator] }));
       const namedFilters = Object.entries(value).map(([operatorName, operatorValue]) => {
@@ -296,7 +310,7 @@ export class BaseService {
     }
 
     return [{ ...this.#parseFilterKey(key), value }];
-  }
+  }*/
 
   #parseFilterKey(key) {
     const normalizedKey = String(key);
@@ -312,22 +326,18 @@ export class BaseService {
     return { field, operator };
   }
 
-  #parseFilterValue(field, operator, value, definition) {
-    if (operator === Op.in) {
+  async #parseFilterValue(field, operator, value, definition) {
+    if ([Op.in, Op.between].includes(operator)) {
       const values = this.#splitFilterValues(value);
       if (values.length === 0) throw new ValidationError(`Filtro "${field}" in requiere al menos un valor`);
-      return values.map((item) => this.#castFilterValue(field, item, definition));
-    }
-
-    if (operator === Op.between) {
-      const values = this.#splitFilterValues(value);
-      if (values.length !== 2) throw new ValidationError(`Filtro "${field}" between requiere dos valores`);
+      if (operator === Op.between && values.length !== 2)  throw new ValidationError(`Filtro "${field}" between requiere dos valores`);
+      let parsedValues = [];
+      for(const item of values) parsedValues.push(await this.#castFilterValue(field, item, definition))
       this.#assertRangeOperator(field, operator, definition);
-      return values.map((item) => this.#castFilterValue(field, item, definition));
+      return parsedValues;
     }
-
     this.#assertRangeOperator(field, operator, definition);
-    return this.#castFilterValue(field, value, definition);
+    return await this.#castFilterValue(field, value, definition);
   }
 
   #splitFilterValues(value) {
@@ -337,72 +347,23 @@ export class BaseService {
   }
 
   #assertRangeOperator(field, operator, definition) {
-    if (!RANGE_OPERATORS.has(operator) || !definition) return;
+    if(!isComparable(this.#filterType(definition)) && RANGE_OPERATORS.has(operator)) throw new ValidationError(`Filtro "${field}" no soporta operador "${FILTER_OPERATOR_NAMES.get(operator)}"`);
+    /*if (!RANGE_OPERATORS.has(operator) || !definition) return;
     const type = this.#filterType(definition);
     const isComparable = ["integer", "decimal", "number", "date", "string"].includes(type);
     if (!isComparable) {
       const operatorName = FILTER_OPERATOR_NAMES.get(operator) || "filtro";
       throw new ValidationError(`Filtro "${field}" no soporta operador "${operatorName}"`);
-    }
+    }*/
   }
 
-  #castFilterValue(field, value, definition) {
+  async #castFilterValue(field, value, definition) {
     const type = this.#filterType(definition);
-
-    if (value === "" || value === undefined) throw new ValidationError(`Filtro "${field}" tiene un valor inválido`);
-    if (!definition) return value;
-    if (value === null) return null;
-
-    if (type === "integer") {
-      const number = Number(value);
-      if (!Number.isInteger(number)) throw new ValidationError(`Filtro "${field}" debe ser integer`);
-      return number;
-    }
-
-    if (type === "decimal" || type === "number") {
-      const number = Number(value);
-      if (!Number.isFinite(number)) throw new ValidationError(`Filtro "${field}" debe ser number`);
-      return number;
-    }
-
-    if (type === "boolean") {
-      if (value === true || value === false) return value;
-      const normalized = String(value).toLowerCase();
-      if (["true", "1", "yes", "si", "sí"].includes(normalized)) return true;
-      if (["false", "0", "no"].includes(normalized)) return false;
-      throw new ValidationError(`Filtro "${field}" debe ser boolean`);
-    }
-
-    if (type === "date") {
-      const date = value instanceof Date ? value : new Date(value);
-      if (Number.isNaN(date.getTime())) throw new ValidationError(`Filtro "${field}" debe ser date`);
-      return date;
-    }
-
-    return value;
-  }
-
-  #filterDefinitions() {
-    return this.#config.resource?.definition || this.#model?.resourceDefinition?.attributes || {};
-  }
-
-  #primaryKeyAttribute() {
-    const definitions = this.#filterDefinitions();
-    return Object.entries(definitions).find(([, definition]) => definition?.primaryKey)?.[0] || "id";
+    const schema = yep.fromJsonSchema({type: 'object', properties: {[field]:{type}}})
+    return await schema.validateAt(field, {[field]:value});
   }
 
   #filterType(definition) {
-    const type = definition?.type;
-    const typeName = typeof type === "string" ? type : type?.key || type?.constructor?.name || "";
-    const normalized = typeName.toLowerCase();
-
-    if (normalized.includes("integer") || normalized === "int") return "integer";
-    if (normalized.includes("decimal")) return "decimal";
-    if (normalized.includes("number")) return "number";
-    if (normalized.includes("boolean") || normalized === "bool") return "boolean";
-    if (normalized.includes("date")) return "date";
-    if (normalized.includes("string")) return "string";
-    if (normalized.includes("object") || normalized.includes("json")) return "object";
-    return "unknown";
+    return (definition?.type?.key||definition?.type).toLowerCase();
   }
 }
