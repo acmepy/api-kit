@@ -28,7 +28,7 @@ export class BaseService {
     }
 
     const validation = await this.validate(data);
-    if (!validation.ok) return validation;
+    if (!validation.ok) throw validation;
 
     const pendingService = this.client.service("pending");
     const temporaryId = await pendingService.nextTemporaryId();

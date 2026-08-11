@@ -180,6 +180,10 @@ form {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.inline-form input {
+  width: 100%;
+}
+
 .detail-block {
   border: 1px solid #e1e6ed;
   border-radius: 8px;
@@ -196,6 +200,13 @@ form {
   border-radius: 6px;
   color: #a8071a;
   padding: 10px;
+}
+
+.field-error {
+  display: block;
+  font-size: 13px;
+  margin-top: 4px;
+  padding: 6px 8px;
 }
 
 .actions {

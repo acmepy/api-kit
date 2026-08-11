@@ -19,6 +19,8 @@ const state = {
   connectionSource: "inicio",
   editingClienteId: null,
   editingPendingId: null,
+  clienteErrors: {},
+  clienteForm: {},
 };
 
 const services = {
@@ -153,9 +155,18 @@ function clientesPanel() {
       <button type="button" data-action="clientes" ${!ready() || state.loading ? "disabled" : ""}>Actualizar</button>
     </div>
     <form class="inline-form" data-cliente-form>
-      <input name="ruc" placeholder="RUC">
-      <input name="nombre" placeholder="Nombre" required>
-      <input name="email" placeholder="Email" type="email">
+      <div>
+        <input name="ruc" placeholder="RUC" value="${escapeHtml(state.clienteForm.ruc || "")}">
+        ${fieldError("ruc")}
+      </div>
+      <div>
+        <input name="nombre" placeholder="Nombre" value="${escapeHtml(state.clienteForm.nombre || "")}" required>
+        ${fieldError("nombre")}
+      </div>
+      <div>
+        <input name="email" placeholder="Email" type="email" value="${escapeHtml(state.clienteForm.email || "")}">
+        ${fieldError("email")}
+      </div>
       <button type="submit" ${!ready() || state.loading ? "disabled" : ""}>Crear cliente</button>
     </form>
     ${clientesTable()}
@@ -411,17 +422,26 @@ async function loadClientes(wrap = true) {
 
 async function createCliente(form) {
   await run(async () => {
-    const formData = Object.fromEntries(new FormData(form));
-    const body = {
-      nombre: formData.nombre,
-      activo: true,
-    };
-    if (formData.ruc) body.ruc = formData.ruc;
-    if (formData.email) body.email = formData.email;
-    await services.clientes.create(body);
-    form.reset();
-    state.clientes = (await services.clientes.list()).data;
-    state.pending = (await services.pending.list()).data;
+    try {
+      state.clienteErrors = {};
+      const formData = Object.fromEntries(new FormData(form));
+      state.clienteForm = formData;
+      const body = {
+        nombre: formData.nombre,
+        ruc : formData.ruc,
+        email : formData.email,
+        activo: true
+      };
+      const response = await services.clientes.create(body);
+      //if (response.ok === false) throw response;
+      form.reset();
+      state.clienteForm = {};
+      state.clientes = (await services.clientes.list()).data;
+      state.pending = (await services.pending.list()).data;
+    } catch (error) {
+      state.clienteErrors = error.errors || {};
+      throw error;
+    }
   });
 }
 
@@ -662,6 +682,11 @@ function message() {
   if (state.error) return `<p class="alert">${escapeHtml(state.error)}</p>`;
   if (state.loading) return `<p class="muted">Procesando...</p>`;
   return "";
+}
+
+function fieldError(name) {
+  const error = state.clienteErrors[name];
+  return error ? `<small class="field-error">${escapeHtml(error)}</small>` : "";
 }
 
 function defaultDateTimeLocal() {
