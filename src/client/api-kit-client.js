@@ -20,7 +20,8 @@ export class ApiKitClient {
   #baseUrl;
   #fetch;
   #adapter;
-  #servicePrefix;
+  #createAdapter;
+  #prefix;
   #sessionKey;
   #session = null;
   #services = new Map();
@@ -43,9 +44,10 @@ export class ApiKitClient {
     this.#baseUrl = normalizeBaseUrl(options.baseUrl || options.url || "");
     this.#fetch = options.fetch || globalThis.fetch?.bind(globalThis);
     this.#adapter = options.adapter || defaultAdapter(options);
-    this.#servicePrefix = options.servicePrefix || DEFAULT_SERVICE_PREFIX;
-    this.#sessionKey = options.sessionKey || (this.#servicePrefix === DEFAULT_SERVICE_PREFIX ? DEFAULT_SESSION_KEY : `${this.#servicePrefix}:session`);
-    this.#services.set("pending", new PendingService({ client: this, servicePrefix: this.#servicePrefix }));
+    this.#createAdapter = options.createAdapter || ((adapterOptions = {}) => defaultAdapter({ ...options, ...adapterOptions }));
+    this.#prefix = options.prefix || DEFAULT_PREFIX;
+    this.#sessionKey = options.sessionKey || (this.#prefix === DEFAULT_PREFIX ? DEFAULT_SESSION_KEY : `${this.#prefix}:session`);
+    this.#services.set("pending", new PendingService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter }));
     this.#pingInterval = normalizeTimeout(options.pingInterval ?? options.pingIntervalMs, DEFAULT_PING_INTERVAL);
     this.#pingTimeout = normalizeTimeout(options.pingTimeout ?? options.pingTimeoutMs, DEFAULT_PING_TIMEOUT);
     this.#sseWatchdogTimeout = normalizeTimeout(options.sseWatchdogTimeout ?? options.sseWatchdogTimeoutMs, DEFAULT_SSE_WATCHDOG_TIMEOUT);
@@ -132,7 +134,7 @@ export class ApiKitClient {
 
     for (const descriptor of discoverServiceDescriptors(this.#openapi, this.#baseUrl)) {
       if (descriptor.name === "pending") continue;
-      this.#services.set(descriptor.name, new BaseService({ client: this, servicePrefix: this.#servicePrefix, ...descriptor }));
+      this.#services.set(descriptor.name, new BaseService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, ...descriptor }));
     }
 
     await this.#preloadServiceSchemas();
@@ -263,8 +265,7 @@ export class ApiKitClient {
     for (const service of this.#services.values()) {
       if (service.name === "audit") continue;
       if (!service.operations.list) continue;
-      const cacheKey = this.#serviceCacheKey(service.name);
-      const cached = await this.#adapter.get(cacheKey);
+      const cached = (await service.list()).data;
       if (!force && this.#hasCachedServiceData(cached)) {
         results[service.name] = { ok: true, data: cached || [], local: true, skipped: true };
         continue;
@@ -550,12 +551,8 @@ export class ApiKitClient {
   async #clearCachedOpenapi() {
     await this.#adapter.remove(this.#openapiCacheKey());
   }
-  #serviceCacheKey(serviceName) {
-    return `${this.#servicePrefix}:${serviceName}`;
-  }
-
   #openapiCacheKey() {
-    return `${this.#servicePrefix}:openapi`;
+    return `${this.#prefix}:openapi`;
   }
 
   #pendingService() {

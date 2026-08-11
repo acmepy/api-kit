@@ -569,12 +569,12 @@ describe("client public API", () => {
     ]);
   });
 
-  it("uses servicePrefix for session and service cache keys", async () => {
+  it("uses prefix for session and service cache keys", async () => {
     const adapter = new MapAdapter();
     const client = createApiKitClient({
       baseUrl: "http://server/api",
       adapter,
-      servicePrefix: "demo",
+      prefix: "demo",
       fetch: async (url) => {
         const pathname = new URL(String(url)).pathname;
         if (pathname === "/api/login") return jsonResponse({ ok: true, data: { token: "token", user: { id: "admin" } } });

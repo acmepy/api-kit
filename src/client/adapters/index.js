@@ -7,8 +7,20 @@ export { MapAdapter } from "./map-adapter.js";
 export { LocalStorageAdapter } from "./local-storage-adapter.js";
 export { IndexedDbAdapter } from "./indexed-db-adapter.js";
 
-export function defaultAdapter(options = {}) {
-  if (options.storage === "localStorage") return new LocalStorageAdapter();
-  if (options.storage === "indexedDB" || options.storage === "indexdb") return new IndexedDbAdapter();
+export function createAdapter({ type, prefix = "api-kit", service, ...options } = {}) {
+  if (type === "localStorage") return new LocalStorageAdapter({ ...options, prefix, service });
+  if (type === "indexedDB" || type === "indexdb") return new IndexedDbAdapter(options);
   return new MapAdapter();
+}
+
+export function defaultAdapter(options = {}) {
+  const { storage, ...adapterOptions } = options;
+  const storageType = typeof storage === "string" ? storage : undefined;
+  const storageOption = storageType ? {} : { storage };
+  return createAdapter({
+    ...adapterOptions,
+    ...storageOption,
+    type: options.type || storageType,
+    prefix: options.prefix || "api-kit",
+  });
 }

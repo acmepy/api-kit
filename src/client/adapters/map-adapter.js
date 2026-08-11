@@ -8,15 +8,33 @@ export class MapAdapter extends BaseAdapter {
     this.#map = map;
   }
 
+  async getAll() {
+    return [...this.#map.values()];
+  }
+
   async get(key) {
-    return this.#map.get(key);
+    return this.#map.get(key) ?? null;
   }
 
-  async set(key, value) {
-    this.#map.set(key, value);
+  async add(value) {
+    if(Array.isArray(value)) {
+      value.forEach(v => this.put(v.id, v));
+      return value;
+    }
+    this.put(value.id, value);
+    return value;
   }
 
-  async remove(key) {
-    this.#map.delete(key);
+  async put(key, value) {
+    this.put(key, value);
+    return value;
+  }
+
+  async delete(key) {
+    return this.#map.delete(key);
+  }
+
+  async clear() {
+    this.#map.clear();
   }
 }

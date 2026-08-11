@@ -1,102 +1,53 @@
-import { ApiKitClientError } from "../errors.js";
 import { BaseService } from "./base-service.js";
 
 export class PendingService extends BaseService {
-  constructor({ client, servicePrefix }) {
-    super({ client, name: "pending", path: "", operations: {}, schemas: {}, servicePrefix });
+  constructor({ client, prefix }) {
+    super({ client, name: "pending", path: "", operations: {}, schemas: {}, prefix });
   }
 
-  async create(operation = {}) {
-    return super.create(operation, { isPending: true });
+  async list() {
+    const pending = [];
+    for (const service of this.client.services().values()) {
+      if (service === this || typeof service.pending !== "function") continue;
+      const result = await service.pending();
+      pending.push(...(result.data || []));
+    }
+    return { ok: true, data: pending, local: true };
   }
 
-  async update(id, patch = {}) {
-    return super.update(id, patch, { isPending: true });
+  async get() {
+    throw new Error("PendingService.get no implementado");
   }
 
-  async remove(id) {
-    return super.remove(id, { isPending: true });
+  async create() {
+    throw new Error("PendingService.create no implementado");
+  }
+
+  async update() {
+    throw new Error("PendingService.update no implementado");
+  }
+
+  async remove() {
+    throw new Error("PendingService.remove no implementado");
   }
 
   async pull() {
-    throw new ApiKitClientError('No implemntado')
+    throw new Error("PendingService.pull no implementado");
   }
 
-  async pullOne(id) {
-    return this.get(id);
+  async pullOne() {
+    throw new Error("PendingService.pullOne no implementado");
   }
 
-  async push(pendingId = null, options = {}) {
-    if (options.discover !== false && !this.client.services().size) await this.client.syncServices();
-    const pending = (await this.list()).data;
-    const targets = pending.filter((item) => {
-      if (options.service && item.service !== options.service) return false;
-      if (pendingId !== null && Number(item.id) !== Number(pendingId)) return false;
-      return true;
-    });
-    const results = [];
-
-    for (const operation of targets) {
-      results.push(await this.#resendOperation(operation, options));
-    }
-
-    const errors = results.filter((result) => !result.ok);
-    return { ok: errors.length === 0, results, errors };
+  async push() {
+    throw new Error("PendingService.push no implementado");
   }
 
   async nextTemporaryId() {
-    const key = this.#temporaryIdKey();
-    const nextId = Number((await this.client.adapter.get(key)) || 0) - 1;
-    await this.client.adapter.set(key, nextId);
-    return nextId;
+    throw new Error("PendingService.nextTemporaryId no implementado");
   }
 
   async clear() {
-    await this.client.adapter.remove(this.#pendingKey());
-    await this.client.adapter.remove(this.#temporaryIdKey());
-  }
-
-  async #resendOperation(operation, options = {}) {
-    const service = this.client.service(operation.service);
-
-    try {
-      let response;
-      if (operation.operation === "create") {
-        response = await service.request("create", { body: operation.data });
-      } else if (operation.operation === "update") {
-        response = await service.request("update", { params: { id: operation.serverId || operation.localId }, body: operation.data });
-      } else if (operation.operation === "remove") {
-        response = await service.request("remove", { params: { id: operation.serverId || operation.localId } });
-      } else {
-        throw new Error(`Operacion pendiente "${operation.operation}" no soportada`);
-      }
-
-      await this.remove(operation.id);
-      if (operation.operation === "create") {
-        await service.remove(operation.localId ?? operation.id, { isPending: true });
-        if (response.data?.id !== undefined) await service.create(response.data, { isPending: true });
-      } else if (operation.operation === "update") {
-        if (response.data?.id !== undefined) await service.create(response.data, { isPending: true });
-      } else if (operation.operation === "remove") {
-        await service.remove(operation.localId, { isPending: true });
-      }
-      return { ok: true, id: operation.id, response };
-    } catch (error) {
-      if (options.throwAuthErrors && error?.status === 401) throw error;
-      const errors = error.errors || error.response?.errors || null;
-      await this.update(operation.id, { status: "error", message: error.message, errors });
-      const localId = operation.localId ?? operation.id;
-      const localRecord = { ...operation.data, id: localId, pending: true, status: "error", message: error.message, errors };
-      await service.create(localRecord, { isPending: true });
-      return { ok: false, id: operation.id, error: error.message, errors };
-    }
-  }
-
-  #temporaryIdKey() {
-    return `${this.servicePrefix}:temporaryId`;
-  }
-
-  #pendingKey() {
-    return `${this.servicePrefix}:pending`;
+    throw new Error("PendingService.clear no implementado");
   }
 }

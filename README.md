@@ -469,7 +469,7 @@ El adapter guarda:
 - `api-kit:pending`
 - `api-kit:temporaryId`
 
-Puedes cambiar el prefijo con `servicePrefix`.
+Puedes cambiar el prefijo con `prefix`.
 
 ## Apps Estaticas
 
