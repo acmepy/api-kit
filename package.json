@@ -1,6 +1,6 @@
 {
   "name": "api-kit",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -15,28 +15,37 @@
   "license": "MIT",
   "author": "Hugo",
   "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
-    "./server": "./src/server/index.js",
-    "./client": "./src/client/index.js",
-    "./cli": "./src/cli/index.js"
+    "./server": "./dist/api-kit-server.js",
+    "./client": "./dist/api-kit-client.js",
+    "./cli": "./dist/api-kit-cli.js"
   },
   "scripts": {
+    "build": "rollup -c",
+    "build:min": "rollup -c --environment MINIFY:true",
+    "prepack": "npm run build",
     "test": "node --test",
+    "test:mysql": "node --env-file=.env --test --test-concurrency=1",
     "dev": "node ./example/app.js",
-    "lint": "eslint src tests example"
+    "dev:mysql": "node --env-file=.env ./example/app.js",
+    "lint": "eslint src tests example rollup.config.js eslint.config.js"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",
     "express": "^5.1.0",
     "iam": "github:acmepy/iam",
-    "seq": "github:acmepy/seq",
+    "seq": "file:../seq-orm/seq",
     "yep": "github:acmepy/yep"
   },
   "peerDependencies": {
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "express-rate-limit": "^8.6.0",
-    "helmet": "^8.3.0", 
+    "helmet": "^8.3.0",
     "logger": "github:acmepy/logger-js"
   },
   "peerDependenciesMeta": {
@@ -54,12 +63,15 @@
     }
   },
   "devDependencies": {
+    "@rollup/plugin-terser": "^1.0.0",
     "better-sqlite3": "^12.11.1",
-    "eslint": "^10.7.0",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
+    "eslint": "^10.7.0",
     "express-rate-limit": "^8.6.0",
-    "helmet": "^8.3.0"
+    "helmet": "^8.3.0",
+    "mysql2": "^3.23.3",
+    "rollup": "^4.0.0"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true

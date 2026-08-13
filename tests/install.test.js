@@ -6,7 +6,7 @@ import path from "node:path";
 import os from "node:os";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import AdmZip from "adm-zip";
-import { Seq, SQLiteAdapter } from "seq";
+import { createTestSeq } from "./helpers/seq.js";
 import { createApiKit } from "../src/server/index.js";
 import { installApp, normalizeInstallableApps, renderInstallHtml, renderInstallScript } from "../src/server/install/install.services.js";
 
@@ -200,8 +200,7 @@ describe("install routes", () => {
 });
 
 async function testApi(options) {
-  const adapter = new SQLiteAdapter({ database: ":memory:" });
-  const seq = new Seq({ adapter, logging: false });
+  const seq = createTestSeq({ logging: false });
   const api = await createApiKit({ seq, ...options });
   await seq.authenticate();
   await seq.init();

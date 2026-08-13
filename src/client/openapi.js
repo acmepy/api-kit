@@ -1,5 +1,7 @@
 import { fallbackOrigin } from "./utils.js";
 
+const INTERNAL_SERVICES = new Set(["audit", "auth", "openapi", "postman", "session", "schema", "pending", "system", "install"]);
+
 export function discoverServiceDescriptors(openapi, baseUrl = "") {
   const byName = new Map();
   const pathPrefix = pathnamePrefix(baseUrl);
@@ -8,7 +10,7 @@ export function discoverServiceDescriptors(openapi, baseUrl = "") {
     for (const [method, operation] of Object.entries(methods || {})) {
       const serviceName = operation.tags?.[0];
       const serviceMethod = serviceMethodFor(operation.operationId, serviceName);
-      if (!serviceName || !serviceMethod || serviceName === "auth" || serviceName === "openapi") continue;
+      if (!serviceName || !serviceMethod || INTERNAL_SERVICES.has(serviceName)) continue;
 
       const clientPath = stripPathPrefix(path, pathPrefix);
       if (!byName.has(serviceName)) {

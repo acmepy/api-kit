@@ -7,12 +7,13 @@ export class SessionService extends BaseService {
 
   async list() {
     const session = await this.adapter.get("session");
-    return { ok: true, data: session ? [session] : [], local: true };
+    return { ok: true, data: session };
   }
 
   async pull() {
     const response = await this.client.request(this.path, { method: "GET" });
-    if (response.data) await this.adapter.put("session", { id: "session", ...response.data });
+    await this.adapter.clear();
+    if (response.data) await this.adapter.add(response.data);
     return response;
   }
 
@@ -20,8 +21,10 @@ export class SessionService extends BaseService {
     throw new Error("SessionService.get no implementado");
   }
 
-  async create() {
-    throw new Error("SessionService.create no implementado");
+  async create(data) {
+    await this.adapter.clear();
+    if (data) await this.adapter.add(data);
+    return { ok: true, data };
   }
 
   async update() {
@@ -62,9 +65,5 @@ export class SessionService extends BaseService {
 
   async pending() {
     throw new Error("SessionService.pending no implementado");
-  }
-
-  async clear() {
-    throw new Error("SessionService.clear no implementado");
   }
 }

@@ -9,13 +9,13 @@ export class BaseService {
     this.name = name;
     this.path = path;
     this.operations = operations;
-    this.schemas = schemas;
+    //this.schemas = schemas;
     this.prefix = prefix;
-    this.adapter = createAdapter?.({ service: name, prefix: this.prefix }) || client.adapter;
+    this.adapter = createAdapter?.({ service: name, prefix: this.prefix });
   }
 
   async list() {
-    return { ok: true, data: await this.adapter.getAll(), local: true };
+    return { ok: true, data: await this.adapter.getAll() };
   }
 
   async pending() {
@@ -25,34 +25,52 @@ export class BaseService {
 
   async get(id) {
     const data = await this.adapter.get(id);
-    return { ok: Boolean(data), data, local: true };
+    return { ok: Boolean(data), data };
   }
 
   async create(data = {}, options = {}) {
-    const isPending = options.isPending || true;
     const record = await this.validate(data, "create");
-    if (!isPending) return { ok: true, data: await this.add(data) }
-    data = {...data, id: this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
+    const pending = options.pending ?? !this.client.connected?.();
+    if (!pending) {
+      const response = await this.#send("create", { body: record });
+      if (!response.ok) await this.adapter.add(response.data);
+      return response;
+    }
+    data = {...record, id: record.id ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
     await this.adapter.add(data);
-    return { ok: true, data:this.push(data.id) };
+    this.#throwPushError(await this.pushOne(data));
+    return { ok: true, data };
   }
 
   async update(id, data = {}, options = {}) {
-    const isPending = options.isPending || true;
     const current = await this.adapter.get(id);
-    const record = await this.validate({...current, ...data}, "update");
-    if(!isPending)return { ok: true, data:await this.adapter.put(id, data) };
+    const record = await this.validate({...current, ...data, id}, "update");
+    const pending = options.pending ?? !this.client.connected?.();
+    if(!pending) {
+      const response = await this.#send("update", { params: { id }, body: data });
+      const nextRecord = response.data || record;
+      await this.adapter.put(nextRecord.id ?? id, nextRecord);
+      return response;
+    }
     data = {...current, ...data, pending: true, operation:'update', status: "pending", message: "", errors: null };
-    await this.adapter.put(id, data)
-    return { ok: true, data:this.push(data.id) };
+    await this.adapter.put(data.id ?? id, data)
+    const ret = await this.pushOne(data);
+    if(!ret.ok) throw ret;
+    return { ok: true, data };
   }
 
   async remove(id, options = {}) {
-    const isPending = options.isPending || true;
-    if(isPending) return { ok: true, data:await this.adapter.remove(id) };
-    const data = {...await this.adapter.get(id), pending: true, operation:'remove', status: "pending", message: "", errors: null };
-    await this.adapter.put(id, data);
-    return { ok: true, data:this.push(data.id) };
+    const current = await this.adapter.get(id);
+    const pending = options.pending ?? !this.client.connected?.();
+    if (!pending) {
+      const response = await this.#send("remove", { params: { id } });
+      await this.adapter.delete(id);
+      return response;
+    }
+    const data = {...current, id, pending: true, operation:'remove', status: "pending", message: "", errors: null };
+    await this.adapter.put(data.id, data);
+    this.#throwPushError(await this.pushOne(data));
+    return { ok: true, data };
   }
 
   async pull(query = {}) {
@@ -85,27 +103,48 @@ export class BaseService {
   }
 
   async push(id = null) {
-    const targets = id === null ? (await this.pending()) : [await this.adapter.get(id)];
+    const targets = id === null ? (await this.pending()).data : [await this.adapter.get(id)].filter(Boolean);
     const results = [];
-    for (const record of targets) results.push(await this.#pushRecord(record));
+    for (const record of targets) results.push(await this.pushOne(record));
     const errors = results.filter((result) => !result.ok);
     return { ok: errors.length === 0, results, errors };
   }
 
+  async pushOne(record) {
+    try {
+      const response = await this.#sendPendingOperation(record);
+      if (record.operation === "create") await this.adapter.delete(record.id);
+      return { ok: true, id: record.id, operation: record.operation, response };
+    } catch (error) {
+      const errors = error.errors || error.response?.errors || null;
+      const nextRecord = {...record, pending: true, status: "error", message: error.message, errors};
+      await this.adapter.put(record.id, nextRecord);
+      return { ok: false, id: record.id, operation: record.operation, error: error.message, errors };
+    }
+  }
+
   async schema() {
-    throw new Error('not implemented');
+    return this.request("schema");
   }
 
   async validate(data = {}, operation = "create") {
-    return data;
+    const schema = await this.#yepSchema(operation);
+    if (!schema) return data;
+    return schema.validate(data);
   }
 
   async validateAt(attribute, data = {}, operation = "create") {
-    throw new Error('not implemented');
+    const schema = await this.#yepSchema(operation);
+    if (!schema) return data?.[attribute];
+    return schema.validateAt(attribute, data);
   }
 
   permissions(operation) {
     return [...(this.operations[operation]?.permissions || [])];
+  }
+
+  async request(operationName, { params = {}, query = {}, body } = {}) {
+    return this.#send(operationName, { params, query, body });
   }
 
   async #send(operationName, { params = {}, query = {}, body } = {}) {
@@ -116,19 +155,6 @@ export class BaseService {
 
   async clear() {
     await this.adapter.clear();
-  }
-
-  async #pushRecord(record) {
-    try {
-      const response = await this.#sendPendingOperation(record);
-      //await this.#applyPushedRecord(record, response);
-      return { ok: true, id: record.id, operation: record.operation, response };
-    } catch (error) {
-      const errors = error.errors || error.response?.errors || null;
-      const nextRecord = {...record, pending: true, status: "error", message: error.message, errors};
-      await this.adapter.put(record.id, nextRecord);
-      return { ok: false, id: record.id, operation: record.operation, error: error.message, errors };
-    }
   }
 
   async #sendPendingOperation(record) {
@@ -154,6 +180,25 @@ export class BaseService {
     return body;
   }
 
+  #throwPushError(result) {
+    if (result.ok) return;
+    const error = new Error(result.error);
+    error.errors = result.errors || null;
+    error.response = result;
+    throw error;
+  }
+
+  async #yepSchema(operation) {
+    if (!this.schemas) {
+      if (typeof this.client.service !== "function") return null;
+      const { id, ...schemas } = (await this.client.service("schema").get(this.name))?.data || {};
+      this.schemas = schemas;
+    }
+    const schema = this.schemas?.[operation];
+    return schema ? yep.fromJsonSchema(schema) : null;
+  }
+
+
   #nextPageQuery(response, query) {
     const pagination = response.pagination || response.meta?.pagination || response.meta || {};
     const next = pagination.next || pagination.nextPage || response.next || response.links?.next;
@@ -176,19 +221,4 @@ function buildYepSchemas(schemas) {
     Object.entries(schemas || {}).map(([name, schema]) => [name, yep.fromJsonSchema(schema)]),
   );
 }
-
-function validationResult(result) {
-  if (isValidationSummary(result)) return { ok: false, message: result.message, errors: result.errors || {} };
-  return { ok: true, message: "OK", errors: null };
-}
-
-function isValidationSummary(result) {
-  return result && typeof result === "object" && "errors" in result;
-}
-
-
-
-
-
-
 

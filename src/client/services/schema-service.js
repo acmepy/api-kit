@@ -6,15 +6,15 @@ export class SchemaService extends BaseService {
   }
 
   async create(data = {}) {
-    return super.create(data, { isPending: true });
+    throw new Error("SchemaService.list no implementado");
   }
 
   async list() {
     throw new Error("SchemaService.list no implementado");
   }
 
-  async update() {
-    throw new Error("SchemaService.update no implementado");
+  async update(name, data = {}) {
+    return { ok: true, data: await this.adapter.put(name, { id: name, ...data }) };
   }
 
   async remove() {
@@ -55,9 +55,5 @@ export class SchemaService extends BaseService {
 
   permissions() {
     throw new Error("SchemaService.permissions no implementado");
-  }
-
-  async clear() {
-    throw new Error("SchemaService.clear no implementado");
   }
 }

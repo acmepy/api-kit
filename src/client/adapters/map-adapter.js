@@ -26,7 +26,7 @@ export class MapAdapter extends BaseAdapter {
   }
 
   async put(key, value) {
-    this.put(key, value);
+    this.#map.set(key, value);
     return value;
   }
 

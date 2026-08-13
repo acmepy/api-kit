@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { Seq, SQLiteAdapter } from "seq";
+import { createTestSeq } from "./helpers/seq.js";
 import { BaseService, defineResource, NotFoundError, ValidationError, runWithContext } from "../src/server/index.js";
 
 describe("BaseService list filters", () => {
@@ -20,8 +20,7 @@ describe("BaseService list filters", () => {
       },
     });
 
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, models: [productResource.model], logging: false });
+    const seq = createTestSeq({ models: [productResource.model], logging: false });
     await seq.authenticate();
     await seq.init();
     await seq.sync({ force: true });
@@ -145,8 +144,7 @@ describe("BaseService list filters", () => {
       },
     });
 
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, models: [skuResource.model], logging: false });
+    const seq = createTestSeq({ models: [skuResource.model], logging: false });
     await seq.authenticate();
     await seq.init();
     await seq.sync({ force: true });
@@ -186,8 +184,7 @@ describe("BaseService list filters", () => {
       },
     });
 
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, models: [skuResource.model], logging: false });
+    const seq = createTestSeq({ models: [skuResource.model], logging: false });
     await seq.authenticate();
     await seq.init();
     await seq.sync({ force: true });
@@ -220,8 +217,7 @@ describe("BaseService list filters", () => {
       },
     });
 
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, models: [skuResource.model], logging: false });
+    const seq = createTestSeq({ models: [skuResource.model], logging: false });
     await seq.authenticate();
     await seq.init();
     await seq.sync({ force: true });
@@ -256,8 +252,7 @@ describe("BaseService list filters", () => {
       },
     });
 
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, models: [taskResource.model], logging: false });
+    const seq = createTestSeq({ models: [taskResource.model], logging: false });
     await seq.authenticate();
     await seq.init();
     await seq.sync({ force: true });
@@ -307,9 +302,13 @@ describe("BaseService list filters", () => {
   it("returns seq unique constraint errors directly", async () => {
     await assert.rejects(
       () => service.create({ body: { name: "Duplicate", email: "basic@test.com", price: 40 } }),
-      (error) =>
-        error.code === "SQLITE_CONSTRAINT_UNIQUE" &&
-        /UNIQUE constraint failed: products\.email/.test(error.message),
+      (error) => {
+        assert.equal(error.status, 409);
+        assert.equal(error.code, "CONFLICT");
+        assert.deepEqual(error.errors, { email: "Ya existe un registro con este valor" });
+        assert.equal(error.details.constraint.type, "unique");
+        return true;
+      },
     );
   });
 });
@@ -382,8 +381,7 @@ describe("BaseService details", () => {
     ventaResource.model.hasMany(cobroResource.model, { as: "cobros", foreignKey: "ventaId" });
     cobroResource.model.belongsTo(ventaResource.model, { as: "venta", foreignKey: "ventaId" });
 
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    seq = new Seq({ adapter, models: [ventaResource.model, itemResource.model, cobroResource.model], logging: false });
+    seq = createTestSeq({ models: [ventaResource.model, itemResource.model, cobroResource.model], logging: false });
     await seq.authenticate();
     await seq.init();
     await seq.sync({ force: true });

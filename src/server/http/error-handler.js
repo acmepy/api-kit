@@ -1,29 +1,19 @@
-import { AppError } from "../errors/app-error.js";
 import { getContext } from "../context/request-context.js";
 import { errorLogger } from "../logger/index.js";
 
 export function errorHandler(err, req, res, _next) {
   if (res.headersSent) return;
 
-  const ctx = getContext();
-  const txId = ctx?.txId || req.headers["x-transaction-id"] || null;
-
-  if (err instanceof AppError || (err.status && err.code)) {
-    errorLogger(err, req, { txId, status: err.status, code: err.code, errors: err.errors });
-    const body = { ok: false, code: err.code, message: err.message, errors: err.errors || null };
-    if (txId) body.txId = txId;
-    if (process.env.NODE_ENV !== "production" && err.stack) body.stack = err.stack;
-    return res.status(err.status).json(body);
-  }
-
-  if (err.type === "entity.parse.failed") {
-    errorLogger(err, req, { txId, status: 400, code: "INVALID_JSON" });
-    return res.status(400).json({ ok: false, code: "INVALID_JSON", message: "JSON invalido", txId });
-  }
-
+  const txId = getContext()?.txId || req.headers["x-transaction-id"] || null;
   const status = err.status || err.statusCode || 500;
-  errorLogger(err, req, { txId, status, code: "INTERNAL_ERROR" });
-  const body = { ok: false, code: "INTERNAL_ERROR", message: process.env.NODE_ENV === "production" ? "Error interno" : err.message, txId };
+  const code = err.type === "entity.parse.failed" ? "INVALID_JSON" : err.code || "INTERNAL_ERROR";
+  const errors = err.errors && typeof err.errors === "object" ? err.errors : {};
+  const message = status >= 500 && process.env.NODE_ENV === "production" ? "Error interno" : err.message;
+
+  errorLogger(err, req, { txId, status, code, message, errors, stack: status >= 500 ? err.stack : {} });
+
+  const body = { ok: false, code, message, errors, txId };
   if (process.env.NODE_ENV !== "production") body.stack = err.stack;
+
   res.status(status).json(body);
 }

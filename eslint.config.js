@@ -1,6 +1,9 @@
 export default [
   {
-    files: ['src/**/*.js', 'tests/**/*.js', 'examples/**/*.js'],
+    ignores: ['dist/**', 'node_modules/**'],
+  },
+  {
+    files: ['src/**/*.js', 'tests/**/*.js', 'example/**/*.js', '*.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module'

@@ -1,5 +1,5 @@
 import { createApiKit } from "api-kit/server";
-import { Seq, SQLiteAdapter } from "seq";
+import { MySQLAdapter, Seq, SQLiteAdapter } from "seq";
 import express from "express";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -16,13 +16,7 @@ async function main() {
   const dataDir = path.join(rootDir, "example/data");
   await fs.mkdir(dataDir, { recursive: true });
 
-  const adapter = new SQLiteAdapter({
-    database: path.join(dataDir, "api-kit.sqlite"),
-    naming: {
-      tables: "snake_case",
-      columns: "snake_case",
-    }
-  });
+  const adapter = createAdapter({ dataDir });
   const seq = new Seq({ adapter, logging:false });
 
   const api = await createApiKit({
@@ -40,7 +34,7 @@ async function main() {
     logging: logger,
   });
 
-  api.app.use("/api-kit/client", express.static(path.join(rootDir, "src/client")));
+  api.app.use("/api-kit/dist", express.static(path.join(rootDir, "dist")));
   api.app.use("/vendor/yep", express.static(path.join(rootDir, "node_modules/yep/dist")));
 
   await seq.authenticate();
@@ -49,6 +43,7 @@ async function main() {
 
   const port = process.env.PORT || 3000;
   api.app.listen(port, () => {
+    console.log(`[api-kit] adapter: ${adapterName()}`);
     console.log(`[api-kit] basic example running on http://localhost:${port}/basic`);
     console.log(`[api-kit] client example running on http://localhost:${port}/client`);
   });
@@ -58,6 +53,41 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+function createAdapter({ dataDir }) {
+  const naming = {
+    tables: "snake_case",
+    columns: "snake_case",
+  };
+
+  if (adapterName() === "mysql") {
+    return new MySQLAdapter({
+      host: process.env.MYSQL_HOST || "localhost",
+      port: numberEnv("MYSQL_PORT", 3306),
+      user: process.env.MYSQL_USER || "root",
+      password: process.env.MYSQL_PASSWORD,
+      database: process.env.MYSQL_DATABASE || "seq",
+      connectTimeout: numberEnv("MYSQL_CONNECT_TIMEOUT", 10000),
+      connectionLimit: numberEnv("MYSQL_CONNECTION_LIMIT", 10),
+      naming,
+    });
+  }
+
+  return new SQLiteAdapter({
+    database: process.env.SQLITE_DATABASE || path.join(dataDir, "api-kit.sqlite"),
+    naming,
+  });
+}
+
+function adapterName() {
+  const value = process.env.API_KIT_ADAPTER || process.env.SEQ_ADAPTER || (process.env.SEQ_MYSQL_TEST ? "mysql" : "sqlite");
+  return String(value).toLowerCase();
+}
+
+function numberEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) ? value : fallback;
+}
 
 async function seedIam(api) {
   const models = api.auth?.models;

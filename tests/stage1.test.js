@@ -7,7 +7,8 @@ import yep from "yep";
 import { createApiKit, defineResource } from "../src/server/index.js";
 import { getContext } from "../src/server/index.js";
 import { normalizeModule } from "../src/server/config/config-normalizer.js";
-import { Seq, SQLiteAdapter, DataTypes } from "seq";
+import { DataTypes } from "seq";
+import { createTestSeq } from "./helpers/seq.js";
 
 const clienteResource = defineResource({
   modelName: "Cliente",
@@ -58,10 +59,10 @@ function request(method, path, body) {
 
 let server;
 let api;
+let seq;
 
 before(async () => {
-  const adapter = new SQLiteAdapter({ database: ":memory:" });
-  const seq = new Seq({ adapter, models: [clienteResource.model, productoResource.model] });
+  seq = createTestSeq({ models: [clienteResource.model, productoResource.model], shared: true });
   await seq.authenticate();
   await seq.init();
   await seq.sync({ force: true });
@@ -113,6 +114,7 @@ before(async () => {
 
 after(async () => {
   await api.close();
+  await seq.close();
   await new Promise((resolve) => server.close(resolve));
 });
 
@@ -204,13 +206,12 @@ describe("Etapa 1 - Nucleo", () => {
       assert.equal(personResource.schemas.create.shapeDefinition.fullName, undefined);
       assert.equal(personResource.schemas.update.shapeDefinition.fullName, undefined);
 
-      const adapter = new SQLiteAdapter({ database: ":memory:" });
-      const seq = new Seq({ adapter, models: [personResource.model], logging: false });
+      const seq = createTestSeq({ models: [personResource.model], logging: false });
       await seq.authenticate();
       await seq.init();
       await seq.sync({ force: true });
 
-      const schema = adapter.schemas.get("people");
+      const schema = seq.adapter.schemas.get("people");
       assert.equal(schema.columns.fullName, undefined);
       assert.deepEqual(schema.virtualAttributes, ["fullName"]);
 

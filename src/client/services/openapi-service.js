@@ -1,15 +1,15 @@
 import { BaseService } from "./base-service.js";
 
 export class OpenapiService extends BaseService {
-  constructor({ client, prefix, createAdapter }) {
-    super({ client, name: "openapi", path: "", operations: {}, schemas: {}, prefix, createAdapter });
-  }
-
-  async create(data = {}) {
-    return super.create(data, { isPending: true });
+  constructor({ client, prefix, createAdapter, path = "/openapi.json" }) {
+    super({ client, name: "openapi", path, operations: {}, schemas: {}, prefix, createAdapter });
   }
 
   async list() {
+    throw new Error("OpenapiService.list no implementado");
+  }
+
+  async create(data = {}) {
     throw new Error("OpenapiService.list no implementado");
   }
 
@@ -22,7 +22,10 @@ export class OpenapiService extends BaseService {
   }
 
   async pull() {
-    throw new Error("OpenapiService.pull no implementado");
+    const records = await this.client.request(this.path, { method: "GET", cache: "no-store" });
+    await this.adapter.clear();
+    await this.adapter.put("document", records);
+    return records;
   }
 
   async pullOne() {
@@ -57,7 +60,4 @@ export class OpenapiService extends BaseService {
     throw new Error("OpenapiService.permissions no implementado");
   }
 
-  async clear() {
-    throw new Error("OpenapiService.clear no implementado");
-  }
 }

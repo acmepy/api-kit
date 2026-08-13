@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { Seq, SQLiteAdapter } from "seq";
+import { createTestSeq } from "./helpers/seq.js";
 import { createApiKit } from "../src/server/index.js";
 
 const modules = [
@@ -19,8 +19,7 @@ const modules = [
 
 describe("auth", () => {
   it("logs in, authorizes bearer/basic requests, checks permissions, and logs out", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -137,8 +136,7 @@ describe("auth", () => {
   });
 
   it("delegates bearer-only auth challenges to iam", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",

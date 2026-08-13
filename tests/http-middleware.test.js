@@ -2,23 +2,24 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { Seq, SQLiteAdapter } from "seq";
+import { createTestSeq } from "./helpers/seq.js";
 import { createApiKit, defineResource } from "../src/server/index.js";
 
-const loggedClienteResource = defineResource({
-  modelName: "LoggedCliente",
-  tableName: "logged_clientes",
-  attributes: {
-    id: { type: "integer", primaryKey: true, autoIncrement: true },
-    ruc: { type: "string", unique: true, maxLength: 20 },
-    nombre: { type: "string", allowNull: false },
-  },
-});
+function loggedClienteResource() {
+  return defineResource({
+    modelName: "LoggedCliente",
+    tableName: "logged_clientes",
+    attributes: {
+      id: { type: "integer", primaryKey: true, autoIncrement: true },
+      ruc: { type: "string", unique: true, maxLength: 20 },
+      nombre: { type: "string", allowNull: false },
+    },
+  });
+}
 
 describe("http middleware", () => {
   it("returns an express app with routes and error handling mounted", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -58,8 +59,7 @@ describe("http middleware", () => {
   });
 
   it("uses and returns the provided express app", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const app = express();
     app.get("/health", (_req, res) => res.json({ ok: true }));
     const api = await createApiKit({
@@ -91,8 +91,7 @@ describe("http middleware", () => {
   });
 
   it("can enable cors, helmet, and compression from createApiKit options", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -132,8 +131,7 @@ describe("http middleware", () => {
   });
 
   it("can enable rate limit and trust proxy from createApiKit options", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -174,8 +172,7 @@ describe("http middleware", () => {
   });
 
   it("can parse text/plain bodies while coexisting with express json", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -219,8 +216,7 @@ describe("http middleware", () => {
   });
 
   it("serves a package welcome message at the base path", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       baseDir: process.cwd(),
@@ -255,8 +251,7 @@ describe("http middleware", () => {
   });
 
   it("parses application/json bodies by default", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -292,8 +287,7 @@ describe("http middleware", () => {
   });
 
   it("creates master-detail records from inline detail module definitions", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -360,8 +354,7 @@ describe("http middleware", () => {
   });
 
   it("can serve static app files with spa fallback from modules config", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -402,8 +395,7 @@ describe("http middleware", () => {
   });
 
   it("serves the basic example without the client package or browser persistence", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -441,8 +433,7 @@ describe("http middleware", () => {
   });
 
   it("serves the client example using only the client package for API calls", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -508,8 +499,7 @@ describe("http middleware", () => {
   });
 
   it("can merge static app module entries from multiple module files", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       modules: ["./tests/fixtures/static-bundle-a.js", "./tests/fixtures/static-bundle-b.js"],
@@ -540,8 +530,7 @@ describe("http middleware", () => {
   });
 
   it("ignores staticFiles passed directly to createApiKit", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       modules: [],
@@ -568,8 +557,7 @@ describe("http middleware", () => {
   });
 
   it("ignores staticFiles and static exports from module bundles", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       modules: "./tests/fixtures/legacy-static-bundle.js",
@@ -598,8 +586,7 @@ describe("http middleware", () => {
   });
 
   it("logs requests through the api-kit logger", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const infos = [];
     const api = await createApiKit({
       seq,
@@ -649,8 +636,7 @@ describe("http middleware", () => {
   });
 
   it("logs HTTP errors through configured logging levels", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const warnings = [];
     const errors = [];
     const api = await createApiKit({
@@ -666,7 +652,7 @@ describe("http middleware", () => {
         {
           name: "clientes",
           basePath: "/clientes",
-          resource: loggedClienteResource,
+          resource: loggedClienteResource(),
           endpoints: {
             ruc: { method: "get", path: "/ruc/:ruc", summary: "Buscar por RUC" },
           },
@@ -729,6 +715,52 @@ describe("http middleware", () => {
       await close(server);
     }
   });
+
+  it("returns conflict errors for duplicated unique values", async () => {
+    const seq = createTestSeq({ logging: false });
+    const api = await createApiKit({
+      seq,
+      basePath: "/api",
+      modules: [
+        {
+          name: "clientes",
+          basePath: "/clientes",
+          resource: loggedClienteResource(),
+        },
+      ],
+    });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const server = await listen(api.app);
+
+    try {
+      const first = await request(server, "POST", "/api/clientes", {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruc: "80000000-0", nombre: "Ana" }),
+      });
+      const duplicated = await request(server, "POST", "/api/clientes", {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruc: "80000000-0", nombre: "Ana duplicada" }),
+      });
+      const list = await request(server, "GET", "/api/clientes");
+
+      assert.equal(first.status, 200);
+      assert.equal(duplicated.status, 409);
+      assert.equal(duplicated.body.ok, false);
+      assert.equal(duplicated.body.code, "CONFLICT");
+      assert.match(duplicated.body.message, /UNIQUE constraint failed/);
+      assert.deepEqual(duplicated.body.errors, { ruc: "Ya existe un registro con este valor" });
+      assert.equal(list.status, 200);
+      assert.equal(list.body.data.length, 1);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
 });
 
 function listen(app) {

@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { Seq, SQLiteAdapter } from "seq";
+import { createTestSeq } from "./helpers/seq.js";
 import { createApiKit } from "../src/server/index.js";
 
 const modules = [
@@ -47,8 +47,7 @@ const modules = [
 
 describe("audit", () => {
   it("audits enabled modules and skips disabled/audit modules", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({ seq, audit: true, modules });
 
     await seq.authenticate();
@@ -70,8 +69,7 @@ describe("audit", () => {
   });
 
   it("audits upsert creates and updates", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({ seq, audit: true, modules });
 
     await seq.authenticate();
@@ -97,8 +95,7 @@ describe("audit", () => {
   });
 
   it("exposes audit changes since a date", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
@@ -134,8 +131,7 @@ describe("audit", () => {
   });
 
   it("filters audit changes by the user's list permission on the changed resource", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -175,8 +171,7 @@ describe("audit", () => {
   });
 
   it("audits IAM session changes without exposing them through changes or sse events", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -235,8 +230,7 @@ describe("audit", () => {
   });
 
   it("streams audit changes over sse", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
@@ -268,8 +262,7 @@ describe("audit", () => {
   });
 
   it("exposes basic active sse client information", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
@@ -309,8 +302,7 @@ describe("audit", () => {
   });
 
   it("streams audit updates over sse", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
@@ -343,8 +335,7 @@ describe("audit", () => {
   });
 
   it("streams audit deletes over sse", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
@@ -378,8 +369,7 @@ describe("audit", () => {
   });
 
   it("uses the configured audit sse heartbeat timeout", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({ seq, basePath: "/api", audit: { heartbeatTimeout: 10 }, modules });
 
     await seq.authenticate();
@@ -406,8 +396,7 @@ describe("audit", () => {
   });
 
   it("closes authenticated sse streams when the bearer token expires", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -450,8 +439,7 @@ describe("audit", () => {
   });
 
   it("streams authenticated audit changes created inside service transactions", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",
@@ -498,8 +486,7 @@ describe("audit", () => {
   });
 
   it("closes authenticated sse streams when the iam session is deactivated", async () => {
-    const adapter = new SQLiteAdapter({ database: ":memory:" });
-    const seq = new Seq({ adapter, logging: false });
+    const seq = createTestSeq({ logging: false });
     const api = await createApiKit({
       seq,
       basePath: "/api",

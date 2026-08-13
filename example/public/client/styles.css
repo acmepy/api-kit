@@ -203,6 +203,7 @@ form {
 }
 
 .field-error {
+  color: #a8071a;
   display: block;
   font-size: 13px;
   margin-top: 4px;

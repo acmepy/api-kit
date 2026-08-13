@@ -3,6 +3,7 @@ import { createApiKitClient, LocalStorageAdapter } from "api-kit/client";
 const client = createApiKitClient({
   baseUrl: "/api",
   adapter: new LocalStorageAdapter(),
+  createAdapter: (options = {}) => new LocalStorageAdapter(options),
   pingInterval: 5000,
   pingTimeout: 3000,
   sseWatchdogTimeout: 25000,
@@ -15,6 +16,7 @@ const state = {
   pending: [],
   loading: false,
   error: "",
+  hasToken: false,
   status: "Sin sesion",
   connectionSource: "inicio",
   editingClienteId: null,
@@ -84,7 +86,8 @@ document.addEventListener("click", async (event) => {
 
 init();
 
-function render() {
+async function render() {
+  state.hasToken = Boolean(await client.token());
   app.innerHTML = `
     <header class="topbar">
       <div>
@@ -92,7 +95,7 @@ function render() {
         <h1>Client demo</h1>
       </div>
       <div class="badges">
-        <span class="session ${client.token() ? "on" : "off"}" data-token-badge>${client.token() ? "Token persistido" : "Sin token"}</span>
+        <span class="session ${state.hasToken ? "on" : "off"}" data-token-badge>${state.hasToken ? "Token persistido" : "Sin token"}</span>
         <span class="session ${client.connected() ? "on" : "off"}" data-connection-badge>
           ${client.connected() ? "Servidor conectado" : "Servidor offline"}
         </span>
@@ -112,7 +115,7 @@ function loginPanel() {
   return `
     <div class="section-row">
       <h2>Login</h2>
-      ${client.token() ? `<button type="button" data-action="logout">Logout</button>` : ""}
+      ${state.hasToken ? `<button type="button" data-action="logout">Logout</button>` : ""}
     </div>
     <form data-login-form>
       <label>
@@ -133,7 +136,7 @@ function sessionPanel() {
   return `
     <div class="section-row">
       <h2>Session</h2>
-      <button type="button" data-action="session" ${!client.token() || state.loading ? "disabled" : ""}>Leer session</button>
+      <button type="button" data-action="session" ${!state.hasToken || state.loading ? "disabled" : ""}>Leer session</button>
     </div>
     <dl>
       <dt>Estado</dt>
@@ -141,7 +144,7 @@ function sessionPanel() {
       <dt>Usuario</dt>
       <dd>${escapeHtml(state.user?.id || "-")}</dd>
       <dt>Token</dt>
-      <dd>${client.token() ? "Si" : "No"}</dd>
+      <dd>${state.hasToken ? "Si" : "No"}</dd>
       <dt>Conexion</dt>
       <dd data-connection-source>${escapeHtml(state.connectionSource)}</dd>
     </dl>
@@ -234,9 +237,9 @@ function clienteEditRow(cliente) {
   return `
     <tr data-cliente-edit-row data-id="${escapeHtml(cliente.id)}">
       <td>${escapeHtml(cliente.id)}</td>
-      <td><input name="ruc" value="${escapeHtml(cliente.ruc || "")}" placeholder="RUC"></td>
-      <td><input name="nombre" value="${escapeHtml(cliente.nombre || "")}" placeholder="Nombre" required></td>
-      <td><input name="email" value="${escapeHtml(cliente.email || "")}" placeholder="Email" type="email"></td>
+      <td><input name="ruc" value="${escapeHtml(cliente.ruc || "")}" placeholder="RUC">${fieldError("ruc")}</td>
+      <td><input name="nombre" value="${escapeHtml(cliente.nombre || "")}" placeholder="Nombre" required>${fieldError("nombre")}</td>
+      <td><input name="email" value="${escapeHtml(cliente.email || "")}" placeholder="Email" type="email">${fieldError("email")}</td>
       <td>
         <div class="actions">
           <button type="button" data-action="save-cliente" data-id="${escapeHtml(cliente.id)}" ${state.loading ? "disabled" : ""}>Guardar</button>
@@ -352,7 +355,8 @@ async function login(form) {
   await run(async () => {
     const response = await client.login(Object.fromEntries(new FormData(form)));
     state.user = response.data?.user || null;
-    state.status = client.token() ? "Login OK" : "Login sin token";
+    state.hasToken = Boolean(await client.token());
+    state.status = state.hasToken ? "Login OK" : "Login sin token";
     assignServices();
     await loadCachedLists();
   });
@@ -364,12 +368,15 @@ async function init() {
   await run(async () => {
     const session = await client.session();
     if (!session?.token) {
+      state.hasToken = false;
       state.status = "Sin sesion";
       return;
     }
 
     state.user = session.user || null;
+    state.hasToken = true;
     state.status = "Session local OK";
+    assignServices();
     await loadCachedLists();
   });
 }
@@ -378,14 +385,16 @@ async function loadSession() {
   await run(async () => {
     const session = await client.session();
     state.user = session?.user || null;
-    state.status = "Session local OK";
+    state.hasToken = Boolean(session?.token);
+    state.status = state.hasToken ? "Session local OK" : "Sin sesion";
   });
 }
 
 async function logout() {
   await run(async () => {
-    if (client.token()) await client.logout();
+    if (await client.token()) await client.logout();
     state.user = null;
+    state.hasToken = false;
     state.clientes = [];
     state.ventas = [];
     state.pending = [];
@@ -446,11 +455,13 @@ async function createCliente(form) {
 }
 
 function editCliente(button) {
+  state.clienteErrors = {};
   state.editingClienteId = button.dataset.id;
   render();
 }
 
 function cancelCliente() {
+  state.clienteErrors = {};
   state.editingClienteId = null;
   render();
 }
@@ -460,18 +471,24 @@ async function saveCliente(button) {
   if (!row) return;
 
   await run(async () => {
-    const id = row.dataset.id;
-    const body = {
-      ruc: row.querySelector('[name="ruc"]').value,
-      nombre: row.querySelector('[name="nombre"]').value,
-      email: row.querySelector('[name="email"]').value,
-    };
-    if (!body.ruc) delete body.ruc;
-    if (!body.email) delete body.email;
-    await services.clientes.update(id, body);
-    state.editingClienteId = null;
-    state.clientes = (await services.clientes.list()).data;
-    state.pending = (await services.pending.list()).data;
+    try {
+      state.clienteErrors = {};
+      const id = row.dataset.id;
+      const body = {
+        ruc: row.querySelector('[name="ruc"]').value,
+        nombre: row.querySelector('[name="nombre"]').value,
+        email: row.querySelector('[name="email"]').value,
+      };
+      if (!body.ruc) delete body.ruc;
+      if (!body.email) delete body.email;
+      await services.clientes.update(id, body);
+      state.editingClienteId = null;
+      state.clientes = (await services.clientes.list()).data;
+      state.pending = (await services.pending.list()).data;
+    } catch (error) {
+      state.clienteErrors = error.errors || {};
+      throw error;
+    }
   });
 }
 
@@ -621,14 +638,14 @@ async function run(task) {
 }
 
 function ready() {
-  return Boolean(client.token() && services.clientes && services.ventas);
+  return Boolean(state.hasToken && services.clientes && services.ventas);
 }
 
 function updateStatusIndicators() {
   const tokenBadge = document.querySelector("[data-token-badge]");
   if (tokenBadge) {
-    tokenBadge.className = `session ${client.token() ? "on" : "off"}`;
-    tokenBadge.textContent = client.token() ? "Token persistido" : "Sin token";
+    tokenBadge.className = `session ${state.hasToken ? "on" : "off"}`;
+    tokenBadge.textContent = state.hasToken ? "Token persistido" : "Sin token";
   }
 
   const connectionBadge = document.querySelector("[data-connection-badge]");
