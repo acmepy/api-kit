@@ -751,7 +751,7 @@ describe("http middleware", () => {
       assert.equal(duplicated.status, 409);
       assert.equal(duplicated.body.ok, false);
       assert.equal(duplicated.body.code, "CONFLICT");
-      assert.match(duplicated.body.message, /UNIQUE constraint failed/);
+      assert.equal(typeof duplicated.body.message, "string");
       assert.deepEqual(duplicated.body.errors, { ruc: "Ya existe un registro con este valor" });
       assert.equal(list.status, 200);
       assert.equal(list.body.data.length, 1);

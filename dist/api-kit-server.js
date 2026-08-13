@@ -2782,20 +2782,18 @@ function installPingRoute({ mainRouter, routeRegistry, config }) {
 
 function errorHandler(err, req, res, _next) {
   if (res.headersSent) return;
-  const ctx = getContext();
-  const txId = ctx?.txId || req.headers["x-transaction-id"] || null;
-  let {code='INTERNAL_ERROR', type, message, errors={}} = err;
-  if(errors==null) errors={};
-  if (err.type === "entity.parse.failed") code = "INVALID_JSON";
-  const isConstraint = code?.startsWith?.("SQLITE_CONSTRAINT");
-  const status = isConstraint ? 409 : err.status || err.statusCode || 500;
-  const fields = isConstraint && ["SQLITE_CONSTRAINT_UNIQUE", "SQLITE_CONSTRAINT_NOTNULL"].includes(err.code) ? err.message?.match(/(?:UNIQUE|NOT NULL) constraint failed: (.+)$/)?.[1]?.split(",").map((field) => field.trim().split(".").pop()).filter(Boolean) || [] : [];
-  errors = Object.keys(errors)>0?errors:fields.length ? Object.fromEntries(fields.map((field) => [field, err.code === "SQLITE_CONSTRAINT_NOTNULL" ? "Requerido" : "Ya existe un registro con este valor"])) : {};
-  if(status>=400) errorLogger(err, req, { txId, status, code, errors, stack:err.stack });
-  message = isConstraint || process.env.NODE_ENV !== "production" ? err.message : "Error interno";
-  if (isConstraint) code = 'CONFLICT';
+
+  const txId = getContext()?.txId || req.headers["x-transaction-id"] || null;
+  const status = err.status || err.statusCode || 500;
+  const code = err.type === "entity.parse.failed" ? "INVALID_JSON" : err.code || "INTERNAL_ERROR";
+  const errors = err.errors && typeof err.errors === "object" ? err.errors : {};
+  const message = status >= 500 && process.env.NODE_ENV === "production" ? "Error interno" : err.message;
+
+  errorLogger(err, req, { txId, status, code, message: err.message, errors, stack: status >= 500 ? err.stack : {} });
+
   const body = { ok: false, code, message, errors, txId };
   if (process.env.NODE_ENV !== "production") body.stack = err.stack;
+
   res.status(status).json(body);
 }
 

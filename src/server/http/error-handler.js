@@ -10,7 +10,7 @@ export function errorHandler(err, req, res, _next) {
   const errors = err.errors && typeof err.errors === "object" ? err.errors : {};
   const message = status >= 500 && process.env.NODE_ENV === "production" ? "Error interno" : err.message;
 
-  errorLogger(err, req, { txId, status, code, message, errors, stack: status >= 500 ? err.stack : {} });
+  errorLogger(err, req, { txId, status, code, message: err.message, errors, stack: status >= 500 ? err.stack : {} });
 
   const body = { ok: false, code, message, errors, txId };
   if (process.env.NODE_ENV !== "production") body.stack = err.stack;
