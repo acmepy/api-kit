@@ -1,6 +1,6 @@
 {
   "name": "api-kit",
-  "version": "1.0.43",
+  "version": "1.0.44",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -10,7 +10,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "gitbub:acmepy/api-kit"
+    "url": "github:acmepy/api-kit"
   },
   "license": "MIT",
   "author": "Hugo",

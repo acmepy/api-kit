@@ -183,6 +183,17 @@ export class ApiKitClient {
     return this.#lastReceivedAt;
   }
 
+  destroy() {
+    this.#stopPing();
+    this.#closeSse();
+    this.#clearWatchdog();
+    this.#listeners.clear();
+  }
+
+  disconnect() {
+    this.destroy();
+  }
+
   onChange(listener) {
     if (typeof listener !== "function") throw new TypeError("listener debe ser una funcion");
     this.#listeners.add(listener);

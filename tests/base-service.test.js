@@ -17,6 +17,7 @@ describe("BaseService list filters", () => {
         email: { type: "string", allowNull: false, unique: true },
         price: { type: "decimal", precision: 12, scale: 2, allowNull: false },
         active: { type: "boolean", defaultValue: true },
+        created_at: { type: "string" },
       },
     });
 
@@ -25,9 +26,9 @@ describe("BaseService list filters", () => {
     await seq.init();
     await seq.sync({ force: true });
 
-    await productResource.model.create({ name: "Basic", email: "basic@test.com", price: 10, active: true });
-    await productResource.model.create({ name: "Plus", email: "plus@test.com", price: 20, active: true });
-    await productResource.model.create({ name: "Legacy", email: "legacy@test.com", price: 30, active: false });
+    await productResource.model.create({ name: "Basic", email: "basic@test.com", price: 10, active: true, created_at: "2026-01-01" });
+    await productResource.model.create({ name: "Plus", email: "plus@test.com", price: 20, active: true, created_at: "2026-06-01" });
+    await productResource.model.create({ name: "Legacy", email: "legacy@test.com", price: 30, active: false, created_at: "2025-01-01" });
 
     service = new BaseService({
       model: productResource.model,
@@ -93,6 +94,13 @@ describe("BaseService list filters", () => {
 
     assert.equal(result.pagination.total, 2);
     assert.deepEqual(result.data.map((item) => item.name), ["Basic", "Legacy"]);
+  });
+
+  it("filters correctly with snake_case attributes and operators", async () => {
+    const result = await service.list({ query: { "created_at[gte]": "2026-01-01" } });
+
+    assert.equal(result.pagination.total, 2);
+    assert.deepEqual(result.data.map((item) => item.name), ["Basic", "Plus"]);
   });
 
   /*it("maps nested query parser operator objects", async () => {

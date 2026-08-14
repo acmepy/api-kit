@@ -54,7 +54,7 @@ export function installAuditHooks(moduleConfigs, auditConfig) {
         await writeAudit(AuditModel, auditConfig, moduleConfig, "delete", payload, options.auditOld || previousData.get(payload) || snapshot(payload), {}, { transaction: options.transaction });
         return;
       }
-      await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-delete", null, options.where || {}, {}, { transaction: options.transaction });
+      await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-delete", null, options.auditOld || options.where || {}, {}, { transaction: options.transaction });
     });
     appendHook(hooks, "afterUpsert", async function auditUpsert(result, options = {}) {
       const [model, created] = Array.isArray(result) ? result : [result, false];

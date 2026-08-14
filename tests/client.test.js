@@ -199,6 +199,35 @@ describe("client public API", () => {
 
     assert.equal(events.some((event) => event.type === "offline" && event.source === "auth-expired"), true);
   });
+
+  it("stops ping timers and clears listeners when destroy or disconnect is called", async () => {
+    let pingCount = 0;
+    const client = createApiKitClient({
+      url: "http://server/api",
+      fetch: async (url) => {
+        if (String(url).includes("/ping")) pingCount++;
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+      pingInterval: 50,
+    });
+
+    let changeEmitted = false;
+    client.onChange(() => {
+      changeEmitted = true;
+    });
+
+    await wait(120);
+    const initialPings = pingCount;
+    assert.ok(initialPings >= 1, "Ping should have run at least once");
+
+    client.destroy();
+
+    const countAfterDestroy = pingCount;
+    await wait(120);
+    assert.equal(pingCount, countAfterDestroy, "No additional pings should occur after destroy()");
+
+    client.disconnect();
+  });
 });
 
 function openapiDocument() {

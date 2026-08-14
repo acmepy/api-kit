@@ -1376,11 +1376,11 @@ class ValidationError extends AppError {
   }
 }
 
-const FILTER_OPERATORS = {eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between};
+const FILTER_OPERATORS = { eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between };
 const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
 const RANGE_OPERATORS = new Set([Op.gt, Op.gte, Op.lt, Op.lte, Op.between]);
 const TYPES_COMPARABLES = ["integer", "decimal", "number", "date", "string"];
-const isComparable = (type)=>TYPES_COMPARABLES.includes(type);
+const isComparable = (type) => TYPES_COMPARABLES.includes(type);
 
 class BaseService {
   #model;
@@ -1423,7 +1423,7 @@ class BaseService {
     return this.#services;
   }
 
-  async list({ params, query, body, transaction=null } = {}) {
+  async list({ params, query, body, transaction = null } = {}) {
     const context = getContext();
     const page = Math.max(1, parseInt(query?.page, 10) || 1);
     const maxSize = this.#config.maxSize || 100;
@@ -1432,12 +1432,12 @@ class BaseService {
     const where = await this.#buildWhere(query);
     //const include = this.#detailDescriptors().map((descriptor) => ({ model: descriptor.target, as: descriptor.as }));
     const include = this.#model.getAssociationIncludes();
-    const { count, rows } = await this.#model.findAndCountAll({where, limit, offset, order: this.#config.defaultOrder || [], include: include.length ? include : undefined, distinct: Boolean(include.length), plain: true, ...(transaction && { transaction })});
+    const { count, rows } = await this.#model.findAndCountAll({ where, limit, offset, order: this.#config.defaultOrder || [], include: include.length ? include : undefined, distinct: Boolean(include.length), plain: true, ...(transaction && { transaction }) });
     const pages = Math.ceil(count / limit);
     return { data: rows, pagination: this.#buildPagination({ page, limit, offset, total: count, pages, baseUrl: context?.baseUrl }) };
   }
 
-  async get({ params, query, body, transaction =null } = {}) {
+  async get({ params, query, body, transaction = null } = {}) {
     getContext();
     const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
     //if (!instance) throw new NotFoundError(this.#resourceName());
@@ -1453,69 +1453,69 @@ class BaseService {
     };
   }
 
-  async create({ params, query, body, transaction=null } = {}) {
+  async create({ params, query, body, transaction = null } = {}) {
     getContext();
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     const data = await this.#schemas.create.validate(masterBody);
     const payload = hasDetails ? { ...body, ...data } : data;
-    const instance = await this.#model.create(payload, { ...(hasDetails && { include }), ...(transaction && { transaction })});
+    const instance = await this.#model.create(payload, { ...(hasDetails && { include }), ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
-  async update({ params, query, body, transaction=null } = {}) {
+  async update({ params, query, body, transaction = null } = {}) {
     getContext();
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     //const pk = this.#primaryKeyAttribute();
     const pk = this.#model.primaryKeyAttribute;
     const data = await this.#schemas.update.validate(masterBody);
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
-    const [instance] = await this.#model.update(payload, { where:{[pk]:params.id}, ...(hasDetails && { include }), ...(transaction && { transaction })});
+    const [instance] = await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
     return { data: instance?.toJSON() || payload };
   }
 
-  async remove({ params, query, body, transaction=null } = {}) {
+  async remove({ params, query, body, transaction = null } = {}) {
     getContext();
-    const instance = await this.#model.findByPk(params.id, {...(transaction && { transaction })});
+    const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }) });
     //if (!instance) throw new NotFoundError(this.#resourceName());
     if (!instance) throw new NotFoundError(this.#model.modelName)
-    await instance.destroy({...(transaction && { transaction }) });
+    await instance.destroy({ ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
-  async createDetail({ params, query, body, transaction=null } = {}) {
+  async createDetail({ params, query, body, transaction = null } = {}) {
     getContext();
     //const {target, foreignKey} = this.#detailDescriptor(params.detail);
-    const {model:target, foreignKey} = this.#model.getAssociationIncludes().find(a=>a.as==params.detail);
+    const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     const parentId = Number.isNaN(Number(params.id)) ? params.id : Number(params.id);
     const data = await target.resourceSchemas.create.validate(body);
-    const instance = await target.create({...data, [foreignKey]:parentId}, {...(transaction&&{transaction})});
-    return {data:instance.toJSON()}
+    const instance = await target.create({ ...data, [foreignKey]: parentId }, { ...(transaction && { transaction }) });
+    return { data: instance.toJSON() }
   }
 
-  async updateDetail({ params, query, body, transaction=null } = {}) {
+  async updateDetail({ params, query, body, transaction = null } = {}) {
     getContext();
     //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
-    const {model:target, foreignKey} = this.#model.getAssociationIncludes().find(a=>a.as==params.detail);
-    const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute||id];
+    const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     const data = await target.resourceSchemas.update.validate(body);
-    const where = {[primaryKey]:params.detailId||body[primaryKey], [foreignKey]:params.id};
-    const [instance] = await target.update(data, {where, ...(transaction&&{transaction})});
+    const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
+    const where = { [primaryKey]: params.detailId || body[primaryKey], [foreignKey]: params.id };
+    const [instance] = await target.update(data, { where, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(name);
-    return {data:instance?.toJSON()}
+    return { data: instance?.toJSON() }
   }
 
-  async removeDetail({ params, query, body, transaction=null } = {}) {
+  async removeDetail({ params, query, body, transaction = null } = {}) {
     getContext();
     //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
-    const {model:target, foreignKey} = this.#model.getAssociationIncludes().find(a=>a.as==params.detail);
-    const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute||id];
-    const where = {[primaryKey]:params.detailId||body?.[primaryKey], [foreignKey]:params.id};
-    const instance = await target.findOne({where, ...(transaction&&{transaction})});
+    const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
+    const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
+    const where = { [primaryKey]: params.detailId || body?.[primaryKey], [foreignKey]: params.id };
+    const instance = await target.findOne({ where, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(name);
     const data = instance.toJSON();
-    const removed = await target.destroy({where, auditOld:data, ...(transaction&&{transaction})});
+    const removed = await target.destroy({ where, auditOld: data, ...(transaction && { transaction }) });
     if (!removed) throw new NotFoundError(name);
-    return {data}
+    return { data }
   }
 
   #masterDetailsContext(body = {}) {
@@ -1532,7 +1532,7 @@ class BaseService {
     //const descriptors = detailNames ? detailNames.map((name) => this.#detailDescriptor(name)) : this.#detailDescriptors();
     //const include = descriptors.map((descriptor) => ({ model: descriptor.target, as: descriptor.as }))
     const include = this.#model.getAssociationIncludes();
-    
+
     return { masterBody, include, hasDetails: true };
   }
 
@@ -1560,12 +1560,12 @@ class BaseService {
     };
   }
 */
-/*
-  #association(name) {
-    if (this.#model?.associations?.[name]) return this.#model.associations[name];
-    return [...new Set(Object.values(this.#model?.associations || {}))].find((association) => association?.as === name) || null;
-  }
-*/
+  /*
+    #association(name) {
+      if (this.#model?.associations?.[name]) return this.#model.associations[name];
+      return [...new Set(Object.values(this.#model?.associations || {}))].find((association) => association?.as === name) || null;
+    }
+  */
   #detailsConfig() {
     if (!this.#config.details || typeof this.#config.details !== "object" || Array.isArray(this.#config.details)) return {};
     return this.#config.details;
@@ -1577,40 +1577,40 @@ class BaseService {
     return schema.toJsonSchema()
     //return this.#enrichJsonSchema(normalizeJsonSchema(schema.toJsonSchema()), operation);
   }
-/*
-  #enrichJsonSchema(schema, operation) {
-    if (!schema?.properties) return schema;
-
-    const enriched = { ...schema, properties: { ...schema.properties } };
-    const definitions = this.#config.resource?.definition || this.#model?.resourceDefinition?.attributes || {};
-
-    for (const [field, property] of Object.entries(enriched.properties)) {
-      const definition = definitions[field];
-      if (!definition) continue;
-      if (operation === "create" && definition.create === false) continue;
-      if (operation === "update" && definition.update === false) continue;
-
-      enriched.properties[field] = this.#enrichPropertySchema(property, definition);
+  /*
+    #enrichJsonSchema(schema, operation) {
+      if (!schema?.properties) return schema;
+  
+      const enriched = { ...schema, properties: { ...schema.properties } };
+      const definitions = this.#config.resource?.definition || this.#model?.resourceDefinition?.attributes || {};
+  
+      for (const [field, property] of Object.entries(enriched.properties)) {
+        const definition = definitions[field];
+        if (!definition) continue;
+        if (operation === "create" && definition.create === false) continue;
+        if (operation === "update" && definition.update === false) continue;
+  
+        enriched.properties[field] = this.#enrichPropertySchema(property, definition);
+      }
+  
+      return enriched;
     }
-
-    return enriched;
-  }
-*/
-/*
-  #enrichPropertySchema(property, definition) {
-    const enriched = { ...property };
-    const type = definition.type;
-    const typeName = type?.key || type?.constructor?.name || "";
-    const normalized = typeName.toLowerCase();
-    const options = type?.options || {};
-    if (normalized.includes("string") && options.length !== undefined) enriched.maxLength = options.length;
-    if ((normalized.includes("decimal") || normalized.includes("number")) && options.precision !== undefined) {
-      enriched.precision = options.precision;
-      if (options.scale !== undefined) enriched.scale = options.scale;
+  */
+  /*
+    #enrichPropertySchema(property, definition) {
+      const enriched = { ...property };
+      const type = definition.type;
+      const typeName = type?.key || type?.constructor?.name || "";
+      const normalized = typeName.toLowerCase();
+      const options = type?.options || {};
+      if (normalized.includes("string") && options.length !== undefined) enriched.maxLength = options.length;
+      if ((normalized.includes("decimal") || normalized.includes("number")) && options.precision !== undefined) {
+        enriched.precision = options.precision;
+        if (options.scale !== undefined) enriched.scale = options.scale;
+      }
+      return enriched;
     }
-    return enriched;
-  }
-*/
+  */
   /*
   #resourceName() {
     if (typeof this.#config.resourceName === "string") return this.#config.resourceName;
@@ -1649,9 +1649,9 @@ class BaseService {
     for (const [key, value] of Object.entries(query)) {
       if (["page", "limit"].includes(key)) continue;
       //const filters = this.#queryFilters(key, value);
-      const [tmp, attribute, operator='eq'] = key.match(/^([a-zA-Z0-9]+)\[([a-zA-Z0-9]+)\]$/)||['', key];
+      const [tmp, attribute, operator = 'eq'] = key.match(/^([a-zA-Z0-9_]+)\[([a-zA-Z0-9_]+)\]$/) || ['', key];
       if (!FILTER_OPERATORS[operator]) throw new ValidationError(`Operador de filtro "${operator}" no está soportado`);
-      const filters = [{field:attribute, operator: FILTER_OPERATORS[operator], value}];
+      const filters = [{ field: attribute, operator: FILTER_OPERATORS[operator], value }];
       for (const filter of filters) {
         if (whitelist.length > 0 && !whitelist.includes(filter.field)) continue;
         const definition = definitions[filter.field];
@@ -1701,9 +1701,9 @@ class BaseService {
     if ([Op.in, Op.between].includes(operator)) {
       const values = this.#splitFilterValues(value);
       if (values.length === 0) throw new ValidationError(`Filtro "${field}" in requiere al menos un valor`);
-      if (operator === Op.between && values.length !== 2)  throw new ValidationError(`Filtro "${field}" between requiere dos valores`);
+      if (operator === Op.between && values.length !== 2) throw new ValidationError(`Filtro "${field}" between requiere dos valores`);
       let parsedValues = [];
-      for(const item of values) parsedValues.push(await this.#castFilterValue(field, item, definition));
+      for (const item of values) parsedValues.push(await this.#castFilterValue(field, item, definition));
       this.#assertRangeOperator(field, operator, definition);
       return parsedValues;
     }
@@ -1718,7 +1718,7 @@ class BaseService {
   }
 
   #assertRangeOperator(field, operator, definition) {
-    if(!isComparable(this.#filterType(definition)) && RANGE_OPERATORS.has(operator)) throw new ValidationError(`Filtro "${field}" no soporta operador "${FILTER_OPERATOR_NAMES.get(operator)}"`);
+    if (!isComparable(this.#filterType(definition)) && RANGE_OPERATORS.has(operator)) throw new ValidationError(`Filtro "${field}" no soporta operador "${FILTER_OPERATOR_NAMES.get(operator)}"`);
     /*if (!RANGE_OPERATORS.has(operator) || !definition) return;
     const type = this.#filterType(definition);
     const isComparable = ["integer", "decimal", "number", "date", "string"].includes(type);
@@ -1730,12 +1730,12 @@ class BaseService {
 
   async #castFilterValue(field, value, definition) {
     const type = this.#filterType(definition);
-    const schema = yep.fromJsonSchema({type: 'object', properties: {[field]:{type}}});
-    return await schema.validateAt(field, {[field]:value});
+    const schema = yep.fromJsonSchema({ type: 'object', properties: { [field]: { type } } });
+    return await schema.validateAt(field, { [field]: value });
   }
 
   #filterType(definition) {
-    return (definition?.type?.key||definition?.type).toLowerCase();
+    return (definition?.type?.key || definition?.type).toLowerCase();
   }
 }
 
@@ -2201,7 +2201,7 @@ function installAuditHooks(moduleConfigs, auditConfig) {
         await writeAudit(AuditModel, auditConfig, moduleConfig, "delete", payload, options.auditOld || previousData.get(payload) || snapshot(payload), {}, { transaction: options.transaction });
         return;
       }
-      await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-delete", null, options.where || {}, {}, { transaction: options.transaction });
+      await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-delete", null, options.auditOld || options.where || {}, {}, { transaction: options.transaction });
     });
     appendHook(hooks, "afterUpsert", async function auditUpsert(result, options = {}) {
       const [model, created] = Array.isArray(result) ? result : [result, false];

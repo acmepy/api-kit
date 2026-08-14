@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import { createTestSeq } from "./helpers/seq.js";
-import { createApiKit } from "../src/server/index.js";
+import { createApiKit, defineResource } from "../src/server/index.js";
 
 const modules = [
   {
@@ -92,6 +92,83 @@ describe("audit", () => {
     assert.equal(rows[1].get("new").nombre, "Ana Maria");
     assert.equal(rows[1].get("old").activo, true);
     assert.equal(rows[1].get("new").activo, false);
+  });
+
+  it("audits removed master-detail rows with old data", async () => {
+    const seq = createTestSeq({ logging: false });
+    const api = await createApiKit({ seq, audit: true, modules: detailAuditModules() });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const venta = await api.services.get("ventas").create({ body: { cliente: "Ana", total: 0 } });
+    const item = await api.services.get("ventas").createDetail({
+      params: { id: venta.data.id, detail: "items" },
+      body: { ventaId: venta.data.id, producto: "Mouse", cantidad: 2 },
+    });
+
+    await api.services.get("ventas").removeDetail({
+      params: { id: venta.data.id, detail: "items", detailId: item.data.id },
+    });
+
+    const Audit = api.models.get("audit");
+    const rows = await Audit.findAll({ order: [["id", "ASC"]] });
+    const removed = rows.map((row) => row.toJSON()).find((row) => row.tableName === "venta_items" && row.action === "bulk-delete");
+
+    assert.ok(removed);
+    assert.equal(removed.rowId, String(item.data.id));
+    assert.equal(removed.old.producto, "Mouse");
+    assert.equal(removed.old.cantidad, 2);
+    assert.equal(removed.old.ventaId, venta.data.id);
+    assert.deepEqual(removed.new, {});
+  });
+
+  it("exposes removed master-detail rows through changes and sse", async () => {
+    const seq = createTestSeq({ logging: false });
+    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules: detailAuditModules() });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+
+    const server = await listen(app);
+    const venta = await api.services.get("ventas").create({ body: { cliente: "Ana", total: 0 } });
+    const item = await api.services.get("ventas").createDetail({
+      params: { id: venta.data.id, detail: "items" },
+      body: { ventaId: venta.data.id, producto: "Teclado", cantidad: 1 },
+    });
+    const since = new Date(Date.now() - 1000).toISOString();
+    const stream = openSse(server, "/api/sse");
+
+    try {
+      await stream.connected;
+      const deleted = await request(server, "DELETE", `/api/ventas/${venta.data.id}/items/${item.data.id}`);
+      assert.equal(deleted.status, 200);
+
+      const event = await stream.nextEvent;
+      assert.equal(event.event, "audit");
+      assert.equal(event.data.action, "bulk-delete");
+      assert.equal(event.data.tableName, "venta_items");
+      assert.equal(event.data.old.producto, "Teclado");
+      assert.deepEqual(event.data.new, {});
+
+      const changes = await request(server, "GET", `/api/changes?since=${encodeURIComponent(since)}`);
+      const change = changes.body.data.find((row) => row.tableName === "venta_items" && row.action === "bulk-delete");
+      assert.ok(change);
+      assert.equal(change.old.producto, "Teclado");
+      assert.equal(change.old.cantidad, 1);
+      assert.deepEqual(change.new, {});
+    } finally {
+      stream.close();
+      await api.close();
+      await close(server);
+    }
   });
 
   it("exposes audit changes since a date", async () => {
@@ -592,6 +669,46 @@ function request(server, method, path, options = {}) {
 
 function tableNameForModel(ModelClass) {
   return ModelClass?._resolvedTableName || ModelClass?.tableName || ModelClass?.modelName || ModelClass?.name || "";
+}
+
+function detailAuditModules() {
+  const ventaResource = defineResource({
+    modelName: "Venta",
+    tableName: "ventas",
+    timestamps: true,
+    attributes: {
+      id: { type: "integer", primaryKey: true, autoIncrement: true },
+      cliente: { type: "string", allowNull: false },
+      total: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0 },
+    },
+  });
+  const itemResource = defineResource({
+    modelName: "VentaItem",
+    tableName: "venta_items",
+    timestamps: true,
+    attributes: {
+      id: { type: "integer", primaryKey: true, autoIncrement: true },
+      ventaId: { type: "integer", allowNull: false },
+      producto: { type: "string", allowNull: false },
+      cantidad: { type: "integer", allowNull: false },
+    },
+  });
+
+  ventaResource.model.hasMany(itemResource.model, { as: "items", foreignKey: "ventaId" });
+  itemResource.model.belongsTo(ventaResource.model, { as: "venta", foreignKey: "ventaId" });
+
+  return [
+    {
+      name: "ventas",
+      resource: ventaResource,
+      details: { items: { association: "items" } },
+    },
+    {
+      name: "venta_items",
+      resource: itemResource,
+    },
+    modules.find((module) => module.modelName === "audit"),
+  ];
 }
 
 function openSse(server, path, options = {}) {
