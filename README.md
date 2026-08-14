@@ -373,13 +373,12 @@ Metodos publicos principales:
 - `service(name)`: obtiene un servicio descubierto.
 - `services()`: devuelve un `Map` de servicios.
 - `syncServices(force = false)`: descubre servicios, hace pull de caches faltantes y empuja pending.
-- `connected()` / `isConnected()`: estado online.
+- `connected()`: estado online.
 - `getSession()`: sesion en memoria.
 - `token()`: Bearer token actual.
 - `lastReceivedAt()`: ultimo timestamp recibido por `changes` o SSE.
 - `onChange(listener)` / `offChange(listener)`: eventos del cliente.
 - `changes(since?)`: consulta `/changes`.
-- `stopConnection()`: hace logout.
 - `request(path, options)`: request autenticado.
 - `url(path, query?)`: arma URL absoluta.
 

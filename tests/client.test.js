@@ -5,7 +5,7 @@ import { createApiKitClient, BaseService, OpenapiService, SchemaService, Session
 describe("client public API", () => {
   it("builds urls from the configured base url and query params", () => {
     const client = createApiKitClient({
-      baseUrl: "http://server/api",
+      url: "http://server/api",
       fetch: async () => jsonResponse({ ok: true }),
       pingInterval: 60_000,
     });
@@ -20,7 +20,7 @@ describe("client public API", () => {
 
   it("registers the session service lazily", async () => {
     const client = createApiKitClient({
-      baseUrl: "http://server/api",
+      url: "http://server/api",
       fetch: async () => jsonResponse({ ok: true }),
       pingInterval: 60_000,
     });
@@ -38,7 +38,7 @@ describe("client public API", () => {
     const calls = [];
     const adapter = memoryAdapter([["session", { token: "local-token", user: { id: "admin" } }]]);
     const client = createApiKitClient({
-      baseUrl: "http://server/api",
+      url: "http://server/api",
       adapter,
       createAdapter: ({ service }) => service === "session" ? adapter : memoryAdapter(),
       fetch: async (url, options = {}) => {
@@ -58,7 +58,7 @@ describe("client public API", () => {
 
   it("wraps network errors with an ok false response", async () => {
     const client = createApiKitClient({
-      baseUrl: "http://server/api",
+      url: "http://server/api",
       fetch: async () => {
         throw new TypeError("Failed to fetch");
       },
@@ -82,7 +82,7 @@ describe("client public API", () => {
     const adapters = adapterRegistry();
     const openapi = openapiDocument();
     const client = createApiKitClient({
-      baseUrl: "http://server/api",
+      url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
       fetch: async (url, options = {}) => {
@@ -119,7 +119,7 @@ describe("client public API", () => {
     const cachedOpenapi = openapiDocument();
     await adapters.forService("openapi").add(cachedOpenapi);
     const client = createApiKitClient({
-      baseUrl: "http://server/api",
+      url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
       fetch: async (url) => {
@@ -149,7 +149,7 @@ describe("client public API", () => {
       releaseOpenapi = resolve;
     });
     const client = createApiKitClient({
-      baseUrl: "http://server/api",
+      url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
       fetch: async (url) => {
@@ -181,7 +181,7 @@ describe("client public API", () => {
     const openapi = openapiDocument();
     const events = [];
     const client = createApiKitClient({
-      baseUrl: "http://server/api",
+      url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
       fetch: async (url) => {

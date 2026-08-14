@@ -94,6 +94,25 @@ export class BaseService {
     return response;
   }
 
+  async applyData(data) {
+    if (!data || typeof data !== "object") return;
+    const action = data.action || data.type;
+    if (action === "create" || action === "update") {
+      const record = data.new && typeof data.new === "object" ? { ...data.new } : null;
+      if (!record) return;
+      //if (record.id === undefined && data.rowId !== undefined && data.rowId !== null) record.id = data.rowId;
+      if (record.id === undefined || record.id === null) return;
+      await this.adapter.put(record.id, record);
+      return;
+    }
+    if (action === "delete") {
+      const id = data.old?.id ?? data.rowId ?? data.id;
+      if (id === undefined || id === null) return;
+      await this.adapter.delete(id);
+      return;
+    }
+  }
+
   async nextTemporaryId() {
     if (!temporaryStorage) temporaryStorage = defaultAdapter({ prefix: this.prefix, service: "temporaryKey" });
     const record = await temporaryStorage.get("temporaryKey");

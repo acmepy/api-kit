@@ -1,7 +1,7 @@
 import { createApiKitClient, LocalStorageAdapter } from "api-kit/client";
 
 const client = createApiKitClient({
-  baseUrl: "/api",
+  url: `${window.location.origin}/api`,
   adapter: new LocalStorageAdapter(),
   createAdapter: (options = {}) => new LocalStorageAdapter(options),
   pingInterval: 5000,

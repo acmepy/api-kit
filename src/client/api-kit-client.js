@@ -7,7 +7,7 @@ import { OpenapiService } from "./services/openapi-service.js";
 import { PendingService } from "./services/pending-service.js";
 import { SchemaService } from "./services/schema-service.js";
 import { SessionService } from "./services/session-service.js";
-import { fallbackOrigin, joinUrl, normalizeBaseUrl, normalizeTimeout } from "./utils.js";
+import { joinUrl, normalizeTimeout } from "./utils.js";
 
 const DEFAULT_PREFIX = "api-kit";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
@@ -20,6 +20,7 @@ export function createApiKitClient(options = {}) {
 }
 
 export class ApiKitClient {
+  #host;
   #baseUrl;
   #fetch;
   #adapter;
@@ -44,7 +45,9 @@ export class ApiKitClient {
   #paths;
 
   constructor(options = {}) {
-    this.#baseUrl = normalizeBaseUrl(options.baseUrl || options.url || "");
+    const url = new URL(options.url || "http://localhost:3000/api");
+    this.#host = url.origin;
+    this.#baseUrl = url.pathname.replace(/\/+$/g, "");
     this.#fetch = options.fetch || globalThis.fetch?.bind(globalThis);
     this.#adapter = options.adapter || defaultAdapter(options);
     this.#createAdapter = options.createAdapter || ((adapterOptions = {}) => defaultAdapter({ ...options, ...adapterOptions }));
@@ -78,7 +81,7 @@ export class ApiKitClient {
 
   async login(credentials = {}) {
     const response = await this.request(this.#paths.login, { method: "POST", body: credentials, auth: false });
-    await this.#persistSession(response.data || null);
+    await this.sessionService().create(response.data || null);
     this.#onLine("login", response.data);
 
     await this.syncServices();
@@ -109,11 +112,17 @@ export class ApiKitClient {
     return session;
   }
 
-  async #preloadServiceSchemas() {
-    for (const service of this.#services.values()) {
-      if (service.name === "pending" || typeof service.loadSchema !== "function") continue;
-      await service.loadSchema();
-    }
+  async #expireSession(error) {
+    await this.#clearServices()
+    this.#stopPing();
+    this.#closeSse();
+    this.#clearWatchdog();
+    this.#offLine("auth-expired", error?.response || null);
+    this.#startPing();
+  }
+
+  async token() {
+    return (await this.session())?.token || null;
   }
 
   service(name) {
@@ -170,14 +179,6 @@ export class ApiKitClient {
     return this.#online;
   }
 
-  isConnected() {
-    return this.connected();
-  }
-
-  async token() {
-    return (await this.#loadSession())?.token || null;
-  }
-
   lastReceivedAt() {
     return this.#lastReceivedAt;
   }
@@ -209,10 +210,6 @@ export class ApiKitClient {
     return response;
   }
 
-  async stopConnection() {
-    return this.logout();
-  }
-
   async request(path, options = {}) {
     const url = this.url(path, options.query);
     const headers = { Accept: "application/json", ...(options.headers || {}) };
@@ -238,7 +235,7 @@ export class ApiKitClient {
   }
 
   url(path, query = {}) {
-    const url = new URL(joinUrl(this.#baseUrl, path), fallbackOrigin());
+    const url = new URL(joinUrl(joinUrl(this.#host, this.#baseUrl), path));
     for (const [key, value] of Object.entries(query || {})) {
       if (value === undefined || value === null) continue;
       url.searchParams.set(key, String(value));
@@ -261,7 +258,7 @@ export class ApiKitClient {
     }
 
     try {
-      const localSession = await this.#loadSession();
+      const localSession = await this.session() || null;
       if (!localSession?.token) throw new ApiKitClientError("Sesion local requerida", { status: 401 });
       await this.syncServices();
       await this.changes();
@@ -299,7 +296,6 @@ export class ApiKitClient {
 
   async #openSse() {
     if (this.#sseAbort) return;
-    await this.#loadSession();
     if (!(await this.token())) return;
     const controller = new AbortController();
     this.#sseAbort = controller;
@@ -359,37 +355,22 @@ export class ApiKitClient {
     } catch (error) {
       console.error("[api-kit] [sse]", error);
     }
-    await this.#applySseData(data);
+    await this.#applyServiceData(data);
     this.#emitChange({ type: "sse", data, lastReceivedAt: receivedAt });
   }
 
-  async #applySseData(data) {
+  async #applyServiceData(data) {
     if (!data || typeof data !== "object") return;
     const serviceName = data.service || data.serviceName || data.tableName;
     if (!serviceName || serviceName === "audit") return;
     const service = this.#services.get(serviceName);
     if (!service) return;
-
-    const action = data.action || data.type;
-    if (action === "create" || action === "update") {
-      const record = data.new && typeof data.new === "object" ? { ...data.new } : null;
-      if (!record) return;
-      if (record.id === undefined && data.rowId !== undefined && data.rowId !== null) record.id = data.rowId;
-      if (record.id === undefined || record.id === null) return;
-      await service.create(record, { pending: false });
-      return;
-    }
-
-    if (action === "delete" || action === "remove") {
-      const id = data.old?.id ?? data.rowId ?? data.id;
-      if (id === undefined || id === null) return;
-      await service.remove(id, { pending: false });
-    }
+    await service.applyData(data);
   }
 
   async #applyChangesData(data) {
     if (!Array.isArray(data)) return;
-    for (const change of data) await this.#applySseData(change);
+    for (const change of data) await this.#applyServiceData(change);
   }
 
   #resetWatchdog() {
@@ -415,15 +396,6 @@ export class ApiKitClient {
     this.#sseReader = null;
     abort?.abort();
     reader?.cancel?.().catch?.(() => {});
-  }
-
-  async #expireSession(error) {
-    await this.#clearServices()
-    this.#stopPing();
-    this.#closeSse();
-    this.#clearWatchdog();
-    this.#offLine("auth-expired", error?.response || null);
-    this.#startPing();
   }
 
   async #clearServices() {
@@ -460,14 +432,6 @@ export class ApiKitClient {
 
   #normalizeDateTime(value) {
     return value instanceof Date ? value.toISOString() : value;
-  }
-
-  async #loadSession() {
-    return (await this.sessionService().adapter.getAll())[0] || null;
-  }
-
-  async #persistSession(session = null) {
-    if (session) await this.sessionService().create(session, {pending:false});
   }
 }
 

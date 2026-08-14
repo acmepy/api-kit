@@ -12,17 +12,9 @@ function joinUrl(baseUrl, path) {
   return `${base}/${child}`;
 }
 
-function normalizeBaseUrl(value) {
-  return String(value || "").replace(/\/+$/g, "");
-}
-
 function normalizeTimeout(value, fallback) {
   const timeout = Number(value);
   return Number.isFinite(timeout) && timeout > 0 ? timeout : fallback;
-}
-
-function fallbackOrigin() {
-  return globalThis.location?.origin || "http://localhost";
 }
 
 class BaseAdapter {
@@ -305,6 +297,25 @@ class BaseService {
     return response;
   }
 
+  async applyData(data) {
+    if (!data || typeof data !== "object") return;
+    const action = data.action || data.type;
+    if (action === "create" || action === "update") {
+      const record = data.new && typeof data.new === "object" ? { ...data.new } : null;
+      if (!record) return;
+      //if (record.id === undefined && data.rowId !== undefined && data.rowId !== null) record.id = data.rowId;
+      if (record.id === undefined || record.id === null) return;
+      await this.adapter.put(record.id, record);
+      return;
+    }
+    if (action === "delete") {
+      const id = data.old?.id ?? data.rowId ?? data.id;
+      if (id === undefined || id === null) return;
+      await this.adapter.delete(id);
+      return;
+    }
+  }
+
   async nextTemporaryId() {
     if (!temporaryStorage) temporaryStorage = defaultAdapter({ prefix: this.prefix, service: "temporaryKey" });
     const record = await temporaryStorage.get("temporaryKey");
@@ -450,28 +461,19 @@ const INTERNAL_SERVICES = new Set(["audit", "auth", "openapi", "postman", "sessi
 
 function discoverServiceDescriptors(openapi, baseUrl = "") {
   const byName = new Map();
-  const pathPrefix = pathnamePrefix(baseUrl);
+  const pathPrefix = String(baseUrl || "").replace(/\/+$/g, "");
 
   for (const [path, methods] of Object.entries(openapi?.paths || {})) {
     for (const [method, operation] of Object.entries(methods || {})) {
       const serviceName = operation.tags?.[0];
       const serviceMethod = serviceMethodFor(operation.operationId, serviceName);
       if (!serviceName || !serviceMethod || INTERNAL_SERVICES.has(serviceName)) continue;
-
-      const clientPath = stripPathPrefix(path, pathPrefix);
-      if (!byName.has(serviceName)) {
-        byName.set(serviceName, { name: serviceName, path: basePathFor(clientPath), operations: {} });
-      }
-
+      const clientPath = pathPrefix && path.startsWith(`${pathPrefix}/`) ? path.slice(pathPrefix.length) : path;
+      if (!byName.has(serviceName)) byName.set(serviceName, { name: serviceName, path: clientPath, operations: {} });
       const descriptor = byName.get(serviceName);
-      descriptor.operations[serviceMethod] = {
-        method: method.toUpperCase(),
-        path: clientPath,
-        permissions: operation["x-permissions"] || [],
-      };
+      descriptor.operations[serviceMethod] = {method: method.toUpperCase(), path: clientPath, permissions: operation["x-permissions"] || []};
     }
   }
-
   return [...byName.values()];
 }
 
@@ -480,24 +482,6 @@ function serviceMethodFor(operationId = "", serviceName = "") {
   const method = normalized.split(/[._-]/).pop();
   if (["list", "get", "schema", "create", "update", "remove", "changes", "sse"].includes(method)) return method;
   return method || null;
-}
-
-function basePathFor(path) {
-  return path.replace(/\/\{[^}]+\}/g, "");
-}
-
-function pathnamePrefix(baseUrl) {
-  try {
-    const url = new URL(baseUrl, fallbackOrigin());
-    return url.pathname === "/" ? "" : url.pathname.replace(/\/+$/g, "");
-  } catch {
-    return "";
-  }
-}
-
-function stripPathPrefix(path, prefix) {
-  if (!prefix || path === prefix) return path;
-  return path.startsWith(`${prefix}/`) ? path.slice(prefix.length) || "/" : path;
 }
 
 class OpenapiService extends BaseService {
@@ -751,6 +735,7 @@ function createApiKitClient(options = {}) {
 }
 
 class ApiKitClient {
+  #host;
   #baseUrl;
   #fetch;
   #adapter;
@@ -775,7 +760,9 @@ class ApiKitClient {
   #paths;
 
   constructor(options = {}) {
-    this.#baseUrl = normalizeBaseUrl(options.baseUrl || options.url || "");
+    const url = new URL(options.url || "http://localhost:3000/api");
+    this.#host = url.origin;
+    this.#baseUrl = url.pathname.replace(/\/+$/g, "");
     this.#fetch = options.fetch || globalThis.fetch?.bind(globalThis);
     this.#adapter = options.adapter || defaultAdapter(options);
     this.#createAdapter = options.createAdapter || ((adapterOptions = {}) => defaultAdapter({ ...options, ...adapterOptions }));
@@ -809,7 +796,7 @@ class ApiKitClient {
 
   async login(credentials = {}) {
     const response = await this.request(this.#paths.login, { method: "POST", body: credentials, auth: false });
-    await this.#persistSession(response.data || null);
+    await this.sessionService().create(response.data || null);
     this.#onLine("login", response.data);
 
     await this.syncServices();
@@ -840,11 +827,17 @@ class ApiKitClient {
     return session;
   }
 
-  async #preloadServiceSchemas() {
-    for (const service of this.#services.values()) {
-      if (service.name === "pending" || typeof service.loadSchema !== "function") continue;
-      await service.loadSchema();
-    }
+  async #expireSession(error) {
+    await this.#clearServices();
+    this.#stopPing();
+    this.#closeSse();
+    this.#clearWatchdog();
+    this.#offLine("auth-expired", error?.response || null);
+    this.#startPing();
+  }
+
+  async token() {
+    return (await this.session())?.token || null;
   }
 
   service(name) {
@@ -901,14 +894,6 @@ class ApiKitClient {
     return this.#online;
   }
 
-  isConnected() {
-    return this.connected();
-  }
-
-  async token() {
-    return (await this.#loadSession())?.token || null;
-  }
-
   lastReceivedAt() {
     return this.#lastReceivedAt;
   }
@@ -940,10 +925,6 @@ class ApiKitClient {
     return response;
   }
 
-  async stopConnection() {
-    return this.logout();
-  }
-
   async request(path, options = {}) {
     const url = this.url(path, options.query);
     const headers = { Accept: "application/json", ...(options.headers || {}) };
@@ -969,7 +950,7 @@ class ApiKitClient {
   }
 
   url(path, query = {}) {
-    const url = new URL(joinUrl(this.#baseUrl, path), fallbackOrigin());
+    const url = new URL(joinUrl(joinUrl(this.#host, this.#baseUrl), path));
     for (const [key, value] of Object.entries(query || {})) {
       if (value === undefined || value === null) continue;
       url.searchParams.set(key, String(value));
@@ -992,7 +973,7 @@ class ApiKitClient {
     }
 
     try {
-      const localSession = await this.#loadSession();
+      const localSession = await this.session() || null;
       if (!localSession?.token) throw new ApiKitClientError("Sesion local requerida", { status: 401 });
       await this.syncServices();
       await this.changes();
@@ -1030,7 +1011,6 @@ class ApiKitClient {
 
   async #openSse() {
     if (this.#sseAbort) return;
-    await this.#loadSession();
     if (!(await this.token())) return;
     const controller = new AbortController();
     this.#sseAbort = controller;
@@ -1090,37 +1070,22 @@ class ApiKitClient {
     } catch (error) {
       console.error("[api-kit] [sse]", error);
     }
-    await this.#applySseData(data);
+    await this.#applyServiceData(data);
     this.#emitChange({ type: "sse", data, lastReceivedAt: receivedAt });
   }
 
-  async #applySseData(data) {
+  async #applyServiceData(data) {
     if (!data || typeof data !== "object") return;
     const serviceName = data.service || data.serviceName || data.tableName;
     if (!serviceName || serviceName === "audit") return;
     const service = this.#services.get(serviceName);
     if (!service) return;
-
-    const action = data.action || data.type;
-    if (action === "create" || action === "update") {
-      const record = data.new && typeof data.new === "object" ? { ...data.new } : null;
-      if (!record) return;
-      if (record.id === undefined && data.rowId !== undefined && data.rowId !== null) record.id = data.rowId;
-      if (record.id === undefined || record.id === null) return;
-      await service.create(record, { pending: false });
-      return;
-    }
-
-    if (action === "delete" || action === "remove") {
-      const id = data.old?.id ?? data.rowId ?? data.id;
-      if (id === undefined || id === null) return;
-      await service.remove(id, { pending: false });
-    }
+    await service.applyData(data);
   }
 
   async #applyChangesData(data) {
     if (!Array.isArray(data)) return;
-    for (const change of data) await this.#applySseData(change);
+    for (const change of data) await this.#applyServiceData(change);
   }
 
   #resetWatchdog() {
@@ -1146,15 +1111,6 @@ class ApiKitClient {
     this.#sseReader = null;
     abort?.abort();
     reader?.cancel?.().catch?.(() => {});
-  }
-
-  async #expireSession(error) {
-    await this.#clearServices();
-    this.#stopPing();
-    this.#closeSse();
-    this.#clearWatchdog();
-    this.#offLine("auth-expired", error?.response || null);
-    this.#startPing();
   }
 
   async #clearServices() {
@@ -1191,14 +1147,6 @@ class ApiKitClient {
 
   #normalizeDateTime(value) {
     return value instanceof Date ? value.toISOString() : value;
-  }
-
-  async #loadSession() {
-    return (await this.sessionService().adapter.getAll())[0] || null;
-  }
-
-  async #persistSession(session = null) {
-    if (session) await this.sessionService().create(session, {pending:false});
   }
 }
 
