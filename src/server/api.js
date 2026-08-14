@@ -21,7 +21,7 @@ import { errorHandler } from "./http/error-handler.js";
 import { requestLogger, setLogging } from "./logger/index.js";
 import { normalizeAuthBackendConfig, normalizeGlobalAuth } from "./utils/normalize.js";
 
-export async function createApiKit(conf = {}) {
+export async function createApi(conf = {}) {
   const auditEvents = new EventEmitter();
   const config = {
     seq: conf.seq,

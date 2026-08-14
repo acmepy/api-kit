@@ -9,13 +9,13 @@ import { SchemaService } from "./services/schema-service.js";
 import { SessionService } from "./services/session-service.js";
 import { joinUrl, normalizeTimeout } from "./utils.js";
 
-const DEFAULT_PREFIX = "api-kit";
+const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
 const DEFAULT_PING_INTERVAL = 5000;
 const DEFAULT_PING_TIMEOUT = 3000;
 const DEFAULT_SSE_WATCHDOG_TIMEOUT = 25000;
 
-export function createApiKitClient(options = {}) {
+export function createApiClient(options = {}) {
   return new ApiKitClient(options);
 }
 
@@ -170,7 +170,7 @@ export class ApiKitClient {
           await this.#expireSession(e);
           throw e;
         }
-        if (![404, 405].includes(e?.status) && e?.message !== "Schema disabled") console.error('api-kit-client, syncServices', e)
+        if (![404, 405].includes(e?.status) && e?.message !== "Schema disabled") console.error('api-client, syncServices', e)
       }
     }
   }
@@ -364,7 +364,7 @@ export class ApiKitClient {
     try {
       data = JSON.parse(data);
     } catch (error) {
-      console.error("[api-kit] [sse]", error);
+      console.error("[api] [sse]", error);
     }
     await this.#applyServiceData(data);
     this.#emitChange({ type: "sse", data, lastReceivedAt: receivedAt });

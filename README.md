@@ -1,6 +1,6 @@
-# api-kit
+# api
 
-`api-kit` arma APIs REST sobre Express a partir de modulos declarativos, modelos de `seq`, validaciones, IAM, auditoria, OpenAPI/Postman y apps estaticas. Tambien incluye un cliente browser/Node con cache local, operaciones pendientes, actualizaciones incrementales via `changes` e instantaneas por SSE.
+`api` arma APIs REST sobre Express a partir de modulos declarativos, modelos de `seq`, validaciones, IAM, auditoria, OpenAPI/Postman y apps estaticas. Tambien incluye un cliente browser/Node con cache local, operaciones pendientes, actualizaciones incrementales via `changes` e instantaneas por SSE.
 
 ## Instalacion
 
@@ -17,7 +17,7 @@ npm run dev
 El server queda en `http://localhost:3000`:
 
 - `http://localhost:3000/basic`: ejemplo simple que usa `fetch` directo.
-- `http://localhost:3000/client`: ejemplo con `api-kit/client`, cache local, pending, push, changes y SSE.
+- `http://localhost:3000/client`: ejemplo con `api/client`, cache local, pending, push, changes y SSE.
 - `http://localhost:3000/api`: API generada.
 - `http://localhost:3000/api/openapi.json`: OpenAPI.
 - `http://localhost:3000/api/postman.json`: coleccion Postman.
@@ -33,17 +33,17 @@ admin / 1234
 El paquete se importa por subpath explicito:
 
 ```js
-import { createApiKit } from "api-kit/server";
-import { createApiKitClient } from "api-kit/client";
-import { runApiKitCli } from "api-kit/cli";
+import { createApi } from "api/server";
+import { createApiClient } from "api/client";
+import { runApiKitCli } from "api/cli";
 ```
 
-El import raiz `api-kit` no exporta API publica.
+El import raiz `api` no exporta API publica.
 
 ## Server Basico
 
 ```js
-import { createApiKit } from "api-kit/server";
+import { createApi } from "api/server";
 import { Seq, SQLiteAdapter } from "seq";
 
 const adapter = new SQLiteAdapter({
@@ -62,7 +62,7 @@ const logger = {
   error: (...args) => console.error(...args),
 };
 
-const api = await createApiKit({
+const api = await createApi({
   seq,
   basePath: "/api",
   modules: "./example/modules.js",
@@ -83,7 +83,7 @@ await seq.sync();
 api.app.listen(3000);
 ```
 
-`createApiKit()` devuelve:
+`createApi()` devuelve:
 
 - `app`: instancia Express.
 - `router`: router principal montado.
@@ -95,11 +95,11 @@ api.app.listen(3000);
 - `auth`: contexto IAM, si auth esta habilitado.
 - `close()`: limpia listeners internos.
 
-Si pasas `app`, `api-kit` usa tu instancia Express. Si no, crea una. `json` esta activo por defecto y monta `express.json()`.
+Si pasas `app`, `api` usa tu instancia Express. Si no, crea una. `json` esta activo por defecto y monta `express.json()`.
 
 ## Seq
 
-`api-kit` usa `seq` como ORM. La configuracion de naming pertenece al adapter de `seq`, no a `createApiKit`.
+`api` usa `seq` como ORM. La configuracion de naming pertenece al adapter de `seq`, no a `createApi`.
 
 ```js
 const adapter = new SQLiteAdapter({
@@ -117,7 +117,7 @@ Los modelos creados desde modulos declarativos se registran en `seq`, se sincron
 
 ## IAM
 
-La autenticacion se delega a `iam`. Con `auth` habilitado, `api-kit` registra bajo `basePath`:
+La autenticacion se delega a `iam`. Con `auth` habilitado, `api` registra bajo `basePath`:
 
 - `POST /login`
 - `GET /session`
@@ -154,14 +154,14 @@ const logger = {
   error: (...args) => console.error(...args),
 };
 
-const api = await createApiKit({
+const api = await createApi({
   seq,
   modules,
   logging: logger,
 });
 ```
 
-Con `true`, `api-kit` usa `console`. Con objeto, llama `logger.info`, `logger.warn` y `logger.error` cuando existan.
+Con `true`, `api` usa `console`. Con objeto, llama `logger.info`, `logger.warn` y `logger.error` cuando existan.
 
 ## Modulos
 
@@ -295,7 +295,7 @@ GET /api/productos?precio__mayor=10
 
 ## Audit, Changes y SSE
 
-Con `audit: true`, `api-kit` registra cambios de recursos auditables en la tabla `audit`.
+Con `audit: true`, `api` registra cambios de recursos auditables en la tabla `audit`.
 
 Rutas generadas:
 
@@ -339,12 +339,12 @@ Devuelve:
 
 ## Cliente
 
-`api-kit/client` descubre servicios desde OpenAPI, guarda sesion local, usa Bearer token y mantiene cache local mediante adapters.
+`api/client` descubre servicios desde OpenAPI, guarda sesion local, usa Bearer token y mantiene cache local mediante adapters.
 
 ```js
-import { createApiKitClient, LocalStorageAdapter } from "api-kit/client";
+import { createApiClient, LocalStorageAdapter } from "api/client";
 
-const client = createApiKitClient({
+const client = createApiClient({
   baseUrl: "/api",
   adapter: new LocalStorageAdapter(),
   pingInterval: 5000,
@@ -458,15 +458,15 @@ import {
   MapAdapter,
   LocalStorageAdapter,
   IndexedDbAdapter,
-} from "api-kit/client";
+} from "api/client";
 ```
 
 El adapter guarda:
 
-- `api-kit:session`
-- caches por servicio, por ejemplo `api-kit:clientes`
-- `api-kit:pending`
-- `api-kit:temporaryId`
+- `api:session`
+- caches por servicio, por ejemplo `api:clientes`
+- `api:pending`
+- `api:temporaryId`
 
 Puedes cambiar el prefijo con `prefix`.
 
@@ -496,7 +496,7 @@ Opciones:
 - `index`: archivo de fallback; default `index.html`.
 - `options`: opciones para `express.static`.
 
-No uses `staticFiles` ni exports `static` dentro de modules: `createApiKit` los ignora.
+No uses `staticFiles` ni exports `static` dentro de modules: `createApi` los ignora.
 
 ## Instalador de Frontends
 
@@ -528,7 +528,7 @@ El token de GitHub se toma de `process.env.GITHUB_TOKEN` o del body `{ "token": 
 Opciones soportadas:
 
 ```js
-const api = await createApiKit({
+const api = await createApi({
   seq,
   cors: { origin: "https://app.example.com" },
   helmet: true,
@@ -551,7 +551,7 @@ const api = await createApiKit({
 ## OpenAPI y Postman
 
 ```js
-const api = await createApiKit({
+const api = await createApi({
   seq,
   basePath: "/api",
   modules: "./example/modules.js",

@@ -1,10 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createApiKitClient, BaseService, OpenapiService, SchemaService, SessionService } from "../src/client/index.js";
+import { createApiClient, BaseService, OpenapiService, SchemaService, SessionService } from "../src/client/index.js";
 
 describe("client public API", () => {
   it("builds urls from the configured base url and query params", () => {
-    const client = createApiKitClient({
+    const client = createApiClient({
       url: "http://server/api",
       fetch: async () => jsonResponse({ ok: true }),
       pingInterval: 60_000,
@@ -19,7 +19,7 @@ describe("client public API", () => {
   });
 
   it("registers the session service lazily", async () => {
-    const client = createApiKitClient({
+    const client = createApiClient({
       url: "http://server/api",
       fetch: async () => jsonResponse({ ok: true }),
       pingInterval: 60_000,
@@ -37,7 +37,7 @@ describe("client public API", () => {
   it("sends bearer token from the local session cache", async () => {
     const calls = [];
     const adapter = memoryAdapter([["session", { token: "local-token", user: { id: "admin" } }]]);
-    const client = createApiKitClient({
+    const client = createApiClient({
       url: "http://server/api",
       adapter,
       createAdapter: ({ service }) => service === "session" ? adapter : memoryAdapter(),
@@ -57,7 +57,7 @@ describe("client public API", () => {
   });
 
   it("wraps network errors with an ok false response", async () => {
-    const client = createApiKitClient({
+    const client = createApiClient({
       url: "http://server/api",
       fetch: async () => {
         throw new TypeError("Failed to fetch");
@@ -81,7 +81,7 @@ describe("client public API", () => {
     const calls = [];
     const adapters = adapterRegistry();
     const openapi = openapiDocument();
-    const client = createApiKitClient({
+    const client = createApiClient({
       url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
@@ -118,7 +118,7 @@ describe("client public API", () => {
     const adapters = adapterRegistry();
     const cachedOpenapi = openapiDocument();
     await adapters.forService("openapi").add(cachedOpenapi);
-    const client = createApiKitClient({
+    const client = createApiClient({
       url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
@@ -148,7 +148,7 @@ describe("client public API", () => {
     const openapiStarted = new Promise((resolve) => {
       releaseOpenapi = resolve;
     });
-    const client = createApiKitClient({
+    const client = createApiClient({
       url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
@@ -180,7 +180,7 @@ describe("client public API", () => {
     const adapters = adapterRegistry();
     const openapi = openapiDocument();
     const events = [];
-    const client = createApiKitClient({
+    const client = createApiClient({
       url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
@@ -202,7 +202,7 @@ describe("client public API", () => {
 
   it("stops ping timers and clears listeners when destroy or disconnect is called", async () => {
     let pingCount = 0;
-    const client = createApiKitClient({
+    const client = createApiClient({
       url: "http://server/api",
       fetch: async (url) => {
         if (String(url).includes("/ping")) pingCount++;

@@ -72,7 +72,7 @@ export function renderInstallHtml(apps) {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>api-kit install</title>
+    <title>api install</title>
     <style>
       body { font-family: system-ui, sans-serif; margin: 2rem; color: #1f2937; }
       table { border-collapse: collapse; width: 100%; }
@@ -176,7 +176,7 @@ async function downloadArchive({ app, tag, token, fetch }) {
 
 async function githubFetch(url, token, fetch) {
   if (typeof fetch !== "function") throw new AppError("fetch no esta disponible", { status: 500, code: "FETCH_NOT_AVAILABLE" });
-  const headers = { "User-Agent": "api-kit", Accept: "application/vnd.github+json" };
+  const headers = { "User-Agent": "api", Accept: "application/vnd.github+json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(url, { headers, redirect: "follow" });
@@ -194,7 +194,7 @@ function readInstalledTag(target) {
 }
 
 async function extractAndReplace({ app, archive, tag }) {
-  const extractDir = path.join(os.tmpdir(), `api-kit-${app.app}-${tag}-${Date.now()}`);
+  const extractDir = path.join(os.tmpdir(), `api-${app.app}-${tag}-${Date.now()}`);
   const staging = path.join(app.publicRoot, `.install-${app.app}-${Date.now()}`);
 
   try {

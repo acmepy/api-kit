@@ -21,9 +21,9 @@ const external = (id) => (
 );
 
 const bundles = [
-  ["src/server/index.js", "dist/api-kit-server"],
-  ["src/client/index.js", "dist/api-kit-client"],
-  ["src/cli/index.js", "dist/api-kit-cli"],
+  ["src/server/index.js", "dist/api-server"],
+  ["src/client/index.js", "dist/api-client"],
+  ["src/cli/index.js", "dist/api-cli"],
 ];
 
 export default bundles.map(([input, outputName]) => ({

@@ -1,6 +1,6 @@
-import { createApiKitClient, LocalStorageAdapter } from "api-kit/client";
+import { createApiClient, LocalStorageAdapter } from "api/client";
 
-const client = createApiKitClient({
+const client = createApiClient({
   url: `${window.location.origin}/api`,
   adapter: new LocalStorageAdapter(),
   createAdapter: (options = {}) => new LocalStorageAdapter(options),
@@ -91,7 +91,7 @@ async function render() {
   app.innerHTML = `
     <header class="topbar">
       <div>
-        <span class="eyebrow">api-kit</span>
+        <span class="eyebrow">api</span>
         <h1>Client demo</h1>
       </div>
       <div class="badges">

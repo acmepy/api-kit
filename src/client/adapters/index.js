@@ -7,7 +7,7 @@ export { MapAdapter } from "./map-adapter.js";
 export { LocalStorageAdapter } from "./local-storage-adapter.js";
 export { IndexedDbAdapter } from "./indexed-db-adapter.js";
 
-export function createAdapter({ type, prefix = "api-kit", service, ...options } = {}) {
+export function createAdapter({ type, prefix = "api", service, ...options } = {}) {
   if (type === "localStorage") return new LocalStorageAdapter({ ...options, prefix, service });
   if (type === "indexedDB" || type === "indexdb") return new IndexedDbAdapter(options);
   return new MapAdapter();
@@ -21,6 +21,6 @@ export function defaultAdapter(options = {}) {
     ...adapterOptions,
     ...storageOption,
     type: options.type || storageType,
-    prefix: options.prefix || "api-kit",
+    prefix: options.prefix || "api",
   });
 }

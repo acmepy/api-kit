@@ -1,4 +1,4 @@
-export { createApiKit } from "./api-kit.js";
+export { createApi } from "./api.js";
 export { log, requestLogger, setLogging } from "./logger/index.js";
 export { defineResource } from "./config/config-resource.js";
 export { BaseModel, BaseModule, BaseRouter, BaseService } from "./base/index.js";

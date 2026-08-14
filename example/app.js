@@ -1,4 +1,4 @@
-import { createApiKit } from "api-kit/server";
+import { createApi } from "api/server";
 import { MySQLAdapter, Seq, SQLiteAdapter } from "seq";
 import express from "express";
 import fs from "node:fs/promises";
@@ -19,7 +19,7 @@ async function main() {
   const adapter = createAdapter({ dataDir });
   const seq = new Seq({ adapter, logging:false });
 
-  const api = await createApiKit({
+  const api = await createApi({
     seq,
     basePath: "/api",
     modules: "./example/modules.js",
@@ -34,7 +34,7 @@ async function main() {
     logging: logger,
   });
 
-  api.app.use("/api-kit/dist", express.static(path.join(rootDir, "dist")));
+  api.app.use("/api/dist", express.static(path.join(rootDir, "dist")));
   api.app.use("/vendor/yep", express.static(path.join(rootDir, "node_modules/yep/dist")));
 
   await seq.authenticate();
@@ -43,9 +43,9 @@ async function main() {
 
   const port = process.env.PORT || 3000;
   api.app.listen(port, () => {
-    console.log(`[api-kit] adapter: ${adapterName()}`);
-    console.log(`[api-kit] basic example running on http://localhost:${port}/basic`);
-    console.log(`[api-kit] client example running on http://localhost:${port}/client`);
+    console.log(`[api] adapter: ${adapterName()}`);
+    console.log(`[api] basic example running on http://localhost:${port}/basic`);
+    console.log(`[api] client example running on http://localhost:${port}/client`);
   });
 }
 
@@ -74,7 +74,7 @@ function createAdapter({ dataDir }) {
   }
 
   return new SQLiteAdapter({
-    database: process.env.SQLITE_DATABASE || path.join(dataDir, "api-kit.sqlite"),
+    database: process.env.SQLITE_DATABASE || path.join(dataDir, "api.sqlite"),
     naming,
   });
 }

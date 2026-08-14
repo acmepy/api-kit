@@ -52,7 +52,7 @@ function render() {
   app.innerHTML = `
     <header class="topbar">
       <div>
-        <span class="eyebrow">api-kit</span>
+        <span class="eyebrow">api</span>
         <h1>Basic fetch demo</h1>
       </div>
       <span class="session ${state.token ? "on" : "off"}">${state.token ? "Token en memoria" : "Sin token"}</span>

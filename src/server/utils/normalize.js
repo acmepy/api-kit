@@ -35,7 +35,7 @@ export function normalizeGlobalAuth(auth) {
 
 export function normalizeAuthBackendConfig(auth) {
   if (!auth) return null;
-  return {loginPath: "/login", sessionPath: "/session", logoutPath: "/logout", secret: process.env.IAM_SECRET || "api-kit-dev-secret", tokenExpiresIn: auth?.tokenExpiresIn || "1h", adapter: auth?.adapter, models: auth?.models, ...auth};
+  return {loginPath: "/login", sessionPath: "/session", logoutPath: "/logout", secret: process.env.IAM_SECRET || "api-dev-secret", tokenExpiresIn: auth?.tokenExpiresIn || "1h", adapter: auth?.adapter, models: auth?.models, ...auth};
 }
 
 export function normalizeJsonSchema(schema) {

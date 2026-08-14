@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import { createTestSeq } from "./helpers/seq.js";
-import { createApiKit } from "../src/server/index.js";
+import { createApi } from "../src/server/index.js";
 
 const modules = [
   {
@@ -20,7 +20,7 @@ const modules = [
 describe("auth", () => {
   it("logs in, authorizes bearer/basic requests, checks permissions, and logs out", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
@@ -137,7 +137,7 @@ describe("auth", () => {
 
   it("delegates bearer-only auth challenges to iam", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       auth: { required: true, strategies: ["bearer"], secret: "test-secret" },

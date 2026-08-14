@@ -1,6 +1,6 @@
 {
-  "name": "api-kit",
-  "version": "1.0.44",
+  "name": "api",
+  "version": "1.0.5",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -10,7 +10,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "github:acmepy/api-kit"
+    "url": "github:acmepy/api"
   },
   "license": "MIT",
   "author": "Hugo",
@@ -20,9 +20,9 @@
     "README.md"
   ],
   "exports": {
-    "./server": "./dist/api-kit-server.js",
-    "./client": "./dist/api-kit-client.js",
-    "./cli": "./dist/api-kit-cli.js"
+    "./server": "./dist/api-server.js",
+    "./client": "./dist/api-client.js",
+    "./cli": "./dist/api-cli.js"
   },
   "scripts": {
     "build": "rollup -c",

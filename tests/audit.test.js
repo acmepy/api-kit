@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import { createTestSeq } from "./helpers/seq.js";
-import { createApiKit, defineResource } from "../src/server/index.js";
+import { createApi, defineResource } from "../src/server/index.js";
 
 const modules = [
   {
@@ -48,7 +48,7 @@ const modules = [
 describe("audit", () => {
   it("audits enabled modules and skips disabled/audit modules", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, audit: true, modules });
+    const api = await createApi({ seq, audit: true, modules });
 
     await seq.authenticate();
     await seq.init();
@@ -70,7 +70,7 @@ describe("audit", () => {
 
   it("audits upsert creates and updates", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, audit: true, modules });
+    const api = await createApi({ seq, audit: true, modules });
 
     await seq.authenticate();
     await seq.init();
@@ -96,7 +96,7 @@ describe("audit", () => {
 
   it("audits removed master-detail rows with old data", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, audit: true, modules: detailAuditModules() });
+    const api = await createApi({ seq, audit: true, modules: detailAuditModules() });
 
     await seq.authenticate();
     await seq.init();
@@ -126,7 +126,7 @@ describe("audit", () => {
 
   it("exposes removed master-detail rows through changes and sse", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules: detailAuditModules() });
+    const api = await createApi({ seq, basePath: "/api", audit: true, modules: detailAuditModules() });
 
     await seq.authenticate();
     await seq.init();
@@ -173,7 +173,7 @@ describe("audit", () => {
 
   it("exposes audit changes since a date", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
+    const api = await createApi({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
     await seq.init();
@@ -209,7 +209,7 @@ describe("audit", () => {
 
   it("filters audit changes by the user's list permission on the changed resource", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       audit: true,
@@ -249,7 +249,7 @@ describe("audit", () => {
 
   it("audits IAM session changes without exposing them through changes or sse events", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       audit: true,
@@ -308,7 +308,7 @@ describe("audit", () => {
 
   it("streams audit changes over sse", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
+    const api = await createApi({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
     await seq.init();
@@ -340,7 +340,7 @@ describe("audit", () => {
 
   it("exposes basic active sse client information", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
+    const api = await createApi({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
     await seq.init();
@@ -380,7 +380,7 @@ describe("audit", () => {
 
   it("streams audit updates over sse", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
+    const api = await createApi({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
     await seq.init();
@@ -413,7 +413,7 @@ describe("audit", () => {
 
   it("streams audit deletes over sse", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, basePath: "/api", audit: true, modules });
+    const api = await createApi({ seq, basePath: "/api", audit: true, modules });
 
     await seq.authenticate();
     await seq.init();
@@ -447,7 +447,7 @@ describe("audit", () => {
 
   it("uses the configured audit sse heartbeat timeout", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({ seq, basePath: "/api", audit: { heartbeatTimeout: 10 }, modules });
+    const api = await createApi({ seq, basePath: "/api", audit: { heartbeatTimeout: 10 }, modules });
 
     await seq.authenticate();
     await seq.init();
@@ -474,7 +474,7 @@ describe("audit", () => {
 
   it("closes authenticated sse streams when the bearer token expires", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 50 },
@@ -517,7 +517,7 @@ describe("audit", () => {
 
   it("streams authenticated audit changes created inside service transactions", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 50 },
@@ -564,7 +564,7 @@ describe("audit", () => {
 
   it("closes authenticated sse streams when the iam session is deactivated", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 20 },

@@ -10,7 +10,7 @@ export class IndexedDbAdapter extends BaseAdapter {
     super();
     this.#indexedDB = options.indexedDB || globalThis.indexedDB;
     if (!this.#indexedDB) throw new Error("IndexedDbAdapter requiere indexedDB");
-    this.#dbName = options.dbName || "api-kit";
+    this.#dbName = options.dbName || "api";
     this.#storeName = options.storeName || "session";
   }
 

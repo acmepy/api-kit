@@ -5,7 +5,7 @@ export class LocalStorageAdapter extends BaseAdapter {
   #key;
   #data;
 
-  constructor({ storage = globalThis.localStorage, service = "", prefix = "api-kit" } = {}) {
+  constructor({ storage = globalThis.localStorage, service = "", prefix = "api" } = {}) {
     super();
     if (!storage) throw new Error("LocalStorageAdapter requiere localStorage");
     this.#storage = storage;

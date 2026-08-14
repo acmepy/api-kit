@@ -1,4 +1,4 @@
-export { createApiKitClient, ApiKitClient } from "./api-kit-client.js";
+export { createApiClient, ApiKitClient } from "./api-client.js";
 export { BaseService } from "./services/base-service.js";
 export { PendingService } from "./services/pending-service.js";
 export { SchemaService } from "./services/schema-service.js";

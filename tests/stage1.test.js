@@ -4,7 +4,7 @@ import http from "node:http";
 import express from "express";
 import packageInfo from "../package.json" with { type: "json" };
 import yep from "yep";
-import { createApiKit, defineResource } from "../src/server/index.js";
+import { createApi, defineResource } from "../src/server/index.js";
 import { getContext } from "../src/server/index.js";
 import { normalizeModule } from "../src/server/config/config-normalizer.js";
 import { DataTypes } from "seq";
@@ -70,7 +70,7 @@ before(async () => {
   const app = express();
   app.use(express.json());
 
-  api = await createApiKit({
+  api = await createApi({
     seq,
     baseDir: process.cwd(),
     basePath: "/api",
@@ -119,7 +119,7 @@ after(async () => {
 });
 
 describe("Etapa 1 - Nucleo", () => {
-  describe("createApiKit()", () => {
+  describe("createApi()", () => {
     it("returns router", () => {
       assert.ok(api.router);
     });

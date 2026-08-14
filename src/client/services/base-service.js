@@ -4,7 +4,7 @@ import {defaultAdapter} from "../adapters/index.js";
 let temporaryStorage;
 
 export class BaseService {
-  constructor({ client, name, path, operations = {}, schemas = {}, prefix = "api-kit", createAdapter }) {
+  constructor({ client, name, path, operations = {}, schemas = {}, prefix = "api", createAdapter }) {
     this.client = client;
     this.name = name;
     this.path = path;

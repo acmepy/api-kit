@@ -1,0 +1,1 @@
+{"version":3,"file":"api-cli.js","sources":["../src/cli/index.js"],"sourcesContent":["export async function runApiKitCli() {\r\n  throw new Error(\"api/cli is not implemented yet\");\r\n}\r\n"],"names":[],"mappings":"AAAO,eAAe,YAAY,GAAG;AACrC,EAAE,MAAM,IAAI,KAAK,CAAC,gCAAgC,CAAC,CAAC;AACpD;;;;"}

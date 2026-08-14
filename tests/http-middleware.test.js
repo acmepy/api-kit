@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import { createTestSeq } from "./helpers/seq.js";
-import { createApiKit, defineResource } from "../src/server/index.js";
+import { createApi, defineResource } from "../src/server/index.js";
 
 function loggedClienteResource() {
   return defineResource({
@@ -20,7 +20,7 @@ function loggedClienteResource() {
 describe("http middleware", () => {
   it("returns an express app with routes and error handling mounted", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       openapi: {},
@@ -47,7 +47,7 @@ describe("http middleware", () => {
       assert.equal(ok.status, 200);
       assert.equal(ok.body.openapi, "3.0.3");
       assert.equal(welcome.status, 200);
-      assert.deepEqual(welcome.body, { ok: true, data: { name: "api-kit", message: "Bienvenido al backend de api-kit" } });
+      assert.deepEqual(welcome.body, { ok: true, data: { name: "api", message: "Bienvenido al backend de api" } });
       assert.equal(fail.status, 500);
       assert.equal(fail.body.code, "INTERNAL_ERROR");
       assert.equal(fail.body.message, "App boom");
@@ -62,7 +62,7 @@ describe("http middleware", () => {
     const seq = createTestSeq({ logging: false });
     const app = express();
     app.get("/health", (_req, res) => res.json({ ok: true }));
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       app,
       basePath: "/api",
@@ -90,9 +90,9 @@ describe("http middleware", () => {
     }
   });
 
-  it("can enable cors, helmet, and compression from createApiKit options", async () => {
+  it("can enable cors, helmet, and compression from createApi options", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       openapi: {},
@@ -130,9 +130,9 @@ describe("http middleware", () => {
     }
   });
 
-  it("can enable rate limit and trust proxy from createApiKit options", async () => {
+  it("can enable rate limit and trust proxy from createApi options", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       openapi: {},
@@ -173,7 +173,7 @@ describe("http middleware", () => {
 
   it("can parse text/plain bodies while coexisting with express json", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       text: true,
@@ -217,7 +217,7 @@ describe("http middleware", () => {
 
   it("serves a package welcome message at the base path", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       baseDir: process.cwd(),
       basePath: "/api",
@@ -237,7 +237,7 @@ describe("http middleware", () => {
       const openapi = await request(server, "GET", "/api/openapi.json");
 
       assert.equal(welcome.status, 200);
-      assert.deepEqual(welcome.body, { ok: true, data: { name: "api-kit", message: "Bienvenido al backend de api-kit" } });
+      assert.deepEqual(welcome.body, { ok: true, data: { name: "api", message: "Bienvenido al backend de api" } });
       assert.equal(ping.status, 200);
       assert.deepEqual(ping.body, { ok: true, data: { pong: true } });
       assert.ok(openapi.body.paths["/api"].get);
@@ -252,7 +252,7 @@ describe("http middleware", () => {
 
   it("parses application/json bodies by default", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       modules: [],
@@ -288,7 +288,7 @@ describe("http middleware", () => {
 
   it("creates master-detail records from inline detail module definitions", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       modules: [
@@ -355,7 +355,7 @@ describe("http middleware", () => {
 
   it("can serve static app files with spa fallback from modules config", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       modules: {
@@ -396,7 +396,7 @@ describe("http middleware", () => {
 
   it("serves the basic example without the client package or browser persistence", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       modules: "./example/modules.js",
@@ -418,12 +418,12 @@ describe("http middleware", () => {
     try {
       const index = await request(server, "GET", "/basic");
       assert.equal(index.status, 200);
-      assert.match(index.raw, /api-kit basic/);
+      assert.match(index.raw, /api basic/);
 
       const asset = await request(server, "GET", "/basic/app.js");
       assert.equal(asset.status, 200);
       assert.match(asset.raw, /fetch/);
-      assert.doesNotMatch(asset.raw, /api-kit\/client/);
+      assert.doesNotMatch(asset.raw, /api\/client/);
       assert.doesNotMatch(asset.raw, /Promise\.all/);
       assert.doesNotMatch(asset.raw, /localStorage|sessionStorage|indexedDB|IndexedDB/);
     } finally {
@@ -434,7 +434,7 @@ describe("http middleware", () => {
 
   it("serves the client example using only the client package for API calls", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       modules: "./example/modules.js",
@@ -456,12 +456,12 @@ describe("http middleware", () => {
     try {
       const index = await request(server, "GET", "/client");
       assert.equal(index.status, 200);
-      assert.match(index.raw, /api-kit client/);
-      assert.match(index.raw, /api-kit\/client/);
+      assert.match(index.raw, /api client/);
+      assert.match(index.raw, /api\/client/);
 
       const asset = await request(server, "GET", "/client/app.js");
       assert.equal(asset.status, 200);
-      assert.match(asset.raw, /createApiKitClient/);
+      assert.match(asset.raw, /createApiClient/);
       assert.match(asset.raw, /LocalStorageAdapter/);
       assert.match(asset.raw, /client\.connected\(\)/);
       assert.match(asset.raw, /services\.clientes\.list\(\)/);
@@ -500,7 +500,7 @@ describe("http middleware", () => {
 
   it("can merge static app module entries from multiple module files", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       modules: ["./tests/fixtures/static-bundle-a.js", "./tests/fixtures/static-bundle-b.js"],
     });
@@ -529,9 +529,9 @@ describe("http middleware", () => {
     }
   });
 
-  it("ignores staticFiles passed directly to createApiKit", async () => {
+  it("ignores staticFiles passed directly to createApi", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       modules: [],
       staticFiles: { mountPath: "/legacy", path: "./tests/fixtures/vue-app" },
@@ -558,7 +558,7 @@ describe("http middleware", () => {
 
   it("ignores staticFiles and static exports from module bundles", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       modules: "./tests/fixtures/legacy-static-bundle.js",
     });
@@ -585,10 +585,10 @@ describe("http middleware", () => {
     }
   });
 
-  it("logs requests through the api-kit logger", async () => {
+  it("logs requests through the api logger", async () => {
     const seq = createTestSeq({ logging: false });
     const infos = [];
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       openapi: {},
@@ -612,14 +612,14 @@ describe("http middleware", () => {
       const res = await request(server, "GET", "/api/openapi.json", {
         headers: {
           "X-Transaction-Id": "tx-123",
-          "User-Agent": "api-kit-test",
+          "User-Agent": "api-test",
         },
       });
       await new Promise((resolve) => setImmediate(resolve));
 
       assert.equal(res.status, 200);
       assert.equal(infos.length, 1);
-      assert.equal(infos[0][0], "[api-kit] [request]");
+      assert.equal(infos[0][0], "[api] [request]");
       assert.equal(infos[0][1], "tx-123");
       assert.equal(typeof infos[0][2], "string");
       assert.equal(infos[0][3], "GET");
@@ -628,7 +628,7 @@ describe("http middleware", () => {
       assert.equal(typeof infos[0][6], "number");
       assert.ok(infos[0][6] >= 0);
       assert.equal(Number(infos[0][7]), Number(res.headers["content-length"] || 0));
-      assert.equal(infos[0][8], "api-kit-test");
+      assert.equal(infos[0][8], "api-test");
     } finally {
       await api.close();
       await close(server);
@@ -639,7 +639,7 @@ describe("http middleware", () => {
     const seq = createTestSeq({ logging: false });
     const warnings = [];
     const errors = [];
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       baseDir: process.cwd(),
       basePath: "/api",
@@ -684,7 +684,7 @@ describe("http middleware", () => {
       assert.equal(errors.length, 0);
       assert.equal(warnings.length, 2);
 
-      assert.equal(warnings[0][0], "[api-kit] [http.error]");
+      assert.equal(warnings[0][0], "[api] [http.error]");
       assert.match(warnings[0][1], /^\[[^\]]+\]$/);
       assert.equal(warnings[0][2], "NotFoundError");
       assert.equal(warnings[0][4], 404);
@@ -693,7 +693,7 @@ describe("http middleware", () => {
       assert.equal(warnings[0][7], "/api/clientes/ruc/80000000-0");
       assert.equal(warnings[0][9], false);
 
-      assert.equal(warnings[1][0], "[api-kit] [http.error]");
+      assert.equal(warnings[1][0], "[api] [http.error]");
       assert.equal(warnings[1][4], 404);
       assert.equal(warnings[1][6], "GET");
       assert.equal(warnings[1][7], "/api/clientes/999");
@@ -701,7 +701,7 @@ describe("http middleware", () => {
 
       assert.equal(res.status, 500);
       assert.equal(errors.length, 1);
-      assert.equal(errors[0][0], "[api-kit] [http.error]");
+      assert.equal(errors[0][0], "[api] [http.error]");
       assert.match(errors[0][1], /^\[[^\]]+\]$/);
       assert.equal(errors[0][2], "Error");
       assert.equal(errors[0][3], "Boom");
@@ -718,7 +718,7 @@ describe("http middleware", () => {
 
   it("returns conflict errors for duplicated unique values", async () => {
     const seq = createTestSeq({ logging: false });
-    const api = await createApiKit({
+    const api = await createApi({
       seq,
       basePath: "/api",
       modules: [

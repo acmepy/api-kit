@@ -7,7 +7,7 @@ import os from "node:os";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import AdmZip from "adm-zip";
 import { createTestSeq } from "./helpers/seq.js";
-import { createApiKit } from "../src/server/index.js";
+import { createApi } from "../src/server/index.js";
 import { installApp, normalizeInstallableApps, renderInstallHtml, renderInstallScript } from "../src/server/install/install.services.js";
 
 describe("installable static modules", () => {
@@ -201,7 +201,7 @@ describe("install routes", () => {
 
 async function testApi(options) {
   const seq = createTestSeq({ logging: false });
-  const api = await createApiKit({ seq, ...options });
+  const api = await createApi({ seq, ...options });
   await seq.authenticate();
   await seq.init();
   await seq.sync({ force: true });
@@ -217,7 +217,7 @@ async function testServer(api) {
 }
 
 async function tempBaseDir() {
-  const baseDir = await mkdtemp(path.join(os.tmpdir(), "api-kit-install-"));
+  const baseDir = await mkdtemp(path.join(os.tmpdir(), "api-install-"));
   await mkdir(path.join(baseDir, "public"), { recursive: true });
   return baseDir;
 }
