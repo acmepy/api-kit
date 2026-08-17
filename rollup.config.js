@@ -26,13 +26,23 @@ const bundles = [
   ["src/cli/index.js", "dist/api-cli"],
 ];
 
-export default bundles.map(([input, outputName]) => ({
-  input,
-  external,
-  plugins: minify ? [terser()] : [],
-  output: {
-    file: `${outputName}${minify ? ".min" : ""}.js`,
-    format: "es",
-    sourcemap: true
-  },
-}));
+function createBundle(input, outputName, shouldMinify = false) {
+  return {
+    input,
+    external,
+    plugins: shouldMinify ? [terser()] : [],
+    output: {
+      file: `${outputName}${shouldMinify ? ".min" : ""}.js`,
+      format: "es",
+      sourcemap: true,
+    },
+  };
+}
+
+const clientMinBundle = createBundle("src/client/index.js", "dist/api-client", true);
+
+const outputs = minify
+  ? [clientMinBundle]
+  : [...bundles.map(([input, outputName]) => createBundle(input, outputName)), clientMinBundle];
+
+export default outputs;
