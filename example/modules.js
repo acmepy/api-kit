@@ -8,6 +8,10 @@ export const modules = [
     path: "./example/public/client",
   },
   {
+    mountPath: "/vue",
+    path: "./example/public/vue",
+  },
+  {
     modelName: "Cliente",
     tableName: "clientes",
     timestamps: true,

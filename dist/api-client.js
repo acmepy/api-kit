@@ -236,11 +236,13 @@ class BaseService {
     const pending = options.pending ?? !this.client.connected?.();
     if (!pending) {
       const response = await this.#send("create", { body: record });
-      if (!response.ok) await this.adapter.add(response.data);
+      if (response.data) await this.adapter.add(response.data);
+      this.#notify();
       return response;
     }
     data = {...record, id: record.id ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
     await this.adapter.add(data);
+    this.#notify();
     this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
@@ -253,10 +255,12 @@ class BaseService {
       const response = await this.#send("update", { params: { id }, body: data });
       const nextRecord = response.data || record;
       await this.adapter.put(nextRecord.id ?? id, nextRecord);
+      this.#notify();
       return response;
     }
     data = {...current, ...data, pending: true, operation:'update', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id ?? id, data);
+    this.#notify();
     const ret = await this.pushOne(data);
     if(!ret.ok) throw ret;
     return { ok: true, data };
@@ -268,10 +272,12 @@ class BaseService {
     if (!pending) {
       const response = await this.#send("remove", { params: { id } });
       await this.adapter.delete(id);
+      this.#notify();
       return response;
     }
     const data = {...current, id, pending: true, operation:'remove', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id, data);
+    this.#notify();
     this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
@@ -287,31 +293,44 @@ class BaseService {
       nextQuery = this.#nextPageQuery(response, nextQuery);
     }
 
-    if (records.length > 0) await this.adapter.add(records);
+    if (records.length > 0) {
+      await this.adapter.add(records);
+      this.#notify();
+    }
     return { ok: true, data: records };
   }
 
   async pullOne(id, query = {}) {
     const response = await this.#send("get", { params: { id }, query });
-    if (response.data?.id !== undefined) await this.adapter.add(response.data);
+    if (response.data?.id !== undefined) {
+      await this.adapter.add(response.data);
+      this.#notify();
+    }
     return response;
   }
 
   async applyData(data) {
     if (!data || typeof data !== "object") return;
-    const action = data.action || data.type;
-    if (action === "create" || action === "update") {
-      const record = data.new && typeof data.new === "object" ? { ...data.new } : null;
-      if (!record) return;
-      //if (record.id === undefined && data.rowId !== undefined && data.rowId !== null) record.id = data.rowId;
-      if (record.id === undefined || record.id === null) return;
-      await this.adapter.put(record.id, record);
+    const action = String(data.action || data.type || "").toLowerCase();
+    const isCreate = action === "create" || action === "bulk-create";
+    const isUpdate = action === "update" || action === "bulk-update";
+    if (isCreate || isUpdate) {
+      const changes = data.new && typeof data.new === "object" ? { ...data.new } : null;
+      if (!changes) return;
+      const current = await this.#recordForChange(data, changes.id);
+      const id = current?.id ?? changes.id ?? data.rowId ?? data.id ?? data.old?.id;
+      if (id === undefined || id === null) return;
+      const record = isUpdate ? { ...current, ...changes, id } : { ...changes, id };
+      await this.adapter.put(id, record);
+      this.#notify();
       return;
     }
-    if (action === "delete") {
-      const id = data.old?.id ?? data.rowId ?? data.id;
+    if (action === "delete" || action === "bulk-delete" || action === "remove" || action === "bulk-remove") {
+      const current = await this.#recordForChange(data);
+      const id = current?.id ?? data.old?.id ?? data.rowId ?? data.id;
       if (id === undefined || id === null) return;
       await this.adapter.delete(id);
+      this.#notify();
       return;
     }
   }
@@ -336,11 +355,13 @@ class BaseService {
     try {
       const response = await this.#sendPendingOperation(record);
       if (record.operation === "create") await this.adapter.delete(record.id);
+      this.#notify();
       return { ok: true, id: record.id, operation: record.operation, response };
     } catch (error) {
       const errors = error.errors || error.response?.errors || null;
       const nextRecord = {...record, pending: true, status: "error", message: error.message, errors};
       await this.adapter.put(record.id, nextRecord);
+      this.#notify();
       return { ok: false, id: record.id, operation: record.operation, error: error.message, errors };
     }
   }
@@ -377,6 +398,19 @@ class BaseService {
 
   async clear() {
     await this.adapter.clear();
+    this.#notify();
+  }
+
+  #notify() {
+    this.client.notifyChange?.({ service: this.name });
+  }
+
+  async #recordForChange(data, preferredId) {
+    const id = preferredId ?? data.rowId ?? data.id ?? data.old?.id;
+    if (id === undefined || id === null) return null;
+    const direct = await this.adapter.get(id);
+    if (direct) return direct;
+    return (await this.adapter.getAll()).find((record) => String(record?.id) === String(id)) || null;
   }
 
   async #sendPendingOperation(record) {
@@ -823,7 +857,7 @@ class ApiKitClient {
   }
   async session() {
     const session = (await this.sessionService().adapter.getAll())[0] || {};
-    if (session?.token) await this.syncServices();
+    if (session?.token && !this.#syncServicesPromise) await this.syncServices();
     return session;
   }
 
@@ -851,7 +885,19 @@ class ApiKitClient {
   }
 
   async syncServices(force = false) {
-    if(!force && this.#services.get('openapi')) return; //para evitar que se ejecute varias veces.
+    if (this.#syncServicesPromise) return this.#syncServicesPromise;
+    if (!force && this.#services.get("openapi")) return;
+
+    const sync = this.#synchronizeServices(force);
+    this.#syncServicesPromise = sync;
+    try {
+      return await sync;
+    } finally {
+      if (this.#syncServicesPromise === sync) this.#syncServicesPromise = null;
+    }
+  }
+
+  async #synchronizeServices(force) {
     const openapiService = new OpenapiService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, path: this.#paths.openapi });
     this.#services.set("openapi", openapiService);
     let openapi;
@@ -917,6 +963,10 @@ class ApiKitClient {
 
   offChange(listener) {
     this.#listeners.delete(listener);
+  }
+
+  notifyChange(event = {}) {
+    this.#emitChange({ type: "cache", ...event });
   }
 
   async changes(since) {

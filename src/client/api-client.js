@@ -108,7 +108,7 @@ export class ApiKitClient {
   }
   async session() {
     const session = (await this.sessionService().adapter.getAll())[0] || {};
-    if (session?.token) await this.syncServices();
+    if (session?.token && !this.#syncServicesPromise) await this.syncServices();
     return session;
   }
 
@@ -136,7 +136,19 @@ export class ApiKitClient {
   }
 
   async syncServices(force = false) {
-    if(!force && this.#services.get('openapi')) return; //para evitar que se ejecute varias veces.
+    if (this.#syncServicesPromise) return this.#syncServicesPromise;
+    if (!force && this.#services.get("openapi")) return;
+
+    const sync = this.#synchronizeServices(force);
+    this.#syncServicesPromise = sync;
+    try {
+      return await sync;
+    } finally {
+      if (this.#syncServicesPromise === sync) this.#syncServicesPromise = null;
+    }
+  }
+
+  async #synchronizeServices(force) {
     const openapiService = new OpenapiService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, path: this.#paths.openapi });
     this.#services.set("openapi", openapiService);
     let openapi;
@@ -202,6 +214,10 @@ export class ApiKitClient {
 
   offChange(listener) {
     this.#listeners.delete(listener);
+  }
+
+  notifyChange(event = {}) {
+    this.#emitChange({ type: "cache", ...event });
   }
 
   async changes(since) {

@@ -170,10 +170,15 @@ describe("client public API", () => {
     calls.length = 0;
     const first = client.syncServices();
     const second = client.syncServices();
+    let secondFinished = false;
+    second.then(() => { secondFinished = true; });
+    await wait(1);
+    assert.equal(secondFinished, false);
     releaseOpenapi();
     await Promise.all([first, second]);
 
     assert.equal(calls.filter((pathname) => pathname === "/api/openapi.json").length, 1);
+    assert.ok(client.service("clientes") instanceof BaseService);
   });
 
   it("expires the local session when schema download returns unauthorized", async () => {

@@ -384,6 +384,36 @@ Metodos publicos principales:
 
 Si `syncServices()` o `changes()` reciben `401`, el cliente hace logout local por expiracion: limpia sesion, caches y pending, cierra SSE, marca offline y vuelve a ping. No llama `POST /logout` en ese caso.
 
+## Vue
+
+`api/vue` conecta el cliente con refs de Vue. El cliente mantiene la cache, los cambios de `changes` y SSE; los composables exponen esa cache de forma reactiva.
+
+```js
+import { createApp } from "vue";
+import { createApiClient } from "api/client";
+import { createApiVue } from "api/vue";
+import App from "./App.vue";
+
+const client = createApiClient({ url: "http://localhost:3000/api" });
+const api = createApiVue(client);
+
+createApp(App).use(api).mount("#app");
+```
+
+Dentro de un componente:
+
+```js
+import { useApi, useApiService } from "api/vue";
+
+const api = useApi();
+const { records: clientes, loading, error, create, update, remove, pull } = useApiService("clientes");
+
+await api.login({ username: "admin", password: "1234" });
+// `clientes` se actualiza automáticamente ante cambios locales, changes y SSE.
+```
+
+`useApi()` expone refs de `connected`, `session`, `event`, `error` y `ready`, además de `login()`, `logout()` y `sync()`. `useApiService(nombre)` expone `records` (también `data`), `loading`, `error`, `empty`, `refresh()` para releer cache y las operaciones `pull`, `create`, `update`, `remove` y `push`.
+
 ## Servicios del Cliente
 
 Cada recurso descubierto se usa como servicio:

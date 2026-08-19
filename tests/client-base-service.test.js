@@ -3,6 +3,21 @@ import assert from "node:assert/strict";
 import { BaseService } from "../src/client/services/base-service.js";
 
 describe("Client BaseService", () => {
+  it("applies partial audit SSE updates and deletes using rowId", async () => {
+    const records = [{ id: 1, nombre: "Ana", activo: true }];
+    const service = new BaseService({
+      client: {},
+      name: "clientes",
+      createAdapter: () => memoryAdapter(records),
+    });
+
+    await service.applyData({ action: "bulk-update", rowId: "1", new: { activo: false } });
+    assert.deepEqual(records, [{ id: 1, nombre: "Ana", activo: false }]);
+
+    await service.applyData({ action: "bulk-delete", rowId: "1", old: { nombre: "Ana" }, new: {} });
+    assert.deepEqual(records, []);
+  });
+
   it("sends discovered operations through the public request helper", async () => {
     const calls = [];
     const service = new BaseService({

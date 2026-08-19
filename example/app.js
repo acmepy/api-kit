@@ -36,6 +36,7 @@ async function main() {
 
   api.app.use("/api/dist", express.static(path.join(rootDir, "dist")));
   api.app.use("/vendor/yep", express.static(path.join(rootDir, "node_modules/yep/dist")));
+  api.app.use("/vendor/vue", express.static(path.join(rootDir, "node_modules/vue/dist")));
 
   await seq.authenticate();
   await seq.sync();
@@ -45,7 +46,8 @@ async function main() {
   api.app.listen(port, () => {
     console.log(`[api] adapter: ${adapterName()}`);
     console.log(`[api] basic example running on http://localhost:${port}/basic`);
-    console.log(`[api] client example running on http://localhost:${port}/client`);
+  console.log(`[api] client example running on http://localhost:${port}/client`);
+  console.log(`[api] Vue example running on http://localhost:${port}/vue`);
   });
 }
 

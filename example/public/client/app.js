@@ -36,7 +36,10 @@ const app = document.querySelector("#app");
 client.onChange((event) => {
   state.connectionSource = event.source || event.type;
   if (event.type === "sync") refreshFromClient({ background: true }).catch(() => {});
-  if (event.type === "changes" || event.type === "sse") refreshLocalState().then(() => renderFromBackground()).catch(() => {});
+  if (event.type === "changes" || event.type === "sse") {
+    tryAssignServices();
+    refreshLocalState().then(() => renderFromBackground()).catch(() => {});
+  }
   updateStatusIndicators();
 });
 
@@ -376,7 +379,10 @@ async function init() {
     state.user = session.user || null;
     state.hasToken = true;
     state.status = "Session local OK";
-    assignServices();
+    if (!tryAssignServices()) {
+      state.status = "Sincronizando servicios...";
+      return;
+    }
     await loadCachedLists();
   });
 }
@@ -616,10 +622,6 @@ async function refreshFromClient(options = {}) {
 }
 
 function renderFromBackground() {
-  if (document.activeElement?.closest?.("form")) {
-    updateStatusIndicators();
-    return;
-  }
   render();
 }
 
