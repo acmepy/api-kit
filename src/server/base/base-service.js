@@ -96,7 +96,7 @@ export class BaseService {
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     //const pk = this.#primaryKeyAttribute();
     const pk = this.#model.primaryKeyAttribute;
-    const data = await this.#schemas.update.validate(masterBody);
+    const data = await this.#schemas.update.validate({ ...masterBody, __uniqueId: params.id });
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
     const [instance] = await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
     return { data: instance?.toJSON() || payload };

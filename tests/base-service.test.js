@@ -307,14 +307,13 @@ describe("BaseService list filters", () => {
     );
   });
 
-  it("returns seq unique constraint errors directly", async () => {
+  it("validates unique values before reaching the database", async () => {
     await assert.rejects(
       () => service.create({ body: { name: "Duplicate", email: "basic@test.com", price: 40 } }),
       (error) => {
-        assert.equal(error.status, 409);
-        assert.equal(error.code, "CONFLICT");
+        assert.equal(error.status, 400);
+        assert.equal(error.code, "VALIDATION_ERROR");
         assert.deepEqual(error.errors, { email: "Ya existe un registro con este valor" });
-        assert.equal(error.details.constraint.type, "unique");
         return true;
       },
     );

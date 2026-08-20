@@ -179,6 +179,16 @@ export class BaseService {
     return schema.validateAt(attribute, data);
   }
 
+  async unique(field, value, data = {}) {
+    if (value === undefined || value === null) return null;
+    const currentId = data?.id;
+    const records = (await this.list()).data;
+    const duplicate = records.find((record) => (
+      record?.[field] === value && (currentId === undefined || String(record.id) !== String(currentId))
+    ));
+    return duplicate ? new Error("Ya existe un registro con este valor") : null;
+  }
+
   permissions(operation) {
     return [...(this.operations[operation]?.permissions || [])];
   }
@@ -247,8 +257,18 @@ export class BaseService {
       const { id, ...schemas } = (await this.client.service("schema").get(this.name))?.data || {};
       this.schemas = schemas;
     }
-    const schema = this.schemas?.[operation];
-    return schema ? yep.fromJsonSchema(schema) : null;
+    const jsonSchema = this.schemas?.[operation];
+    if (!jsonSchema) return null;
+    const schema = yep.fromJsonSchema(jsonSchema);
+    this.#applyUniqueRules(schema, jsonSchema);
+    return schema;
+  }
+
+  #applyUniqueRules(schema, jsonSchema) {
+    for (const [field, property] of Object.entries(jsonSchema?.properties || {})) {
+      if (property?.unique !== true || typeof schema.shapeDefinition?.[field]?.unique !== "function") continue;
+      schema.shapeDefinition[field].unique((value, attribute, data) => this.unique(attribute, value, data));
+    }
   }
 
 

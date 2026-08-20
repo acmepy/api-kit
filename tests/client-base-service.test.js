@@ -280,6 +280,29 @@ describe("Client BaseService", () => {
     );
   });
 
+  it("validates unique fields against the local service list", async () => {
+    const service = new BaseService({
+      client: schemaClient("clientes", {
+        create: {
+          type: "object",
+          properties: { email: { type: "string", unique: true } },
+        },
+        update: {
+          type: "object",
+          properties: { email: { type: "string", unique: true } },
+        },
+      }),
+      name: "clientes",
+      createAdapter: () => memoryAdapter([{ id: 1, email: "ana@example.com" }]),
+    });
+
+    await assert.rejects(
+      () => service.validate({ email: "ana@example.com" }, "create"),
+      (error) => error.errors.email === "Ya existe un registro con este valor",
+    );
+    assert.deepEqual(await service.validate({ id: 1, email: "ana@example.com" }, "update"), { email: "ana@example.com" });
+  });
+
   it("validates one field with validateAt", async () => {
     const service = new BaseService({
       client: schemaClient("clientes", {

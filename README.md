@@ -386,7 +386,15 @@ Si `syncServices()` o `changes()` reciben `401`, el cliente hace logout local po
 
 ## Vue
 
-`api/vue` conecta el cliente con refs de Vue. El cliente mantiene la cache, los cambios de `changes` y SSE; los composables exponen esa cache de forma reactiva.
+`api/vue` conecta un `ApiKitClient` con Composition API. Vue es una peer dependency opcional: solo es necesaria si importas este subpath.
+
+```bash
+npm install vue
+```
+
+El cliente mantiene cache, operaciones pendientes, `changes` y SSE; los composables exponen esos datos de forma reactiva.
+
+### Instalación
 
 ```js
 import { createApp } from "vue";
@@ -399,6 +407,8 @@ const api = createApiVue(client);
 
 createApp(App).use(api).mount("#app");
 ```
+
+Instala el plugin una sola vez. `createApiVue(client)` devuelve `api`, con refs de `connected`, `session`, `event`, `lastReceivedAt`, `error` y `ready`; los métodos `login()`, `logout()` y `sync()`; la promesa `initialized`; y `dispose()` para retirar su listener global.
 
 Dentro de un componente:
 
@@ -413,6 +423,41 @@ await api.login({ username: "admin", password: "1234" });
 ```
 
 `useApi()` expone refs de `connected`, `session`, `event`, `error` y `ready`, además de `login()`, `logout()` y `sync()`. `useApiService(nombre)` expone `records` (también `data`), `loading`, `error`, `empty`, `refresh()` para releer cache y las operaciones `pull`, `create`, `update`, `remove` y `push`.
+
+Para formularios usa `useApiForm()`. Sus `data` y `errors` son reactivos; al modificar un campo valida con debounce, incluidas las reglas `unique` disponibles en la cache local.
+
+```js
+import { useApiForm } from "api/vue";
+
+const clienteForm = useApiForm("clientes", {
+  operation: "create",
+  initial: { ruc: "", nombre: "", email: "" },
+  debounce: 250,
+});
+
+await clienteForm.submit();
+```
+
+```html
+<input v-model="clienteForm.data.ruc">
+<small v-if="clienteForm.errors.ruc">{{ clienteForm.errors.ruc }}</small>
+```
+
+`useApiService(nombre)` maneja una colección reactiva: expone `records`/`data`, `loading`, `error`, `empty`, `refresh()`/`list()` para cache local, `pull()`/`pullOne()` para el servidor y CRUD (`create`, `update`, `remove`, `push`). Vuelve a leer la cache cuando el cliente recibe cambios locales, `changes` o SSE.
+
+`useApiForm(nombre, opciones)` expone `data`, `errors`, `validating`, `submitting`, `valid`, `validateField()`, `validate()`, `submit()`, `reset()` y `clearErrors()`. Los errores devueltos durante `submit()` quedan disponibles en `errors` por campo.
+
+Para editar, configura `operation: "update"` e indica el ID (valor o `ref`):
+
+```js
+const clienteForm = useApiForm("clientes", {
+  operation: "update",
+  id: clienteId,
+  initial: { nombre: "" },
+});
+```
+
+Las reglas `unique` se comprueban en el cliente contra su cache local. Son una validación de experiencia de usuario; el servidor y la restricción de base de datos siguen siendo la autoridad final.
 
 ## Servicios del Cliente
 

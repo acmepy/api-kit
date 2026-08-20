@@ -25,10 +25,10 @@ export function defineResource(definition = {}) {
   const modelOptions = pickModelOptions(definition);
   const normalizedAttributes = normalizeAttributes(attributes);
   const modelAttributes = buildModelAttributes(normalizedAttributes);
-  const generatedSchemas = buildSchemas(normalizedAttributes, schemas, definition);
   const ResourceModel = CustomModel || class extends Model {
     static define(seq) {return this.init(modelAttributes, { ...modelOptions, seq })}
   };
+  const generatedSchemas = buildSchemas(normalizedAttributes, schemas, definition, ResourceModel);
 
   ResourceModel.attributes = modelAttributes;
   ResourceModel.resourceSchemas = generatedSchemas;
@@ -101,10 +101,10 @@ function buildModelAttributes(attributes) {
   return modelAttributes;
 }
 
-function buildSchemas(attributes, explicitSchemas, definition = {}) {
+function buildSchemas(attributes, explicitSchemas, definition = {}, model) {
   const generated = {
-    create: explicitSchemas.create || yep.object(buildShape(attributes, "create")),
-    update: explicitSchemas.update || yep.object(buildShape(attributes, "update")),
+    create: explicitSchemas.create || yep.object(buildShape(attributes, "create", model)),
+    update: explicitSchemas.update || yep.object(buildShape(attributes, "update", model)),
     ...explicitSchemas,
   };
   applyObjectRules(generated.create, definition, "create");
@@ -112,11 +112,11 @@ function buildSchemas(attributes, explicitSchemas, definition = {}) {
   return generated;
 }
 
-function buildShape(attributes, operation) {
+function buildShape(attributes, operation, model) {
   const shape = {};
   for (const [name, definition] of Object.entries(attributes)) {
     if (!shouldIncludeInSchema(definition, operation)) continue;
-    const schema = resolveValidation(definition, operation);
+    const schema = resolveValidation(definition, operation, model, primaryKeyName(attributes));
     if (schema) shape[name] = schema;
   }
   return shape;
@@ -136,13 +136,29 @@ function isVirtualDataType(type) {
   return type?.key === "VIRTUAL" || type?.constructor?.name === "VirtualType";
 }
 
-function resolveValidation(definition, operation) {
+function resolveValidation(definition, operation, model, primaryKey) {
   const schema = applyDeclarativeRules(inferValidation(definition), definition);
   if (!schema || typeof schema.validate !== "function") return null;
   if (operation === "create" && definition.allowNull === false && typeof schema.required === "function") schema.required();
   if (definition.allowNull === true && typeof schema.nullable === "function") schema.nullable();
   if (operation === "create" && definition.defaultValue !== undefined && typeof schema.default === "function") schema.default(definition.defaultValue);
+  if (definition.unique === true && typeof schema.unique === "function") schema.unique(uniqueValidator(model, primaryKey));
   return schema;
+}
+
+function primaryKeyName(attributes) {
+  return Object.entries(attributes).find(([, definition]) => definition.primaryKey)?.[0] || "id";
+}
+
+function uniqueValidator(model, primaryKey) {
+  return async (value, field, data = {}) => {
+    const existing = await model.findOne({ where: { [field]: value } });
+    if (!existing) return null;
+    const existingId = typeof existing.get === "function" ? existing.get(primaryKey) : existing[primaryKey];
+    const currentId = data.__uniqueId ?? data[primaryKey];
+    if (currentId !== undefined && String(existingId) === String(currentId)) return null;
+    return new Error("Ya existe un registro con este valor");
+  };
 }
 
 function applyDeclarativeRules(schema, definition) {

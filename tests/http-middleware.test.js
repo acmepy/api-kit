@@ -716,7 +716,7 @@ describe("http middleware", () => {
     }
   });
 
-  it("returns conflict errors for duplicated unique values", async () => {
+  it("validates duplicated unique values before persisting", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({
       seq,
@@ -748,9 +748,9 @@ describe("http middleware", () => {
       const list = await request(server, "GET", "/api/clientes");
 
       assert.equal(first.status, 200);
-      assert.equal(duplicated.status, 409);
-      assert.equal(duplicated.body.ok, false);
-      assert.equal(duplicated.body.code, "CONFLICT");
+        assert.equal(duplicated.status, 400);
+        assert.equal(duplicated.body.ok, false);
+        assert.equal(duplicated.body.code, "VALIDATION_ERROR");
       assert.equal(typeof duplicated.body.message, "string");
       assert.deepEqual(duplicated.body.errors, { ruc: "Ya existe un registro con este valor" });
       assert.equal(list.status, 200);

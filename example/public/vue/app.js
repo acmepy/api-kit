@@ -1,6 +1,6 @@
 import { createApp, reactive, ref } from "vue";
 import { createApiClient, LocalStorageAdapter } from "api/client";
-import { createApiVue, useApi, useApiService } from "api/vue";
+import { createApiVue, useApi, useApiForm, useApiService } from "api/vue";
 
 const client = createApiClient({
   url: `${window.location.origin}/api`,
@@ -16,7 +16,10 @@ const api = createApiVue(client);
 createApp({
   setup() {
     const loginForm = reactive({ username: "admin", password: "1234" });
-    const clienteForm = reactive({ ruc: "", nombre: "", email: "" });
+    const clienteForm = useApiForm("clientes", {
+      operation: "create",
+      initial: { ruc: "", nombre: "", email: "", activo: true },
+    });
     const ventaForm = reactive({
       cliente: "",
       fecha: localDateTime(),
@@ -48,14 +51,8 @@ createApp({
 
     const logout = () => run(() => api.logout());
     const createCliente = () => run(async () => {
-      try {
-        clienteErrors.value = {};
-        await clientes.create({ ...clienteForm, activo: true });
-        Object.assign(clienteForm, { ruc: "", nombre: "", email: "" });
-      } catch (error) {
-        clienteErrors.value = error.errors || error.response?.errors || {};
-        throw error;
-      }
+      await clienteForm.submit();
+      clienteForm.reset();
     });
     const startEdit = (cliente) => {
       clienteErrors.value = {};
@@ -157,8 +154,8 @@ createApp({
       <section class="panel wide">
         <div class="section-row"><h2>Clientes</h2><button :disabled="!api.session.value?.token" @click="clientes.pull()">Actualizar</button></div>
         <form class="inline-form" @submit.prevent="createCliente">
-          <div><input v-model="clienteForm.ruc" placeholder="RUC"><small v-if="fieldError('ruc')" class="field-error">{{ fieldError('ruc') }}</small></div><div><input v-model="clienteForm.nombre" placeholder="Nombre" required><small v-if="fieldError('nombre')" class="field-error">{{ fieldError('nombre') }}</small></div><div><input v-model="clienteForm.email" placeholder="Email" type="email"><small v-if="fieldError('email')" class="field-error">{{ fieldError('email') }}</small></div>
-          <button :disabled="!api.session.value?.token">Crear cliente</button>
+          <div><input v-model="clienteForm.data.ruc" placeholder="RUC"><small v-if="clienteForm.errors.ruc" class="field-error">{{ clienteForm.errors.ruc }}</small></div><div><input v-model="clienteForm.data.nombre" placeholder="Nombre" required><small v-if="clienteForm.errors.nombre" class="field-error">{{ clienteForm.errors.nombre }}</small></div><div><input v-model="clienteForm.data.email" placeholder="Email" type="email"><small v-if="clienteForm.errors.email" class="field-error">{{ clienteForm.errors.email }}</small></div>
+          <button :disabled="!api.session.value?.token || clienteForm.submitting.value">Crear cliente</button>
         </form>
         <p v-if="clientes.loading.value" class="muted">Leyendo cache local…</p>
         <div v-else-if="clientes.empty.value" class="muted">Sin clientes.</div>

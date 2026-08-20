@@ -1,4 +1,4 @@
-import { computed, inject, onScopeDispose, provide, readonly, ref } from "vue";
+import { computed, inject, onScopeDispose, provide, reactive, readonly, ref, watch } from "vue";
 
 /** Injection key used by the ApiKit Vue plugin. */
 export const ApiVueKey = Symbol("ApiKitVue");
@@ -176,5 +176,119 @@ export function useApiService(name) {
     update: run("update"),
     remove: run("remove"),
     push: run("push"),
+  };
+}
+
+/**
+ * Reactive form state backed by a discovered client service.
+ * Unique rules are evaluated against the service's local cache as fields
+ * change, while submit still lets the server remain the final authority.
+ */
+export function useApiForm(name, options = {}) {
+  const api = useApi();
+  const data = reactive({ ...(options.initial || {}) });
+  const errors = reactive({});
+  const validating = ref(false);
+  const submitting = ref(false);
+  const debounce = Number(options.debounce ?? 250);
+  const timers = new Map();
+
+  const service = () => api.client.service(name);
+  const operation = () => {
+    const value = typeof options.operation === "function" ? options.operation() : options.operation?.value ?? options.operation;
+    return value || "create";
+  };
+  const available = () => typeof api.client.services !== "function" || api.client.services().has(name);
+  const setErrors = (nextErrors = {}) => {
+    for (const key of Object.keys(errors)) delete errors[key];
+    Object.assign(errors, nextErrors || {});
+  };
+  const setFieldError = (field, value) => {
+    if (value) errors[field] = value;
+    else delete errors[field];
+  };
+
+  const validateField = async (field) => {
+    if (!available()) return true;
+    validating.value = true;
+    try {
+      await service().validateAt(field, data, operation());
+      setFieldError(field, null);
+      return true;
+    } catch (cause) {
+      setFieldError(field, cause.errors?.[field] || cause.message);
+      return false;
+    } finally {
+      validating.value = false;
+    }
+  };
+  const scheduleFieldValidation = (field) => {
+    clearTimeout(timers.get(field));
+    timers.set(field, setTimeout(() => {
+      validateField(field).catch(() => {});
+    }, Math.max(0, debounce)));
+  };
+  const validate = async () => {
+    if (!available()) return data;
+    validating.value = true;
+    try {
+      const validated = await service().validate(data, operation());
+      Object.assign(data, validated);
+      setErrors();
+      return validated;
+    } catch (cause) {
+      setErrors(cause.errors || { form: cause.message });
+      throw cause;
+    } finally {
+      validating.value = false;
+    }
+  };
+  const submit = async () => {
+    submitting.value = true;
+    try {
+      const validated = await validate();
+      const action = operation();
+      if (action === "create") return await service().create(validated);
+      if (action === "update") {
+        const id = options.id?.value ?? options.id ?? data.id;
+        if (id === undefined || id === null) throw new Error("useApiForm requiere id para update");
+        return await service().update(id, validated);
+      }
+      throw new Error(`Operacion de formulario "${action}" no soportada`);
+    } catch (cause) {
+      if (cause.errors) setErrors(cause.errors);
+      throw cause;
+    } finally {
+      submitting.value = false;
+    }
+  };
+  const reset = (values = options.initial || {}) => {
+    for (const key of Object.keys(data)) delete data[key];
+    Object.assign(data, values);
+    setErrors();
+  };
+
+  const stop = watch(() => ({ ...data }), (next, previous) => {
+    for (const field of Object.keys(next)) {
+      if (next[field] !== previous[field]) scheduleFieldValidation(field);
+    }
+  });
+  onScopeDispose(() => {
+    stop();
+    for (const timer of timers.values()) clearTimeout(timer);
+  });
+
+  return {
+    name,
+    data,
+    errors: readonly(errors),
+    validating: readonly(validating),
+    submitting: readonly(submitting),
+    valid: computed(() => Object.keys(errors).length === 0),
+    validateField,
+    validate,
+    submit,
+    reset,
+    clearErrors: () => setErrors(),
   };
 }

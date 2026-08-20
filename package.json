@@ -40,7 +40,7 @@
     "express": "^5.1.0",
     "iam": "file:../iam",
     "seq": "file:../seq-orm/seq",
-    "yep": "github:acmepy/yep"
+    "yep": "file:../yep"
   },
   "peerDependencies": {
     "compression": "^1.8.1",
