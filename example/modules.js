@@ -1,16 +1,7 @@
 export const modules = [
-  {
-    mountPath: "/basic",
-    path: "./example/public/basic",
-  },
-  {
-    mountPath: "/client",
-    path: "./example/public/client",
-  },
-  {
-    mountPath: "/vue",
-    path: "./example/public/vue",
-  },
+  { mountPath: "/basic", path: "./example/public/basic" },
+  { mountPath: "/client", path: "./example/public/client" },
+  { mountPath: "/vue", path: "./example/public/vue" },
   {
     modelName: "Cliente",
     tableName: "clientes",

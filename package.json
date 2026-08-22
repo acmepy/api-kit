@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -26,7 +26,7 @@
     "./cli": "./dist/api-cli.js"
   },
   "scripts": {
-    "build": "rollup -c",
+    "build": "npm run test && rollup -c",
     "build:min": "rollup -c --environment MINIFY:true",
     "prepack": "npm run build",
     "test": "node --test",

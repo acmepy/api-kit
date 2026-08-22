@@ -44,7 +44,7 @@ function isRootPostmanItem(route) {
 
 function collectionDescription(config, packageInfo) {
   const description = config.description || packageInfo.description || "";
-  const loginHelp = "Use el request Login para obtener el token. Al ejecutarlo, la coleccion actualiza automaticamente la variable bearerToken con el token recibido para usar el resto de los recursos protegidos. Use el request Logout para cerrar la sesion y limpiar bearerToken.";
+  const loginHelp = "Use el request Login para obtener el token.";
   return [description, loginHelp].filter(Boolean).join("\n\n");
 }
 

@@ -416,10 +416,8 @@ describe("Etapa 1 - Nucleo", () => {
       const res = await request("GET", "/api/postman.json");
       assert.equal(res.status, 200);
       assert.equal(res.body.info.schema, "https://schema.getpostman.com/json/collection/v2.1.0/collection.json");
-      assert.match(res.body.info.description, /Use el request Login para obtener el token/);
-      assert.match(res.body.info.description, /actualiza automaticamente la variable bearerToken/);
-      assert.match(res.body.info.description, /Use el request Logout/);
-      assert.match(res.body.info.description, /limpiar bearerToken/);
+      assert.match(res.body.info.description, /Use el request Login para obtener el token\./);
+      assert.doesNotMatch(res.body.info.description, /bearerToken|Logout/);
       assert.equal(res.body.variable.find((item) => item.key === "baseUrl").value, "http://localhost:3000");
 
       const root = res.body.item.find((item) => item.name === "api");
