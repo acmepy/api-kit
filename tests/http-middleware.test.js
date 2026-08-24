@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { createTestSeq } from "./helpers/seq.js";
+import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi, defineResource } from "../src/server/index.js";
 
 function loggedClienteResource() {
@@ -400,7 +400,7 @@ describe("http middleware", () => {
       seq,
       basePath: "/api",
       modules: "./example/modules.js",
-      auth: { required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
       audit: true,
       openapi: true,
     });
@@ -438,7 +438,7 @@ describe("http middleware", () => {
       seq,
       basePath: "/api",
       modules: "./example/modules.js",
-      auth: { required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
       audit: true,
       openapi: true,
     });

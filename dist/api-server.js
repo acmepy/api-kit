@@ -11,7 +11,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import AdmZip from 'adm-zip';
 import { RBAC } from 'iam';
-import { SeqAdapter } from 'iam/adapters';
 import { auth, can } from 'iam/express';
 
 class AppError extends Error {
@@ -2572,8 +2571,10 @@ function plainAuditModel(change) {
   };
 }
 
-function installAuthRoutes({ mainRouter, routeRegistry, config, authContext }) {
-  if (!authContext) return;
+function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
+  if (!auth) return null;
+  if (!auth.adapter) throw new ConfigError("auth.adapter es requerido cuando auth esta habilitado");
+  const authContext = createAuthContext(config, auth);
 
   const loginPath = joinPaths(config.basePath, authContext.loginPath);
   const sessionPath = joinPaths(config.basePath, authContext.sessionPath);
@@ -2589,10 +2590,11 @@ function installAuthRoutes({ mainRouter, routeRegistry, config, authContext }) {
   authRouter.get(authContext.sessionPath, authContext.middleware);
   authRouter.post(authContext.logoutPath, authContext.middleware);
   mainRouter.use(basePath, authRouter);
+  return authContext;
 }
 
-function createAuthContext(config, authBackend, { auditWriter } = {}) {
-  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models, auditable: authAuditable(config, authBackend, auditWriter) });
+function createAuthContext(config, authBackend) {
+  const adapter = authBackend.adapter;
   const rbac = new RBAC({ adapter });
   const logging = authBackend.logging ?? config.logging;
   const authConfig = { ...authBackend, logging };
@@ -2600,19 +2602,20 @@ function createAuthContext(config, authBackend, { auditWriter } = {}) {
   return { ...authConfig, adapter, rbac, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
 }
 
-function createAuthorizer(authContext) {
-  return ({ auth: auth$1 = { required: false }, permissions = [] } = {}) => {
-    if (!auth$1?.required) return (_req, _res, next) => next();
-    if (!authContext) return (_req, res) => res.status(401).json({ ok: false, message: "Auth no configurado" });
+function createAuthorizer(resolveAuthContext) {
+  return ({ auth = { required: false }, permissions = [] } = {}) => {
+    if (!auth?.required) return (_req, _res, next) => next();
+    return (req, res, next) => {
+      const authContext = typeof resolveAuthContext === "function" ? resolveAuthContext() : resolveAuthContext;
+      if (!authContext) return res.status(401).json({ ok: false, message: "Auth no configurado" });
 
-    const handlers = [
-      auth(iamAuthOptions({ ...authContext, ...auth$1 }, authContext.adapter)),
-      syncAuthContext,
-      ...(permissions || []).filter(Boolean).map((permission) => can(permission)),
-      syncAuthContext,
-    ];
-
-    return composeMiddlewares(handlers);
+      return composeMiddlewares([
+        authContext.middleware,
+        syncAuthContext,
+        ...(permissions || []).filter(Boolean).map((permission) => can(permission)),
+        syncAuthContext,
+      ])(req, res, next);
+    };
   };
 }
 
@@ -2659,14 +2662,6 @@ function iamAuthOptions(auth, adapter) {
     },
     strategies: toIamStrategies(auth.strategies || ["bearer", "basic"]),
     createSession: auth.createSession,
-  };
-}
-
-function authAuditable(config, authBackend, auditWriter) {
-  if (!auditWriter || authBackend.auditable === false) return null;
-  return {
-    tableName: authBackend.tableNames?.sessions || "sessions",
-    write: auditWriter,
   };
 }
 
@@ -2850,10 +2845,10 @@ async function createApi(conf = {}) {
 
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
-  const authBackend = normalizeAuthBackendConfig(config.auth);
-  const auditWriter = createAuditWriter(moduleConfigs, config.audit);
-  const authContext = authBackend ? createAuthContext(config, authBackend, { auditWriter }) : null;
-  const authorize = createAuthorizer(authContext);
+  const authBackend = conf.auth ? normalizeAuthBackendConfig(config.auth) : null;
+  createAuditWriter(moduleConfigs, config.audit);
+  let authContext = null;
+  const authorize = createAuthorizer(() => authContext);
 
   installAuditHooks(moduleConfigs, config.audit);
 
@@ -2900,7 +2895,7 @@ async function createApi(conf = {}) {
 
   installWelcomeRoute({ mainRouter, routeRegistry, config, packageInfo });
   installPingRoute({ mainRouter, routeRegistry, config });
-  installAuthRoutes({ mainRouter, routeRegistry, config, authContext });
+  authContext = installAuthRoutes({ mainRouter, routeRegistry, config, auth: authBackend });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   const auditSse = installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });

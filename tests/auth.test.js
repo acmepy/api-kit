@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { createTestSeq } from "./helpers/seq.js";
+import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi } from "../src/server/index.js";
 import { createAuthContext } from "../src/server/install/auth.services.js";
 
@@ -40,7 +40,7 @@ describe("auth", () => {
     const api = await createApi({
       seq,
       basePath: "/api",
-      auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn: "5m" },
       openapi: { auth: true, permission: "openapi.read" },
       postman: { auth: true, permission: "openapi.read" },
       modules,
@@ -157,7 +157,7 @@ describe("auth", () => {
     const api = await createApi({
       seq,
       basePath: "/api",
-      auth: { required: true, strategies: ["bearer"], secret: "test-secret" },
+      auth: { adapter: createIamAdapter(seq), required: true, strategies: ["bearer"], secret: "test-secret" },
       modules,
     });
 

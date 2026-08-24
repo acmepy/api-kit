@@ -1,13 +1,15 @@
 import express from "express";
 import { RBAC } from "iam";
-import { SeqAdapter } from "iam/adapters";
 import { auth as iamAuth, can as iamCan } from "iam/express";
+import { ConfigError } from "../errors/config-error.js";
 import { getContext } from "../context/request-context.js";
 import { joinPaths } from "../utils/paths.js";
 import { normalizeMountPath, toIamStrategies } from "../utils/normalize.js";
 
-export function installAuthRoutes({ mainRouter, routeRegistry, config, authContext }) {
-  if (!authContext) return;
+export function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
+  if (!auth) return null;
+  if (!auth.adapter) throw new ConfigError("auth.adapter es requerido cuando auth esta habilitado");
+  const authContext = createAuthContext(config, auth);
 
   const loginPath = joinPaths(config.basePath, authContext.loginPath);
   const sessionPath = joinPaths(config.basePath, authContext.sessionPath);
@@ -23,10 +25,11 @@ export function installAuthRoutes({ mainRouter, routeRegistry, config, authConte
   authRouter.get(authContext.sessionPath, authContext.middleware);
   authRouter.post(authContext.logoutPath, authContext.middleware);
   mainRouter.use(basePath, authRouter);
+  return authContext;
 }
 
-export function createAuthContext(config, authBackend, { auditWriter } = {}) {
-  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models, auditable: authAuditable(config, authBackend, auditWriter) });
+export function createAuthContext(config, authBackend) {
+  const adapter = authBackend.adapter;
   const rbac = new RBAC({ adapter });
   const logging = authBackend.logging ?? config.logging;
   const authConfig = { ...authBackend, logging };
@@ -34,19 +37,20 @@ export function createAuthContext(config, authBackend, { auditWriter } = {}) {
   return { ...authConfig, adapter, rbac, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
 }
 
-export function createAuthorizer(authContext) {
+export function createAuthorizer(resolveAuthContext) {
   return ({ auth = { required: false }, permissions = [] } = {}) => {
     if (!auth?.required) return (_req, _res, next) => next();
-    if (!authContext) return (_req, res) => res.status(401).json({ ok: false, message: "Auth no configurado" });
+    return (req, res, next) => {
+      const authContext = typeof resolveAuthContext === "function" ? resolveAuthContext() : resolveAuthContext;
+      if (!authContext) return res.status(401).json({ ok: false, message: "Auth no configurado" });
 
-    const handlers = [
-      iamAuth(iamAuthOptions({ ...authContext, ...auth }, authContext.adapter)),
-      syncAuthContext,
-      ...(permissions || []).filter(Boolean).map((permission) => iamCan(permission)),
-      syncAuthContext,
-    ];
-
-    return composeMiddlewares(handlers);
+      return composeMiddlewares([
+        authContext.middleware,
+        syncAuthContext,
+        ...(permissions || []).filter(Boolean).map((permission) => iamCan(permission)),
+        syncAuthContext,
+      ])(req, res, next);
+    };
   };
 }
 
@@ -96,10 +100,3 @@ function iamAuthOptions(auth, adapter) {
   };
 }
 
-function authAuditable(config, authBackend, auditWriter) {
-  if (!auditWriter || authBackend.auditable === false) return null;
-  return {
-    tableName: authBackend.tableNames?.sessions || "sessions",
-    write: auditWriter,
-  };
-}

@@ -11,7 +11,7 @@ import { RouteRegistry } from "./schema/route-registry.js";
 import { loadModels, loadModule } from "./loaders/index.js";
 import { installFrontendInstallRoutes, normalizeInstallableApps } from "./install/install.services.js";
 import { createAuditWriter, installAuditChangesRoute, installAuditHooks, installAuditSseRoute, normalizeAuditConfig } from "./install/audit.services.js";
-import { createAuthContext, createAuthorizer, installAuthRoutes } from "./install/auth.services.js";
+import { createAuthorizer, installAuthRoutes } from "./install/auth.services.js";
 import { installHttpMiddleware } from "./install/http-middleware.services.js";
 import { installOpenApiRoute, installPostmanRoute } from "./install/schema.services.js";
 import { installStaticFiles } from "./install/static-files.services.js";
@@ -69,10 +69,10 @@ export async function createApi(conf = {}) {
 
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
-  const authBackend = normalizeAuthBackendConfig(config.auth);
+  const authBackend = conf.auth ? normalizeAuthBackendConfig(config.auth) : null;
   const auditWriter = createAuditWriter(moduleConfigs, config.audit);
-  const authContext = authBackend ? createAuthContext(config, authBackend, { auditWriter }) : null;
-  const authorize = createAuthorizer(authContext);
+  let authContext = null;
+  const authorize = createAuthorizer(() => authContext);
 
   installAuditHooks(moduleConfigs, config.audit);
 
@@ -119,7 +119,7 @@ export async function createApi(conf = {}) {
 
   installWelcomeRoute({ mainRouter, routeRegistry, config, packageInfo });
   installPingRoute({ mainRouter, routeRegistry, config });
-  installAuthRoutes({ mainRouter, routeRegistry, config, authContext });
+  authContext = installAuthRoutes({ mainRouter, routeRegistry, config, auth: authBackend });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   const auditSse = installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });

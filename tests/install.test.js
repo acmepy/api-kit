@@ -6,7 +6,7 @@ import path from "node:path";
 import os from "node:os";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import AdmZip from "adm-zip";
-import { createTestSeq } from "./helpers/seq.js";
+import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi } from "../src/server/index.js";
 import { installApp, normalizeInstallableApps, renderInstallHtml, renderInstallScript } from "../src/server/install/install.services.js";
 
@@ -201,7 +201,8 @@ describe("install routes", () => {
 
 async function testApi(options) {
   const seq = createTestSeq({ logging: false });
-  const api = await createApi({ seq, ...options });
+  const auth = options.auth && { ...options.auth, adapter: options.auth.adapter || createIamAdapter(seq) };
+  const api = await createApi({ seq, ...options, auth });
   await seq.authenticate();
   await seq.init();
   await seq.sync({ force: true });

@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { createTestSeq } from "./helpers/seq.js";
+import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi, defineResource } from "../src/server/index.js";
 
 const modules = [
@@ -213,7 +213,7 @@ describe("audit", () => {
       seq,
       basePath: "/api",
       audit: true,
-      auth: { required: true, secret: "test-secret" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret" },
       modules,
     });
 
@@ -247,13 +247,13 @@ describe("audit", () => {
     }
   });
 
-  it("audits IAM session changes without exposing them through changes or sse events", async () => {
+  it("does not audit IAM sessions when its adapter has no auditable configuration", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({
       seq,
       basePath: "/api",
       audit: true,
-      auth: { required: true, secret: "test-secret" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret" },
       modules,
     });
 
@@ -290,9 +290,7 @@ describe("audit", () => {
       const rows = await Audit.findAll({ order: [["id", "ASC"]] });
       const sessionRows = rows.map((row) => row.toJSON()).filter((row) => row.tableName === sessionTableName);
 
-      assert.deepEqual(sessionRows.map((row) => row.action), ["create", "update", "update"]);
-      assert.equal(sessionRows[0].new.userId, "admin");
-      assert.equal(sessionRows[2].new.active, false);
+      assert.deepEqual(sessionRows, []);
       assert.equal(emitted.some((change) => change.tableName === sessionTableName), false);
 
       const changes = await request(server, "GET", `/api/changes?since=${encodeURIComponent(since)}`, {
@@ -478,7 +476,7 @@ describe("audit", () => {
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 50 },
-      auth: { required: true, secret: "test-secret", tokenExpiresIn: "1s" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn: "1s" },
       modules,
     });
 
@@ -521,7 +519,7 @@ describe("audit", () => {
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 50 },
-      auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn: "5m" },
       modules,
     });
 
@@ -568,7 +566,7 @@ describe("audit", () => {
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 20 },
-      auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn: "5m" },
       modules,
     });
 

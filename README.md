@@ -34,6 +34,8 @@ El paquete se importa por subpath explicito:
 
 ```js
 import { createApi } from "api/server";
+import { SeqAdapter } from "iam/adapters";
+import { createLogger, logger, LEVELS } from "logger";
 import { createApiClient } from "api/client";
 import { runApiKitCli } from "api/cli";
 ```
@@ -55,18 +57,16 @@ const adapter = new SQLiteAdapter({
 });
 
 const seq = new Seq({ adapter, logging: false });
+const iamAdapter = new SeqAdapter({ seq });
 
-const logger = {
-  info: (...args) => console.info(...args),
-  warn: (...args) => console.warn(...args),
-  error: (...args) => console.error(...args),
-};
+createLogger({ name: "[api]", displayConsole: true, level: LEVELS.INFO });
 
 const api = await createApi({
   seq,
   basePath: "/api",
   modules: "./example/modules.js",
   auth: {
+    adapter: iamAdapter,
     secret: process.env.IAM_SECRET || "dev-secret",
     strategies: ["bearer", "basic"],
     tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",

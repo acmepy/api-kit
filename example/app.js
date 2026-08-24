@@ -1,15 +1,13 @@
 import { createApi } from "api/server";
+import { SeqAdapter } from "iam/adapters";
+import { createLogger, logger, LEVELS } from "logger";
 import { MySQLAdapter, Seq, SQLiteAdapter } from "seq";
 import express from "express";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const logger = {
-  info: (...args) => console.info(...args),
-  warn: (...args) => console.warn(...args),
-  error: (...args) => console.error(...args),
-};
+createLogger({ name: "[api]", displayConsole: true, level: LEVELS.INFO });
 
 async function main() {
   const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -18,12 +16,14 @@ async function main() {
 
   const adapter = createAdapter({ dataDir });
   const seq = new Seq({ adapter, logging:false });
+  const iamAdapter = new SeqAdapter({ seq });
 
   const api = await createApi({
     seq,
     basePath: "/api",
     modules: "./example/modules.js",
     auth: {
+      adapter: iamAdapter,
       secret: process.env.IAM_SECRET || "dev-secret",
       strategies: ["bearer", "basic"],
       tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",
@@ -75,10 +75,7 @@ function createAdapter({ dataDir }) {
     });
   }
 
-  return new SQLiteAdapter({
-    database: process.env.SQLITE_DATABASE || path.join(dataDir, "api.sqlite"),
-    naming,
-  });
+  return new SQLiteAdapter({database: process.env.SQLITE_DATABASE || path.join(dataDir, "api.sqlite"), naming});
 }
 
 function adapterName() {
@@ -95,9 +92,9 @@ async function seedIam(api) {
   const models = api.auth?.models;
   if (!models) return;
 
-  let user = await models.User.findByPk("admin");
+  let user = await models.users.findByPk("admin");
   if (!user) {
-    user = await models.User.create({
+    user = await models.users.create({
       id: "admin",
       password: "1234",
       name: "Admin",
@@ -106,22 +103,22 @@ async function seedIam(api) {
     });
   }
 
-  let role = await models.Role.findOne({ where: { role: "admin" } });
-  if (!role) role = await models.Role.create({ role: "admin", active: true });
+  let role = await models.roles.findOne({ where: { role: "admin" } });
+  if (!role) role = await models.roles.create({ role: "admin", active: true });
 
   const userId = user.get("id");
   const roleId = role.get("id");
 
-  const userRole = await models.UserRole.findOne({ where: { userId, roleId } });
-  if (!userRole) await models.UserRole.create({ userId, roleId, active: true });
+  const userRole = await models.usersRoles.findOne({ where: { userId, roleId } });
+  if (!userRole) await models.usersRoles.create({ userId, roleId, active: true });
 
   const permissionNames = new Set(api.routes.getAll().flatMap((route) => route.permissions || []));
   for (const permissionName of permissionNames) {
-    let permission = await models.Permission.findOne({ where: { permission: permissionName } });
-    if (!permission) permission = await models.Permission.create({ permission: permissionName, active: true });
+    let permission = await models.permissions.findOne({ where: { permission: permissionName } });
+    if (!permission) permission = await models.permissions.create({ permission: permissionName, active: true });
 
     const permissionId = permission.get("id");
-    const rolePermission = await models.RolePermission.findOne({ where: { roleId, permissionId } });
-    if (!rolePermission) await models.RolePermission.create({ roleId, permissionId, active: true });
+    const rolePermission = await models.rolesPermissions.findOne({ where: { roleId, permissionId } });
+    if (!rolePermission) await models.rolesPermissions.create({ roleId, permissionId, active: true });
   }
 }
