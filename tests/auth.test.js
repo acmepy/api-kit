@@ -4,6 +4,7 @@ import http from "node:http";
 import express from "express";
 import { createTestSeq } from "./helpers/seq.js";
 import { createApi } from "../src/server/index.js";
+import { createAuthContext } from "../src/server/install/auth.services.js";
 
 const modules = [
   {
@@ -18,6 +19,22 @@ const modules = [
 ];
 
 describe("auth", () => {
+  it("passes global logging to iam", async () => {
+    const events = [];
+    const logger = { error(...args) { events.push(args); } };
+    const auth = createAuthContext(
+      { logging: logger },
+      { adapter: {}, secret: "test-secret" },
+    );
+    const req = { method: "POST", path: "/login", body: {} };
+    const res = { status() { return this; }, json() {} };
+
+    await auth.middleware(req, res, () => {});
+
+    assert.equal(auth.logging, logger);
+    assert.ok(events.some(([prefix, message]) => prefix === "[IAM]" && message === "Error de inicio de sesión"));
+  });
+
   it("logs in, authorizes bearer/basic requests, checks permissions, and logs out", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({
@@ -168,13 +185,13 @@ describe("auth", () => {
 });
 
 async function seedIam(models, permissions) {
-  const user = await models.User.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
-  const role = await models.Role.create({ role: "admin", active: true });
-  await models.UserRole.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
+  const user = await models.users.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
+  const role = await models.roles.create({ role: "admin", active: true });
+  await models.usersRoles.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
 
   for (const permissionName of permissions) {
-    const permission = await models.Permission.create({ permission: permissionName, active: true });
-    await models.RolePermission.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
+    const permission = await models.permissions.create({ permission: permissionName, active: true });
+    await models.rolesPermissions.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
   }
 }
 

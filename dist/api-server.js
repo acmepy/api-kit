@@ -306,23 +306,9 @@ function camelCase(str) {
   return str.replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : "")).replace(/^(.)/, (_, c) => c.toLowerCase());
 }
 
-function snakeCase(str) {
-  return String(str).replace(/([a-z])([A-Z])/g, "$1_$2").replace(/([A-Z])([A-Z][a-z])/g, "$1_$2").replace(/[-\s]+/g, "_").toLowerCase();
-}
-
 function pascalCase(str) {
   const cc = camelCase(str);
   return cc.charAt(0).toUpperCase() + cc.slice(1);
-}
-
-function applyNamingConvention(name, naming = {}) {
-  let value = String(name);
-  if (naming.tables === "snake_case") value = snakeCase(value);
-  if (naming.tables === "camelCase") value = camelCase(value);
-  if (naming.prefix && naming.tables) value = `${naming.prefix}_${value}`;
-  if (naming.caseStyle === "upper") value = value.toUpperCase();
-  if (naming.caseStyle === "lower") value = value.toLowerCase();
-  return value;
 }
 
 async function loadModuleBundle(input, baseDir) {
@@ -2501,8 +2487,8 @@ async function writeAudit(AuditModel, auditConfig, moduleConfig, action, model, 
 }
 
 async function findSessionById(adapter, sessionId, options = {}) {
-  if (options.transaction && adapter?.models?.Session?.findByPk) {
-    const session = await adapter.models.Session.findByPk(sessionId, { transaction: options.transaction });
+  if (options.transaction && adapter?.models?.sessions?.findByPk) {
+    const session = await adapter.models.sessions.findByPk(sessionId, { transaction: options.transaction });
     if (!session) return null;
     if (typeof session.get === "function") return session.get();
     if (typeof session.toJSON === "function") return session.toJSON();
@@ -2608,8 +2594,10 @@ function installAuthRoutes({ mainRouter, routeRegistry, config, authContext }) {
 function createAuthContext(config, authBackend, { auditWriter } = {}) {
   const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models, auditable: authAuditable(config, authBackend, auditWriter) });
   const rbac = new RBAC({ adapter });
-  const middleware = auth(iamAuthOptions(authBackend, adapter));
-  return { ...authBackend, adapter, rbac, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
+  const logging = authBackend.logging ?? config.logging;
+  const authConfig = { ...authBackend, logging };
+  const middleware = auth(iamAuthOptions(authConfig, adapter));
+  return { ...authConfig, adapter, rbac, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
 }
 
 function createAuthorizer(authContext) {
@@ -2664,6 +2652,7 @@ function composeMiddlewares(middlewares) {
 function iamAuthOptions(auth, adapter) {
   return {
     adapter,
+    logging: auth.logging,
     jwt: {
       secret: auth.secret,
       expiresIn: auth.tokenExpiresIn,
@@ -2676,7 +2665,7 @@ function iamAuthOptions(auth, adapter) {
 function authAuditable(config, authBackend, auditWriter) {
   if (!auditWriter || authBackend.auditable === false) return null;
   return {
-    tableName: authBackend.tableNames?.Session || applyNamingConvention("Session", config.seq?.adapter?.naming),
+    tableName: authBackend.tableNames?.sessions || "sessions",
     write: auditWriter,
   };
 }

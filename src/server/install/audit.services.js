@@ -338,8 +338,8 @@ async function writeAudit(AuditModel, auditConfig, moduleConfig, action, model, 
 }
 
 async function findSessionById(adapter, sessionId, options = {}) {
-  if (options.transaction && adapter?.models?.Session?.findByPk) {
-    const session = await adapter.models.Session.findByPk(sessionId, { transaction: options.transaction });
+  if (options.transaction && adapter?.models?.sessions?.findByPk) {
+    const session = await adapter.models.sessions.findByPk(sessionId, { transaction: options.transaction });
     if (!session) return null;
     if (typeof session.get === "function") return session.get();
     if (typeof session.toJSON === "function") return session.toJSON();

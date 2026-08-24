@@ -286,13 +286,13 @@ describe("audit", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       const Audit = api.models.get("audit");
-      const sessionTableName = tableNameForModel(api.auth.models.Session);
+      const sessionTableName = tableNameForModel(api.auth.models.sessions);
       const rows = await Audit.findAll({ order: [["id", "ASC"]] });
       const sessionRows = rows.map((row) => row.toJSON()).filter((row) => row.tableName === sessionTableName);
 
-      assert.deepEqual(sessionRows.map((row) => row.action), ["create", "update"]);
+      assert.deepEqual(sessionRows.map((row) => row.action), ["create", "update", "update"]);
       assert.equal(sessionRows[0].new.userId, "admin");
-      assert.equal(sessionRows[1].new.active, false);
+      assert.equal(sessionRows[2].new.active, false);
       assert.equal(emitted.some((change) => change.tableName === sessionTableName), false);
 
       const changes = await request(server, "GET", `/api/changes?since=${encodeURIComponent(since)}`, {
@@ -622,18 +622,18 @@ async function seedAuditAuth(models, users) {
   const permissionNames = new Set(Object.values(users).flat());
 
   for (const permissionName of permissionNames) {
-    const permission = await models.Permission.create({ permission: permissionName, active: true });
+    const permission = await models.permissions.create({ permission: permissionName, active: true });
     permissionModels.set(permissionName, permission);
   }
 
   for (const [userId, permissions] of Object.entries(users)) {
-    const user = await models.User.create({ id: userId, password: "1234", name: userId, email: `${userId}@example.com`, active: true });
-    const role = await models.Role.create({ role: userId, active: true });
-    await models.UserRole.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
+    const user = await models.users.create({ id: userId, password: "1234", name: userId, email: `${userId}@example.com`, active: true });
+    const role = await models.roles.create({ role: userId, active: true });
+    await models.usersRoles.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
 
     for (const permissionName of permissions) {
       const permission = permissionModels.get(permissionName);
-      await models.RolePermission.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
+      await models.rolesPermissions.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
     }
   }
 }

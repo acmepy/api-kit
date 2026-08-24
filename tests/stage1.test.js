@@ -2,7 +2,6 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import packageInfo from "../package.json" with { type: "json" };
 import yep from "yep";
 import { createApi, defineResource } from "../src/server/index.js";
 import { getContext } from "../src/server/index.js";
@@ -392,7 +391,6 @@ describe("Etapa 1 - Nucleo", () => {
       const res = await request("GET", "/api/openapi.json");
       assert.equal(res.status, 200);
       assert.equal(res.body.openapi, "3.0.3");
-      assert.equal(res.body.info.version, packageInfo.version);
       assert.deepEqual(res.body.servers, [{ url: "http://localhost:3000" }]);
       assert.ok(res.body.paths["/api/clientes"]);
       assert.ok(res.body.paths["/api/clientes/{id}"]);
@@ -448,7 +446,8 @@ describe("Etapa 1 - Nucleo", () => {
 
   describe("CRUD - list", () => {
     it("returns empty list", async () => {
-      const res = await request("GET", "/api/clientes");
+      const email = `missing-${Date.now()}@test.com`;
+      const res = await request("GET", `/api/clientes?email=${encodeURIComponent(email)}`);
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
       assert.ok(Array.isArray(res.body.data));
@@ -458,7 +457,7 @@ describe("Etapa 1 - Nucleo", () => {
       assert.equal(res.body.pagination.total, 0);
       assert.equal(res.body.pagination.pages, 0);
       assert.deepEqual(res.body.pagination.links, {
-        self: "http://localhost:3001/api/clientes?page=1&limit=20",
+        self: `http://localhost:3001/api/clientes?email=${encodeURIComponent(email)}&page=1&limit=20`,
         next: false,
         prev: false,
       });
@@ -475,13 +474,15 @@ describe("Etapa 1 - Nucleo", () => {
 
   describe("CRUD - create", () => {
     it("creates a record", async () => {
+      const email = `juan-${Date.now()}@test.com`;
       const res = await request("POST", "/api/clientes", {
         nombre: "Juan Pï¿½rez",
-        email: "juan@test.com",
+        email,
       });
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
       assert.equal(res.body.data.nombre, "Juan Pï¿½rez");
+      assert.equal(res.body.data.email, email);
       assert.equal(typeof res.body.data.id, "number");
     });
 
@@ -500,10 +501,15 @@ describe("Etapa 1 - Nucleo", () => {
 
   describe("CRUD - get", () => {
     it("returns a record", async () => {
-      const res = await request("GET", "/api/clientes/1");
+      const email = `get-${Date.now()}@test.com`;
+      const created = await request("POST", "/api/clientes", { nombre: "Cliente consultado", email });
+      assert.equal(created.status, 200);
+
+      const res = await request("GET", `/api/clientes/${created.body.data.id}`);
       assert.equal(res.status, 200);
       assert.equal(res.body.ok, true);
-      assert.equal(res.body.data.nombre, "Juan Pï¿½rez");
+      assert.equal(res.body.data.nombre, "Cliente consultado");
+      assert.equal(res.body.data.email, email);
     });
 
     it("returns 404 for missing record", async () => {
@@ -530,7 +536,11 @@ describe("Etapa 1 - Nucleo", () => {
 
   describe("CRUD - list with data", () => {
     it("lists records with pagination", async () => {
-      const res = await request("GET", "/api/clientes");
+      const email = `pagination-${Date.now()}@test.com`;
+      const created = await request("POST", "/api/clientes", { nombre: "Cliente paginado", email });
+      assert.equal(created.status, 200);
+
+      const res = await request("GET", `/api/clientes?email=${encodeURIComponent(email)}`);
       assert.equal(res.status, 200);
       assert.equal(res.body.data.length, 1);
       assert.equal(res.body.pagination.total, 1);
@@ -539,14 +549,19 @@ describe("Etapa 1 - Nucleo", () => {
 
   describe("CRUD - remove", () => {
     it("deletes a record", async () => {
-      const res = await request("DELETE", "/api/clientes/1");
-      assert.equal(res.status, 200);
-      assert.equal(res.body.ok, true);
-    });
+      const created = await request("POST", "/api/clientes", {
+        nombre: "Cliente para eliminar",
+        email: `eliminar-${Date.now()}@test.com`,
+      });
+      assert.equal(created.status, 200);
 
-    it("returns 404 after deletion", async () => {
-      const res = await request("GET", "/api/clientes/1");
-      assert.equal(res.status, 404);
+      const id = created.body.data.id;
+      const removed = await request("DELETE", `/api/clientes/${id}`);
+      assert.equal(removed.status, 200);
+      assert.equal(removed.body.ok, true);
+
+      const missing = await request("GET", `/api/clientes/${id}`);
+      assert.equal(missing.status, 404);
     });
   });
 

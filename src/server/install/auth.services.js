@@ -3,7 +3,6 @@ import { RBAC } from "iam";
 import { SeqAdapter } from "iam/adapters";
 import { auth as iamAuth, can as iamCan } from "iam/express";
 import { getContext } from "../context/request-context.js";
-import { applyNamingConvention } from "../utils/naming.js";
 import { joinPaths } from "../utils/paths.js";
 import { normalizeMountPath, toIamStrategies } from "../utils/normalize.js";
 
@@ -29,8 +28,10 @@ export function installAuthRoutes({ mainRouter, routeRegistry, config, authConte
 export function createAuthContext(config, authBackend, { auditWriter } = {}) {
   const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models, auditable: authAuditable(config, authBackend, auditWriter) });
   const rbac = new RBAC({ adapter });
-  const middleware = iamAuth(iamAuthOptions(authBackend, adapter));
-  return { ...authBackend, adapter, rbac, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
+  const logging = authBackend.logging ?? config.logging;
+  const authConfig = { ...authBackend, logging };
+  const middleware = iamAuth(iamAuthOptions(authConfig, adapter));
+  return { ...authConfig, adapter, rbac, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
 }
 
 export function createAuthorizer(authContext) {
@@ -85,6 +86,7 @@ function composeMiddlewares(middlewares) {
 function iamAuthOptions(auth, adapter) {
   return {
     adapter,
+    logging: auth.logging,
     jwt: {
       secret: auth.secret,
       expiresIn: auth.tokenExpiresIn,
@@ -97,7 +99,7 @@ function iamAuthOptions(auth, adapter) {
 function authAuditable(config, authBackend, auditWriter) {
   if (!auditWriter || authBackend.auditable === false) return null;
   return {
-    tableName: authBackend.tableNames?.Session || applyNamingConvention("Session", config.seq?.adapter?.naming),
+    tableName: authBackend.tableNames?.sessions || "sessions",
     write: auditWriter,
   };
 }

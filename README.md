@@ -145,7 +145,7 @@ auth: {
 
 ## Logger
 
-`logging` puede ser `false`, `true`, una funcion o un objeto tipo logger.
+`logging` puede ser `false`, `true`, una funcion o un objeto tipo logger. Cuando `auth` esta habilitado, el mismo logger se reenvia a `iam`; se puede sobrescribir solo para autenticacion con `auth.logging`.
 
 ```js
 const logger = {
