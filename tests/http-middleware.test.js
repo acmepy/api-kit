@@ -130,6 +130,24 @@ describe("http middleware", () => {
     }
   });
 
+  it("allows the Vite development origin by default", async () => {
+    const seq = createTestSeq({ logging: false });
+    const api = await createApi({ seq, basePath: "/api", modules: [] });
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+    const server = await listen(api.app);
+
+    try {
+      const res = await request(server, "GET", "/api/ping", { headers: { Origin: "http://localhost:5173" } });
+      assert.equal(res.status, 200);
+      assert.equal(res.headers["access-control-allow-origin"], "http://localhost:5173");
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("can enable rate limit and trust proxy from createApi options", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({

@@ -10,7 +10,7 @@ export function installOpenApiRoute({ mainRouter, routeRegistry, modules, packag
   routeRegistry.register({ module: "openapi", operationId: "openapi.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "openapi", auth, permissions, summary: "OpenAPI document", description: "", tags: ["openapi"], deprecated: false});
   const handlers = [];
   if (authorize) handlers.push(authorize({ auth, permissions }));
-  handlers.push((_req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi}))});
+  handlers.push((req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi, session: req.session || null }))});
   mainRouter.get(fullPath, ...handlers);
 }
 

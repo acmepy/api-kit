@@ -1,7 +1,7 @@
 import yep from "yep";
 import { Model, DataTypes } from "seq";
 
-const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks"]);
+const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes"]);
 const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
 const DECLARATIVE_RULE_KEYS = new Set(["title", "required", "nullable", "default", "defaultValue", "oneOf", "notOneOf", "in", "pattern", "regexp", "matches", "email", "positive", "min", "max", "maxLength", "between"]);
 const ATTRIBUTE_METADATA_KEYS = new Set([...ATTRIBUTE_OPTION_KEYS, ...DECLARATIVE_RULE_KEYS, "schema", "create", "update", "precision", "scale", "itemType", "items", "of", "returnType", "fields"]);

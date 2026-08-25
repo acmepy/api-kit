@@ -26,26 +26,40 @@ const modules = [
       descripcion: { type: "string", allowNull: false },
     },
   },
-  {
-    modelName: "audit",
-    tableName: "audit",
-    timestamps: true,
-    audit: false,
-    attributes: {
-      id: { type: "integer", primaryKey: true, autoIncrement: true },
-      txId: { type: "string", maxLength: 50, allowNull: false },
-      clientIp: { type: "string", maxLength: 50, allowNull: false },
-      userId: { type: "string", maxLength: 20 },
-      tableName: { type: "string", maxLength: 50, allowNull: false },
-      rowId: { type: "string", maxLength: 50, allowNull: false },
-      action: { type: "string", maxLength: 20, allowNull: false },
-      old: { type: "json" },
-      new: { type: "json" },
-    },
-  },
 ];
 
 describe("audit", () => {
+  it("registers its internal model and documents only audit routes in Postman", async () => {
+    const seq = createTestSeq({ logging: false });
+    const api = await createApi({ seq, basePath: "/api", audit: true, postman: true, modules });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+    const server = await listen(app);
+
+    try {
+      assert.ok(api.models.get("audit"));
+      assert.deepEqual(api.models.get("audit").options.indexes, [
+        { name: "idx_audit_created_at", columns: ["createdAt"] },
+      ]);
+      assert.deepEqual([...api.routes.findBy({ module: "audit" })].map((route) => route.operationId), ["audit.changes", "audit.sse"]);
+
+      const postman = await request(server, "GET", "/api/postman.json");
+      const root = postman.body.item.find((item) => item.name === "api");
+      const audit = root.item.find((item) => item.name === "audit");
+      assert.deepEqual(audit.item.map((item) => item.name), ["Cambios desde una fecha", "Cambios en vivo"]);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("audits enabled modules and skips disabled/audit modules", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({ seq, audit: true, modules });

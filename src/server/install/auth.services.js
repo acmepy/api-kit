@@ -1,14 +1,13 @@
 import express from "express";
 import { RBAC } from "iam";
+import { SeqAdapter } from "iam/adapters";
 import { auth as iamAuth, can as iamCan } from "iam/express";
-import { ConfigError } from "../errors/config-error.js";
 import { getContext } from "../context/request-context.js";
 import { joinPaths } from "../utils/paths.js";
 import { normalizeMountPath, toIamStrategies } from "../utils/normalize.js";
 
 export function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
   if (!auth) return null;
-  if (!auth.adapter) throw new ConfigError("auth.adapter es requerido cuando auth esta habilitado");
   const authContext = createAuthContext(config, auth);
 
   const loginPath = joinPaths(config.basePath, authContext.loginPath);
@@ -29,7 +28,7 @@ export function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
 }
 
 export function createAuthContext(config, authBackend) {
-  const adapter = authBackend.adapter;
+  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models });
   const rbac = new RBAC({ adapter });
   const logging = authBackend.logging ?? config.logging;
   const authConfig = { ...authBackend, logging };

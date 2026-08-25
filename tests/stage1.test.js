@@ -83,7 +83,7 @@ before(async () => {
         tags: ["Clientes"],
         endpoints: {
           list: { permission: "clientes.list" },
-          get: { permission: "clientes.read" },
+          get: { permission: "clientes.list" },
           create: { permission: "clientes.create" },
           update: { permission: "clientes.update" },
           remove: { permission: "clientes.delete" },

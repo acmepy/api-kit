@@ -1,7 +1,7 @@
-export class ApiKitClientError extends Error {
+export class ApiClientError extends Error {
   constructor(message, { status = 0, response = null } = {}) {
     super(message);
-    this.name = "ApiKitClientError";
+    this.name = "ApiClientError";
     this.status = status;
     this.response = response;
     this.errors = response?.errors || null;

@@ -345,11 +345,14 @@ Devuelve:
 import { createApiClient, LocalStorageAdapter } from "api/client";
 
 const client = createApiClient({
-  baseUrl: "/api",
+  url: "http://localhost:3000/api",
   adapter: new LocalStorageAdapter(),
   pingInterval: 5000,
   pingTimeout: 3000,
   sseWatchdogTimeout: 25000,
+  syncCacheTimeout: 5 * 60_000,
+  changes: true,
+  sse: true,
 });
 
 client.onChange((event) => {
@@ -379,6 +382,10 @@ Metodos publicos principales:
 - `lastReceivedAt()`: ultimo timestamp recibido por `changes` o SSE.
 - `onChange(listener)` / `offChange(listener)`: eventos del cliente.
 - `changes(since?)`: consulta `/changes`.
+
+`changes` y `sse` estan activados por defecto. Configuralos como `false` para desactivar, respectivamente, la descarga automatica de cambios y la conexion SSE.
+
+`syncCacheTimeout` define por cuantos milisegundos se reutilizan OpenAPI, schemas y datos locales sin consultar la red. Su valor por defecto es 5 minutos; al vencer, el cliente restaura la cache y la actualiza en segundo plano. Usa `syncServices(true)` para forzar una actualizacion inmediata.
 - `request(path, options)`: request autenticado.
 - `url(path, query?)`: arma URL absoluta.
 
@@ -386,7 +393,7 @@ Si `syncServices()` o `changes()` reciben `401`, el cliente hace logout local po
 
 ## Vue
 
-`api/vue` conecta un `ApiKitClient` con Composition API. Vue es una peer dependency opcional: solo es necesaria si importas este subpath.
+`api/vue` conecta un `ApiClient` con Composition API. Vue es una peer dependency opcional: solo es necesaria si importas este subpath.
 
 ```bash
 npm install vue

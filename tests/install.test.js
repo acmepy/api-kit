@@ -100,6 +100,16 @@ describe("installable static modules", () => {
     assert.equal(pkg.apiKitInstall.tag, "v1.2.0");
   });
 
+  it("propagates install errors to the HTTP error handler", async () => {
+    const baseDir = await tempBaseDir();
+    const [app] = normalizeInstallableApps([{ mountPath: "/portal", root: "./public/portal", repo: "github:acmepy/sifen-portal" }], baseDir);
+
+    await assert.rejects(
+      installApp(app, { fetch: async () => ({ ok: false, status: 500 }) }),
+      /GitHub respondio 500: https:\/\/api\.github\.com\/repos\/acmepy\/sifen-portal\/tags\?per_page=1/,
+    );
+  });
+
   it("renders html that posts and displays status, tag, and errors", async () => {
     const html = renderInstallHtml([{ app: "portal", mountPath: "/portal", repo: "github:acmepy/sifen-portal", version: "latest" }]);
     const script = renderInstallScript();
@@ -175,7 +185,7 @@ describe("install routes", () => {
       openapi: {},
       modules: [{ mountPath: "/portal", root: "./public/portal", repo: "github:acmepy/sifen-portal" }],
     });
-    await seedIam(api.auth.models);
+    const role = await seedIam(api.auth.models);
     const server = await testServer(api);
 
     try {
@@ -185,6 +195,10 @@ describe("install routes", () => {
       assert.equal(deniedPost.status, 401);
 
       const login = await request(server, "POST", "/api/login", { body: { username: "admin", password: "1234" } });
+      const forbidden = await request(server, "POST", "/install/portal", { token: login.body.data.token, body: {} });
+      assert.equal(forbidden.status, 403);
+
+      await grantPermission(api.auth.models, role, "install");
       const installed = await request(server, "POST", "/install/portal", { token: login.body.data.token, body: {} });
 
       assert.equal(installed.status, 200);
@@ -281,4 +295,10 @@ async function seedIam(models) {
   const user = await models.users.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
   const role = await models.roles.create({ role: "admin", active: true });
   await models.usersRoles.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
+  return role;
+}
+
+async function grantPermission(models, role, permission) {
+  const permissionModel = await models.permissions.create({ permission, active: true });
+  await models.rolesPermissions.create({ roleId: role.get("id"), permissionId: permissionModel.get("id"), active: true });
 }

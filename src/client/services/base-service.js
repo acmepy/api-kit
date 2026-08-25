@@ -90,10 +90,9 @@ export class BaseService {
       nextQuery = this.#nextPageQuery(response, nextQuery);
     }
 
-    if (records.length > 0) {
-      await this.adapter.add(records);
-      this.#notify();
-    }
+    if (records.length > 0) await this.adapter.add(records);
+    await this.client.markServiceCacheUpdated?.(this.name);
+    this.#notify();
     return { ok: true, data: records };
   }
 

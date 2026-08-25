@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import AdmZip from 'adm-zip';
 import { RBAC } from 'iam';
+import { SeqAdapter } from 'iam/adapters';
 import { auth, can } from 'iam/express';
 
 class AppError extends Error {
@@ -65,7 +66,7 @@ async function fileExists(filePath) {
   }
 }
 
-const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks"]);
+const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes"]);
 const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
 const DECLARATIVE_RULE_KEYS = new Set(["title", "required", "nullable", "default", "defaultValue", "oneOf", "notOneOf", "in", "pattern", "regexp", "matches", "email", "positive", "min", "max", "maxLength", "between"]);
 const ATTRIBUTE_METADATA_KEYS = new Set([...ATTRIBUTE_OPTION_KEYS, ...DECLARATIVE_RULE_KEYS, "schema", "create", "update", "precision", "scale", "itemType", "items", "of", "returnType", "fields"]);
@@ -506,7 +507,8 @@ function normalizeModules(configs, options = {}) {
 
 function normalizeEndpoint(endpoint, moduleConfig, operation) {
   const auth = normalizeAuth(endpoint.auth === undefined ? moduleConfig.auth : endpoint.auth);
-  const permission = endpoint.permission === undefined && auth.required ? `${moduleConfig.name}.${operation}` : endpoint.permission;
+  const permissionOperation = operation === "schema" ? "list" : operation;
+  const permission = endpoint.permission === undefined && auth.required ? `${moduleConfig.name}.${permissionOperation}` : endpoint.permission;
   return { ...endpoint, auth, permission };
 }
 
@@ -597,21 +599,22 @@ function normalizeJsonSchema(schema) {
 
 function normalizeOpenApiConfig(openapi) {
   if (!openapi) return null;
-  if (openapi === true) return {};
-  return openapi;
+  const config = openapi === true ? {} : openapi;
+  return { permission: "schema.list", ...config };
 }
 
-function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {} }) {
+function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {}, session } = {}) {
   const paths = {};
   const schemas = {};
-  const securitySchemes = securitySchemesFor(routes.getAll());
+  const visibleRoutes = routesForSession(routes.getAll(), session);
+  const securitySchemes = securitySchemesFor(visibleRoutes);
 
   for (const mod of modules.values()) {
     const moduleSchemas = schemaComponents(mod);
     for (const [name, schema] of Object.entries(moduleSchemas)) schemas[componentName(mod.name, name)] = schema;
   }
 
-  for (const route of routes.getAll()) {
+  for (const route of visibleRoutes) {
     const path = route.openApiPath;
     if (!paths[path]) paths[path] = {};
     paths[path][route.method.toLowerCase()] = operationFor(route, modules);
@@ -633,6 +636,17 @@ function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {} }
       }).filter(([, value]) => value && Object.keys(value).length > 0),
     ),
   };
+}
+
+function routesForSession(routes, session) {
+  if (session === undefined) return routes;
+  const permissions = new Set(session?.permissions || []);
+
+  return routes.filter((route) => {
+    if (!route.auth?.required) return true;
+    if (!session) return false;
+    return (route.permissions || []).every((permission) => permissions.has(permission));
+  });
 }
 
 function normalizeServers(servers) {
@@ -848,7 +862,7 @@ function toJsonSchema(schema) {
 const POSTMAN_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
 
 function normalizePostmanConfig(postman, openapi) {
-  if (postman) return postman === true ? {} : postman;
+  if (postman) return { permission: "schema.list", ...(postman === true ? {} : postman) };
   if (!openapi?.postman) return null;
   return {...openapi,path: openapi.postmanPath || "/postman.json"};
 }
@@ -1810,12 +1824,13 @@ function installFrontendInstallRoutes({ mainRouter, routeRegistry, config, autho
   if (apps.length === 0) return;
 
   const auth = config.auth || { required: false, strategies: [] };
+  const permissions = ["install"];
   const handlers = [];
-  if (authorize) handlers.push(authorize({ auth, permissions: [] }));
+  if (authorize) handlers.push(authorize({ auth, permissions }));
 
-  routeRegistry.register({ module: "install", operationId: "install.list", method: "get", expressPath: "/install", openApiPath: "/install", serviceMethod: "installList", auth, permissions: [], summary: "Instalador de frontends", description: "", tags: ["install"], deprecated: false });
-  routeRegistry.register({ module: "install", operationId: "install.script", method: "get", expressPath: "/install/app.js", openApiPath: "/install/app.js", serviceMethod: "installScript", auth, permissions: [], summary: "Script del instalador", description: "", tags: ["install"], deprecated: false });
-  routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions: [], summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.list", method: "get", expressPath: "/install", openApiPath: "/install", serviceMethod: "installList", auth, permissions, summary: "Instalador de frontends", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.script", method: "get", expressPath: "/install/app.js", openApiPath: "/install/app.js", serviceMethod: "installScript", auth, permissions, summary: "Script del instalador", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions, summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
 
   mainRouter.get("/install", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps));});
   mainRouter.get("/install/", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps));});
@@ -1830,19 +1845,15 @@ function installFrontendInstallRoutes({ mainRouter, routeRegistry, config, autho
 }
 
 async function installApp(app, { token, fetch: fetchImpl = globalThis.fetch } = {}) {
-  try {
-    const tokenValue = stringValue(token) || tokenForProvider(app.provider);
-    const tag = app.version === "latest" ? await getLatestTag({ app, token: tokenValue, fetch: fetchImpl }) : app.version;
-    const installedTag = readInstalledTag(app.target);
+  const tokenValue = stringValue(token) || tokenForProvider(app.provider);
+  const tag = app.version === "latest" ? await getLatestTag({ app, token: tokenValue, fetch: fetchImpl }) : app.version;
+  const installedTag = readInstalledTag(app.target);
 
-    if (installedTag === tag) return installResult(app, tag, "skipped");
+  if (installedTag === tag) return installResult(app, tag, "skipped");
 
-    const archive = await downloadArchive({ app, tag, token: tokenValue, fetch: fetchImpl });
-    await extractAndReplace({ app, archive, tag });
-    return installResult(app, tag, "updated");
-  } catch (error) {
-    return { ...installResult(app, app.version, "failed"), error: error.message };
-  }
+  const archive = await downloadArchive({ app, tag, token: tokenValue, fetch: fetchImpl });
+  await extractAndReplace({ app, archive, tag });
+  return installResult(app, tag, "updated");
 }
 
 function renderInstallHtml(apps) {
@@ -1972,7 +1983,7 @@ async function githubFetch(url, token, fetch) {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(url, { headers, redirect: "follow" });
-  if (!res.ok) throw new AppError(`GitHub respondio ${res.status}: ${await res.text()}`, { status: 502, code: "GITHUB_ERROR" });
+  if (!res.ok) throw new AppError(`GitHub respondio ${res.status}: ${url}`, { status: 502, code: "GITHUB_ERROR" });
   return res;
 }
 
@@ -2153,6 +2164,28 @@ function errorLogger(err, req, { txId, status, code, errors }) {
   );
 }
 
+function createAuditResource() {
+  return defineResource({
+    modelName: "audit",
+    tableName: "audit",
+    timestamps: true,
+    indexes: [
+      { name: "idx_audit_created_at", columns: ["createdAt"] },
+    ],
+    attributes: {
+      id: { type: "integer", primaryKey: true, autoIncrement: true },
+      txId: { type: "string", maxLength: 50, allowNull: false },
+      clientIp: { type: "string", maxLength: 50, allowNull: false },
+      userId: { type: "string", maxLength: 20 },
+      tableName: { type: "string", maxLength: 50, allowNull: false },
+      rowId: { type: "string", maxLength: 50, allowNull: false },
+      action: { type: "string", maxLength: 20, allowNull: false },
+      old: { type: "json" },
+      new: { type: "json" },
+    },
+  });
+}
+
 function normalizeAuditConfig(audit) {
   if (!audit) return false;
   const defaults = { changesPath: "/changes", ssePath: "/sse", heartbeatTimeout: 15000 };
@@ -2160,11 +2193,8 @@ function normalizeAuditConfig(audit) {
   return { ...defaults, ...audit, heartbeatTimeout: normalizeAuditHeartbeatTimeout(audit.heartbeatTimeout, defaults.heartbeatTimeout) };
 }
 
-function installAuditHooks(moduleConfigs, auditConfig) {
+function installAuditHooks(moduleConfigs, auditConfig, AuditModel) {
   if (!auditConfig) return;
-
-  const auditModule = moduleConfigs.find((moduleConfig) => isAuditModule(moduleConfig));
-  const AuditModel = auditModule?.resource?.model;
   if (!AuditModel) return;
 
   for (const moduleConfig of moduleConfigs) {
@@ -2236,11 +2266,8 @@ function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, 
   });
 }
 
-function createAuditWriter(moduleConfigs, auditConfig) {
+function createAuditWriter(auditConfig, AuditModel) {
   if (!auditConfig) return null;
-
-  const auditModule = moduleConfigs.find((moduleConfig) => isAuditModule(moduleConfig));
-  const AuditModel = auditModule?.resource?.model;
   if (!AuditModel) return null;
 
   return async function auditWrite(change) {
@@ -2573,7 +2600,6 @@ function plainAuditModel(change) {
 
 function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
   if (!auth) return null;
-  if (!auth.adapter) throw new ConfigError("auth.adapter es requerido cuando auth esta habilitado");
   const authContext = createAuthContext(config, auth);
 
   const loginPath = joinPaths(config.basePath, authContext.loginPath);
@@ -2594,7 +2620,7 @@ function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
 }
 
 function createAuthContext(config, authBackend) {
-  const adapter = authBackend.adapter;
+  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models });
   const rbac = new RBAC({ adapter });
   const logging = authBackend.logging ?? config.logging;
   const authConfig = { ...authBackend, logging };
@@ -2712,7 +2738,7 @@ function installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, 
   routeRegistry.register({ module: "openapi", operationId: "openapi.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "openapi", auth, permissions, summary: "OpenAPI document", description: "", tags: ["openapi"], deprecated: false});
   const handlers = [];
   if (authorize) handlers.push(authorize({ auth, permissions }));
-  handlers.push((_req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi}));});
+  handlers.push((req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi, session: req.session || null }));});
   mainRouter.get(fullPath, ...handlers);
 }
 
@@ -2812,7 +2838,7 @@ async function createApi(conf = {}) {
       schemas: conf.paths?.schemas || "./schemas",
     },
     auth: conf.auth,
-    cors: conf.cors ?? false,
+    cors: conf.cors ?? { origin: "http://localhost:5173" },
     helmet: conf.helmet ?? false,
     compression: conf.compression ?? false,
     rateLimit: conf.rateLimit ?? false,
@@ -2846,13 +2872,15 @@ async function createApi(conf = {}) {
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
   const authBackend = conf.auth ? normalizeAuthBackendConfig(config.auth) : null;
-  createAuditWriter(moduleConfigs, config.audit);
+  const auditResource = config.audit ? createAuditResource() : null;
+  createAuditWriter(config.audit, auditResource?.model);
   let authContext = null;
   const authorize = createAuthorizer(() => authContext);
 
-  installAuditHooks(moduleConfigs, config.audit);
+  installAuditHooks(moduleConfigs, config.audit, auditResource?.model);
 
   const explicitModels = { ...config.models };
+  if (auditResource) explicitModels.audit = auditResource.model;
   for (const moduleConfig of moduleConfigs) {
     const resourceModel = moduleConfig.resource?.model;
     const modelName = resourceModel?.modelName || moduleConfig.resource?.options?.modelName || moduleConfig.resource?.model?.name;

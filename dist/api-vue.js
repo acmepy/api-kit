@@ -11,7 +11,7 @@ const ApiVueKey = Symbol("ApiKitVue");
  */
 function createApiVue(client) {
   if (!client || typeof client.onChange !== "function") {
-    throw new TypeError("createApiVue requiere un ApiKitClient");
+    throw new TypeError("createApiVue requiere un ApiClient");
   }
 
   const connected = ref(Boolean(client.connected?.()));

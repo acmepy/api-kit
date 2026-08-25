@@ -293,10 +293,9 @@ class BaseService {
       nextQuery = this.#nextPageQuery(response, nextQuery);
     }
 
-    if (records.length > 0) {
-      await this.adapter.add(records);
-      this.#notify();
-    }
+    if (records.length > 0) await this.adapter.add(records);
+    await this.client.markServiceCacheUpdated?.(this.name);
+    this.#notify();
     return { ok: true, data: records };
   }
 
@@ -492,10 +491,10 @@ class BaseService {
 
 }
 
-class ApiKitClientError extends Error {
+class ApiClientError extends Error {
   constructor(message, { status = 0, response = null } = {}) {
     super(message);
-    this.name = "ApiKitClientError";
+    this.name = "ApiClientError";
     this.status = status;
     this.response = response;
     this.errors = response?.errors || null;
@@ -783,12 +782,19 @@ const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
 const DEFAULT_PING_INTERVAL = 5000;
 const DEFAULT_PING_TIMEOUT = 3000;
 const DEFAULT_SSE_WATCHDOG_TIMEOUT = 25000;
+const DEFAULT_SYNC_CACHE_TIMEOUT = 5 * 60 * 1000;
 
-function createApiClient(options = {}) {
-  return new ApiKitClient(options);
+function normalizeCacheTimeout(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  const timeout = Number(value);
+  return Number.isFinite(timeout) && timeout >= 0 ? timeout : fallback;
 }
 
-class ApiKitClient {
+function createApiClient(options = {}) {
+  return new ApiClient(options);
+}
+
+class ApiClient {
   #host;
   #baseUrl;
   #fetch;
@@ -803,14 +809,23 @@ class ApiKitClient {
   #online = false;
   #lastReceivedAt = null;
   #syncServicesPromise = null;
+  #backgroundSyncPromise = null;
+  #backgroundServiceSyncs = new Map();
+  #cachedRequests = new Map();
+  #changesPromise = null;
   #pingTimer = null;
   #pingAbort = null;
+  #pingPromise = null;
   #sseAbort = null;
   #sseReader = null;
+  #sseOpenPromise = null;
   #watchdogTimer = null;
   #pingInterval;
   #pingTimeout;
   #sseWatchdogTimeout;
+  #syncCacheTimeout;
+  #changesEnabled;
+  #sseEnabled;
   #paths;
 
   constructor(options = {}) {
@@ -826,6 +841,9 @@ class ApiKitClient {
     this.#pingInterval = normalizeTimeout(options.pingInterval ?? options.pingIntervalMs, DEFAULT_PING_INTERVAL);
     this.#pingTimeout = normalizeTimeout(options.pingTimeout ?? options.pingTimeoutMs, DEFAULT_PING_TIMEOUT);
     this.#sseWatchdogTimeout = normalizeTimeout(options.sseWatchdogTimeout ?? options.sseWatchdogTimeoutMs, DEFAULT_SSE_WATCHDOG_TIMEOUT);
+    this.#syncCacheTimeout = normalizeCacheTimeout(options.syncCacheTimeout, DEFAULT_SYNC_CACHE_TIMEOUT);
+    this.#changesEnabled = options.changes !== false;
+    this.#sseEnabled = options.sse !== false;
     this.#paths = {
       login: options.loginPath || "/login",
       logout: options.logoutPath || "/logout",
@@ -836,7 +854,7 @@ class ApiKitClient {
       sse: options.ssePath || "/sse",
     };
 
-    if (!this.#fetch) throw new Error("ApiKitClient requiere fetch");
+    if (!this.#fetch) throw new Error("ApiClient requiere fetch");
     queueMicrotask(() => this.#startPing());
   }
 
@@ -854,9 +872,9 @@ class ApiKitClient {
     this.#onLine("login", response.data);
 
     await this.syncServices();
-    await this.changes();
+    if (this.#changesEnabled) await this.changes();
     this.#stopPing();
-    await this.#openSse();
+    if (this.#sseEnabled) await this.#openSse();
     return response;
   }
 
@@ -904,6 +922,22 @@ class ApiKitClient {
     return new Map(this.#services);
   }
 
+  async cachedRequest(key, path, { force = false, ...options } = {}) {
+    const cacheKey = `cache:${key}`;
+    const cached = await this.#adapter.get(cacheKey);
+    if (!force && cached && Object.hasOwn(cached, "data")) {
+      const response = { ok: true, data: cached.data, cached: true };
+      if (!this.#isSyncCacheFresh(cached)) response.refresh = this.#refreshCachedRequest(cacheKey, path, options);
+      return response;
+    }
+    return this.#refreshCachedRequest(cacheKey, path, options);
+  }
+
+  async markServiceCacheUpdated(name) {
+    const id = this.#serviceCacheKey(name);
+    await this.#adapter.put(id, { id, lastUpdateAt: new Date().toISOString() });
+  }
+
   async syncServices(force = false) {
     if (this.#syncServicesPromise) return this.#syncServicesPromise;
     if (!force && this.#services.get("openapi")) return;
@@ -920,6 +954,24 @@ class ApiKitClient {
   async #synchronizeServices(force) {
     const openapiService = new OpenapiService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, path: this.#paths.openapi });
     this.#services.set("openapi", openapiService);
+    const cachedOpenapi = await this.#cachedOpenapi(openapiService);
+    const cacheMetadata = await openapiService.adapter.get("metadata");
+
+    if (!force && cachedOpenapi && this.#isSyncCacheFresh(cacheMetadata)) {
+      await this.#registerServices(cachedOpenapi);
+      return;
+    }
+
+    if (!force && cachedOpenapi && cacheMetadata) {
+      await this.#registerServices(cachedOpenapi);
+      if (this.#online) this.#refreshServicesInBackground(openapiService);
+      return;
+    }
+
+    await this.#refreshServices(openapiService, force, cachedOpenapi);
+  }
+
+  async #refreshServices(openapiService, force, fallbackOpenapi = null) {
     let openapi;
     try {
       if(!this.#online) throw Error('OffLine')
@@ -929,10 +981,70 @@ class ApiKitClient {
         await this.#expireSession(error);
         throw error;
       }else {
-        openapi = (await openapiService.adapter.getAll())[0] || null;
+        openapi = fallbackOpenapi || await this.#cachedOpenapi(openapiService);
       }
     }
-    
+
+    await this.#registerServices(openapi, { refreshSchemas: Boolean(openapi), force });
+    if (openapi && openapi !== fallbackOpenapi) {
+      await openapiService.adapter.put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+    }
+  }
+
+  #refreshServicesInBackground(openapiService) {
+    if (this.#backgroundSyncPromise) return;
+    const refresh = this.#refreshServices(openapiService, false)
+      .catch((error) => {
+        if (error?.status !== 401) console.error("api-client, syncServices", error);
+      })
+      .finally(() => {
+        if (this.#backgroundSyncPromise === refresh) this.#backgroundSyncPromise = null;
+      });
+    this.#backgroundSyncPromise = refresh;
+  }
+
+  #refreshServiceInBackground(service) {
+    if (this.#backgroundServiceSyncs.has(service.name)) return;
+    const refresh = service.pull()
+      .catch((error) => {
+        if (error?.status !== 401) console.error("api-client, service refresh", service.name, error);
+      })
+      .finally(() => this.#backgroundServiceSyncs.delete(service.name));
+    this.#backgroundServiceSyncs.set(service.name, refresh);
+  }
+
+  #serviceCacheKey(name) {
+    return `sync:${name}`;
+  }
+
+  async #isServiceCacheFresh(name) {
+    return this.#isSyncCacheFresh(await this.#adapter.get(this.#serviceCacheKey(name)));
+  }
+
+  #refreshCachedRequest(cacheKey, path, options) {
+    if (this.#cachedRequests.has(cacheKey)) return this.#cachedRequests.get(cacheKey);
+    const refresh = this.request(path, options)
+      .then(async (response) => {
+        await this.#adapter.put(cacheKey, { id: cacheKey, data: response.data, lastUpdateAt: new Date().toISOString() });
+        return response;
+      })
+      .finally(() => this.#cachedRequests.delete(cacheKey));
+    this.#cachedRequests.set(cacheKey, refresh);
+    return refresh;
+  }
+
+  async #cachedOpenapi(openapiService) {
+    const document = await openapiService.adapter.get("document");
+    if (document) return document;
+    return (await openapiService.adapter.getAll()).find((record) => record?.openapi) || null;
+  }
+
+  #isSyncCacheFresh(metadata) {
+    const updatedAt = Date.parse(metadata?.lastUpdateAt || "");
+    return Number.isFinite(updatedAt) && Date.now() - updatedAt < this.#syncCacheTimeout;
+  }
+
+  async #registerServices(openapi, { refreshSchemas = false, force = false } = {}) {
     const schemaService = new SchemaService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter });
     this.#services.set("schema", schemaService);
 
@@ -941,11 +1053,12 @@ class ApiKitClient {
       const service = new BaseService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, ...descriptor });
       this.#services.set(descriptor.name, service);
       try{
-        if (descriptor.operations.schema) {
+        if (refreshSchemas && descriptor.operations.schema) {
           const response = await service.schema();
           await schemaService.update(descriptor.name, response.data || response);
         }
-        if ((await service.list()).data.length==0 || force) await service.pull();
+        if (force) await service.pull();
+        else if (!(await this.#isServiceCacheFresh(descriptor.name))) this.#refreshServiceInBackground(service);
       }catch(e){
         if (e?.status === 401) {
           await this.#expireSession(e);
@@ -990,13 +1103,25 @@ class ApiKitClient {
   }
 
   async changes(since) {
+    if (this.#changesPromise) return this.#changesPromise;
+
+    const changes = this.#requestChanges(since);
+    this.#changesPromise = changes;
+    try {
+      return await changes;
+    } finally {
+      if (this.#changesPromise === changes) this.#changesPromise = null;
+    }
+  }
+
+  async #requestChanges(since) {
     const requestedSince = since ? this.#normalizeDateTime(since) : this.#lastReceivedAt || this.#now();
     const query = { since: requestedSince };
     let response;
     try {
       response = await this.request(this.#paths.changes, { query });
     } catch (error) {
-      if (error instanceof ApiKitClientError && error.status === 401) await this.#expireSession(error);
+      if (error instanceof ApiClientError && error.status === 401) await this.#expireSession(error);
       throw error;
     }
     const receivedAt = this.#touchLastReceivedAt();
@@ -1011,7 +1136,7 @@ class ApiKitClient {
     const headers = { Accept: "application/json", ...(options.headers || {}) };
     const body = encodeBody(options.body, headers);
     const token = options.token || await this.token() || null;
-    if (options.requireToken && !token) throw new ApiKitClientError("Sesion local requerida", { status: 401 });
+    if (options.requireToken && !token) throw new ApiClientError("Sesion local requerida", { status: 401 });
     if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`;
 
     let response;
@@ -1019,12 +1144,12 @@ class ApiKitClient {
       response = await this.#fetch(url, { method: options.method || "GET", headers, body, signal: options.signal, cache: options.cache });
     } catch (error) {
       const payload = { ok: false, message: error.message || "Error de red", error };
-      throw new ApiKitClientError(payload.message, { response: payload });
+      throw new ApiClientError(payload.message, { response: payload });
     }
     const contentType = response.headers?.get?.("content-type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok || payload?.ok === false){
-      throw new ApiKitClientError(payload?.message || response.statusText, { status: response.status, response: payload });
+      throw new ApiClientError(payload?.message || response.statusText, { status: response.status, response: payload });
     }
 
     return payload;
@@ -1040,6 +1165,18 @@ class ApiKitClient {
   }
 
   async #ping() {
+    if (this.#pingPromise) return this.#pingPromise;
+
+    const ping = this.#runPing();
+    this.#pingPromise = ping;
+    try {
+      return await ping;
+    } finally {
+      if (this.#pingPromise === ping) this.#pingPromise = null;
+    }
+  }
+
+  async #runPing() {
     const controller = new AbortController();
     this.#pingAbort = controller;
     const timeout = setTimeout(() => controller.abort(), this.#pingTimeout);
@@ -1055,11 +1192,11 @@ class ApiKitClient {
 
     try {
       const localSession = await this.session() || null;
-      if (!localSession?.token) throw new ApiKitClientError("Sesion local requerida", { status: 401 });
+      if (!localSession?.token) throw new ApiClientError("Sesion local requerida", { status: 401 });
       await this.syncServices();
-      await this.changes();
+      if (this.#changesEnabled) await this.changes();
       this.#stopPing();
-      await this.#openSse();
+      if (this.#sseEnabled) await this.#openSse();
     } catch {
       this.#closeSse();
     } finally {
@@ -1091,8 +1228,23 @@ class ApiKitClient {
   }
 
   async #openSse() {
+    if (!this.#sseEnabled) return;
     if (this.#sseAbort) return;
+
+    if (this.#sseOpenPromise) return this.#sseOpenPromise;
+
+    const opening = this.#startSse();
+    this.#sseOpenPromise = opening;
+    try {
+      return await opening;
+    } finally {
+      if (this.#sseOpenPromise === opening) this.#sseOpenPromise = null;
+    }
+  }
+
+  async #startSse() {
     if (!(await this.token())) return;
+    if (this.#sseAbort) return;
     const controller = new AbortController();
     this.#sseAbort = controller;
     const headers = { Accept: "text/event-stream" };
@@ -1198,6 +1350,7 @@ class ApiKitClient {
     for (const [serviceName, service] of this.#services.entries()) {
       if (serviceName === "audit") continue;
       await service.clear();
+      await this.#adapter.delete(this.#serviceCacheKey(serviceName));
     }
   }
 
@@ -1231,5 +1384,5 @@ class ApiKitClient {
   }
 }
 
-export { ApiKitClient, ApiKitClientError, BaseAdapter, BaseService, IndexedDbAdapter, LocalStorageAdapter, MapAdapter, OpenapiService, PendingService, SchemaService, SessionService, createAdapter, createApiClient };
+export { ApiClient, ApiClientError, BaseAdapter, BaseService, IndexedDbAdapter, LocalStorageAdapter, MapAdapter, OpenapiService, PendingService, SchemaService, SessionService, createAdapter, createApiClient };
 //# sourceMappingURL=api-client.js.map

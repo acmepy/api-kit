@@ -40,16 +40,18 @@ describe("auth", () => {
     const api = await createApi({
       seq,
       basePath: "/api",
-      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn: "5m" },
-      openapi: { auth: true, permission: "openapi.read" },
-      postman: { auth: true, permission: "openapi.read" },
+      auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
+      openapi: { auth: true },
+      postman: { auth: true },
       modules,
     });
+
+    assert.equal(api.auth.adapter.seq, seq);
 
     await seq.authenticate();
     await seq.init();
     await seq.sync({ force: true });
-    await seedIam(api.auth.models, ["clientes.list", "clientes.create", "openapi.read"]);
+    await seedIam(api.auth.models, ["clientes.list", "clientes.create", "schema.list"]);
 
     const app = express();
     app.use(express.json());
@@ -93,6 +95,11 @@ describe("auth", () => {
       assert.equal(listed.status, 200);
       assert.equal(listed.body.data.length, 1);
 
+      const schema = await request(server, "GET", "/api/clientes/schema", {
+        basic: ["admin", "1234"],
+      });
+      assert.equal(schema.status, 200);
+
       const forbidden = await request(server, "PUT", `/api/clientes/${created.body.data.id}`, {
         token: login.body.data.token,
         body: { activo: false },
@@ -120,8 +127,11 @@ describe("auth", () => {
       assert.equal(openapi.body.components.securitySchemes.basicAuth.scheme, "basic");
       assert.deepEqual(openapi.body.paths["/api/clientes"].get.security, [{ bearerAuth: [] }, { basicAuth: [] }]);
       assert.deepEqual(openapi.body.paths["/api/clientes"].get["x-permissions"], ["clientes.list"]);
+      assert.ok(openapi.body.paths["/api/clientes"].post);
+      assert.ok(openapi.body.paths["/api/clientes/schema"].get);
+      assert.equal(openapi.body.paths["/api/clientes/{id}"], undefined);
       assert.deepEqual(openapi.body.paths["/api/openapi.json"].get.security, [{ bearerAuth: [] }, { basicAuth: [] }]);
-      assert.deepEqual(openapi.body.paths["/api/openapi.json"].get["x-permissions"], ["openapi.read"]);
+      assert.deepEqual(openapi.body.paths["/api/openapi.json"].get["x-permissions"], ["schema.list"]);
       assert.equal(openapi.body.paths["/api/login"].post.security, undefined);
       assert.equal(openapi.body.paths["/api/login"].post.requestBody.content["application/json"].schema.properties.password.format, "password");
       assert.deepEqual(openapi.body.paths["/api/session"].get.security, [{ bearerAuth: [] }, { basicAuth: [] }]);

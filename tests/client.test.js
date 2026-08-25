@@ -68,13 +68,36 @@ describe("client public API", () => {
     await assert.rejects(
       () => client.request("/clientes"),
       (error) => {
-        assert.equal(error.name, "ApiKitClientError");
+        assert.equal(error.name, "ApiClientError");
         assert.equal(error.status, 0);
         assert.equal(error.response.ok, false);
         assert.equal(error.response.message, "Failed to fetch");
         return true;
       },
     );
+  });
+
+  it("can disable automatic changes and SSE", async () => {
+    const calls = [];
+    const client = createApiClient({
+      url: "http://server/api",
+      changes: false,
+      sse: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push(pathname);
+        if (pathname === "/api/login") return jsonResponse({ ok: true, data: { token: "token", user: { id: "admin" } } });
+        if (pathname === "/api/openapi.json") return jsonResponse({ openapi: "3.0.3", paths: {} });
+        return jsonResponse({ ok: true, data: {} });
+      },
+    });
+
+    await client.login({ username: "admin", password: "1234" });
+
+    assert.equal(calls.includes("/api/changes"), false);
+    assert.equal(calls.includes("/api/sse"), false);
+    client.destroy();
   });
 
   it("syncServices downloads OpenAPI, registers services and stores schemas", async () => {
@@ -140,6 +163,172 @@ describe("client public API", () => {
     });
   });
 
+  it("uses a fresh cached OpenAPI, schemas, and records without network requests", async () => {
+    const adapters = adapterRegistry();
+    const openapi = openapiDocument();
+    const calls = [];
+    await adapters.forService("openapi").put("document", openapi);
+    await adapters.forService("openapi").put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+    await adapters.forService("schema").put("clientes", { id: "clientes", create: { type: "object" } });
+    await adapters.forService("clientes").put(1, { id: 1, nombre: "Ana" });
+    await adapters.root.put("sync:clientes", { id: "sync:clientes", lastUpdateAt: new Date().toISOString() });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        calls.push(new URL(String(url)).pathname);
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+
+    await client.syncServices();
+
+    assert.ok(client.service("clientes") instanceof BaseService);
+    assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }] });
+    assert.equal(calls.includes("/api/openapi.json"), false);
+    assert.equal(calls.includes("/api/clientes/schema"), false);
+    assert.equal(calls.includes("/api/clientes"), false);
+    client.destroy();
+  });
+
+  it("returns a fresh cached request without contacting the server", async () => {
+    const adapters = adapterRegistry();
+    const calls = [];
+    await adapters.root.put("cache:portal.dash:admin", {
+      id: "cache:portal.dash:admin",
+      data: { nombre: "Ana" },
+      lastUpdateAt: new Date().toISOString(),
+    });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      fetch: async (url) => {
+        calls.push(new URL(String(url)).pathname);
+        return jsonResponse({ ok: true, data: { nombre: "Servidor" } });
+      },
+      pingInterval: 60_000,
+    });
+
+    const response = await client.cachedRequest("portal.dash:admin", "/portal/dash");
+
+    assert.deepEqual(response.data, { nombre: "Ana" });
+    assert.equal(response.cached, true);
+    assert.equal(response.refresh, undefined);
+    assert.equal(calls.includes("/api/portal/dash"), false);
+    client.destroy();
+  });
+
+  it("refreshes an expired service cache in the background", async () => {
+    const adapters = adapterRegistry();
+    const openapi = openapiDocument();
+    let releasePull;
+    const pullPending = new Promise((resolve) => { releasePull = resolve; });
+    await adapters.forService("openapi").put("document", openapi);
+    await adapters.forService("openapi").put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+    await adapters.forService("schema").put("clientes", { id: "clientes", create: { type: "object" } });
+    await adapters.forService("clientes").put(1, { id: 1, nombre: "Ana" });
+    await adapters.root.put("sync:clientes", { id: "sync:clientes", lastUpdateAt: "2020-01-01T00:00:00.000Z" });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        if (new URL(String(url)).pathname === "/api/clientes") {
+          await pullPending;
+          return jsonResponse({ ok: true, data: [{ id: 2, nombre: "Actualizado" }] });
+        }
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+
+    await client.syncServices();
+    assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }] });
+
+    releasePull();
+    await wait(5);
+    assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }, { id: 2, nombre: "Actualizado" }] });
+    assert.equal(typeof (await adapters.root.get("sync:clientes")).lastUpdateAt, "string");
+    client.destroy();
+  });
+
+  it("refreshes an expired cached request in the background", async () => {
+    const adapters = adapterRegistry();
+    await adapters.root.put("cache:portal.dash:admin", {
+      id: "cache:portal.dash:admin",
+      data: { nombre: "Ana" },
+      lastUpdateAt: "2020-01-01T00:00:00.000Z",
+    });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      fetch: async (url) => {
+        assert.equal(new URL(String(url)).pathname, "/api/portal/dash");
+        return jsonResponse({ ok: true, data: { nombre: "Actualizado" } });
+      },
+      pingInterval: 60_000,
+    });
+
+    const response = await client.cachedRequest("portal.dash:admin", "/portal/dash");
+    const refreshed = await response.refresh;
+
+    assert.deepEqual(response.data, { nombre: "Ana" });
+    assert.deepEqual(refreshed.data, { nombre: "Actualizado" });
+    assert.deepEqual((await adapters.root.get("cache:portal.dash:admin")).data, { nombre: "Actualizado" });
+    client.destroy();
+  });
+
+  it("refreshes an expired cache in the background", async () => {
+    const adapters = adapterRegistry();
+    const openapi = openapiDocument();
+    const calls = [];
+    let releaseOpenapi;
+    const openapiPending = new Promise((resolve) => { releaseOpenapi = resolve; });
+    await adapters.forService("openapi").put("document", openapi);
+    await adapters.forService("openapi").put("metadata", { id: "metadata", lastUpdateAt: "2020-01-01T00:00:00.000Z" });
+    await adapters.forService("schema").put("clientes", { id: "clientes", create: { type: "object" } });
+    await adapters.forService("clientes").put(1, { id: 1, nombre: "Ana" });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push(pathname);
+        if (pathname === "/api/openapi.json") {
+          await openapiPending;
+          return jsonResponse(openapi);
+        }
+        if (pathname === "/api/clientes/schema") return jsonResponse({ ok: true, data: { create: { type: "object" } } });
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+
+    await wait(5);
+    calls.length = 0;
+    await client.syncServices();
+
+    assert.ok(client.service("clientes") instanceof BaseService);
+    assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }] });
+    assert.equal(calls.includes("/api/openapi.json"), true);
+
+    releaseOpenapi();
+    await wait(5);
+    assert.equal(typeof (await adapters.forService("openapi").get("metadata")).lastUpdateAt, "string");
+    client.destroy();
+  });
+
   it("reuses an in-flight syncServices call", async () => {
     const adapters = adapterRegistry();
     const openapi = openapiDocument();
@@ -179,6 +368,100 @@ describe("client public API", () => {
 
     assert.equal(calls.filter((pathname) => pathname === "/api/openapi.json").length, 1);
     assert.ok(client.service("clientes") instanceof BaseService);
+  });
+
+  it("reuses an in-flight changes request", async () => {
+    const calls = [];
+    let releaseChanges;
+    const changesStarted = new Promise((resolve) => {
+      releaseChanges = resolve;
+    });
+    const client = createApiClient({
+      url: "http://server/api",
+      changes: false,
+      sse: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push(pathname);
+        if (pathname === "/api/changes") await changesStarted;
+        return jsonResponse({ ok: true, data: [] });
+      },
+    });
+
+    await wait(5);
+    calls.length = 0;
+    const first = client.changes("2026-01-01T00:00:00.000Z");
+    const second = client.changes("2026-01-02T00:00:00.000Z");
+    await wait(1);
+    assert.equal(calls.filter((pathname) => pathname === "/api/changes").length, 1);
+
+    releaseChanges();
+    await Promise.all([first, second]);
+    client.destroy();
+  });
+
+  it("does not overlap pings while the initial changes request is pending", async () => {
+    const adapters = adapterRegistry();
+    await adapters.forService("session").put("session", { token: "local-token", user: { id: "admin" } });
+    let changesCalls = 0;
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      sse: false,
+      pingInterval: 10,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/api/openapi.json") return jsonResponse({ openapi: "3.0.3", paths: {} });
+        if (pathname === "/api/changes") {
+          changesCalls += 1;
+          await wait(50);
+        }
+        return jsonResponse({ ok: true, data: [] });
+      },
+    });
+
+    await wait(35);
+    assert.equal(changesCalls, 1);
+    client.destroy();
+  });
+
+  it("opens one SSE connection when login and ping complete together", async () => {
+    const adapters = adapterRegistry();
+    await adapters.forService("session").put("session", { token: "local-token", user: { id: "admin" } });
+    let releaseOpenapi;
+    const openapiStarted = new Promise((resolve) => {
+      releaseOpenapi = resolve;
+    });
+    let sseCalls = 0;
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/api/openapi.json") {
+          await openapiStarted;
+          return jsonResponse({ openapi: "3.0.3", paths: {} });
+        }
+        if (pathname === "/api/login") return jsonResponse({ ok: true, data: { token: "new-token", user: { id: "admin" } } });
+        if (pathname === "/api/sse") {
+          sseCalls += 1;
+          return new Promise(() => {});
+        }
+        return jsonResponse({ ok: true, data: [] });
+      },
+    });
+
+    await wait(5);
+    const login = client.login({ username: "admin", password: "1234" });
+    releaseOpenapi();
+    await login;
+    await wait(5);
+    assert.equal(sseCalls, 1);
+    client.destroy();
   });
 
   it("expires the local session when schema download returns unauthorized", async () => {

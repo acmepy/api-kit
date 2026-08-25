@@ -18,12 +18,13 @@ export function installFrontendInstallRoutes({ mainRouter, routeRegistry, config
   if (apps.length === 0) return;
 
   const auth = config.auth || { required: false, strategies: [] };
+  const permissions = ["install"];
   const handlers = [];
-  if (authorize) handlers.push(authorize({ auth, permissions: [] }));
+  if (authorize) handlers.push(authorize({ auth, permissions }));
 
-  routeRegistry.register({ module: "install", operationId: "install.list", method: "get", expressPath: "/install", openApiPath: "/install", serviceMethod: "installList", auth, permissions: [], summary: "Instalador de frontends", description: "", tags: ["install"], deprecated: false });
-  routeRegistry.register({ module: "install", operationId: "install.script", method: "get", expressPath: "/install/app.js", openApiPath: "/install/app.js", serviceMethod: "installScript", auth, permissions: [], summary: "Script del instalador", description: "", tags: ["install"], deprecated: false });
-  routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions: [], summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.list", method: "get", expressPath: "/install", openApiPath: "/install", serviceMethod: "installList", auth, permissions, summary: "Instalador de frontends", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.script", method: "get", expressPath: "/install/app.js", openApiPath: "/install/app.js", serviceMethod: "installScript", auth, permissions, summary: "Script del instalador", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions, summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
 
   mainRouter.get("/install", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps));});
   mainRouter.get("/install/", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps))});
@@ -38,19 +39,15 @@ export function installFrontendInstallRoutes({ mainRouter, routeRegistry, config
 }
 
 export async function installApp(app, { token, fetch: fetchImpl = globalThis.fetch } = {}) {
-  try {
-    const tokenValue = stringValue(token) || tokenForProvider(app.provider);
-    const tag = app.version === "latest" ? await getLatestTag({ app, token: tokenValue, fetch: fetchImpl }) : app.version;
-    const installedTag = readInstalledTag(app.target);
+  const tokenValue = stringValue(token) || tokenForProvider(app.provider);
+  const tag = app.version === "latest" ? await getLatestTag({ app, token: tokenValue, fetch: fetchImpl }) : app.version;
+  const installedTag = readInstalledTag(app.target);
 
-    if (installedTag === tag) return installResult(app, tag, "skipped");
+  if (installedTag === tag) return installResult(app, tag, "skipped");
 
-    const archive = await downloadArchive({ app, tag, token: tokenValue, fetch: fetchImpl });
-    await extractAndReplace({ app, archive, tag });
-    return installResult(app, tag, "updated");
-  } catch (error) {
-    return { ...installResult(app, app.version, "failed"), error: error.message };
-  }
+  const archive = await downloadArchive({ app, tag, token: tokenValue, fetch: fetchImpl });
+  await extractAndReplace({ app, archive, tag });
+  return installResult(app, tag, "updated");
 }
 
 export function renderInstallHtml(apps) {
@@ -180,7 +177,7 @@ async function githubFetch(url, token, fetch) {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(url, { headers, redirect: "follow" });
-  if (!res.ok) throw new AppError(`GitHub respondio ${res.status}: ${await res.text()}`, { status: 502, code: "GITHUB_ERROR" });
+  if (!res.ok) throw new AppError(`GitHub respondio ${res.status}: ${url}`, { status: 502, code: "GITHUB_ERROR" });
   return res;
 }
 

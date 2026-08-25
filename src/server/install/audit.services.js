@@ -4,6 +4,29 @@ import { ValidationError } from "../errors/validation-error.js";
 import { ok } from "../http/response.js";
 import { log } from "../logger/index.js";
 import { joinPaths } from "../utils/paths.js";
+import { defineResource } from "../config/config-resource.js";
+
+export function createAuditResource() {
+  return defineResource({
+    modelName: "audit",
+    tableName: "audit",
+    timestamps: true,
+    indexes: [
+      { name: "idx_audit_created_at", columns: ["createdAt"] },
+    ],
+    attributes: {
+      id: { type: "integer", primaryKey: true, autoIncrement: true },
+      txId: { type: "string", maxLength: 50, allowNull: false },
+      clientIp: { type: "string", maxLength: 50, allowNull: false },
+      userId: { type: "string", maxLength: 20 },
+      tableName: { type: "string", maxLength: 50, allowNull: false },
+      rowId: { type: "string", maxLength: 50, allowNull: false },
+      action: { type: "string", maxLength: 20, allowNull: false },
+      old: { type: "json" },
+      new: { type: "json" },
+    },
+  });
+}
 
 export function normalizeAuditConfig(audit) {
   if (!audit) return false;
@@ -12,11 +35,8 @@ export function normalizeAuditConfig(audit) {
   return { ...defaults, ...audit, heartbeatTimeout: normalizeAuditHeartbeatTimeout(audit.heartbeatTimeout, defaults.heartbeatTimeout) };
 }
 
-export function installAuditHooks(moduleConfigs, auditConfig) {
+export function installAuditHooks(moduleConfigs, auditConfig, AuditModel) {
   if (!auditConfig) return;
-
-  const auditModule = moduleConfigs.find((moduleConfig) => isAuditModule(moduleConfig));
-  const AuditModel = auditModule?.resource?.model;
   if (!AuditModel) return;
 
   for (const moduleConfig of moduleConfigs) {
@@ -88,11 +108,8 @@ export function installAuditChangesRoute({ mainRouter, routeRegistry, modules, m
   });
 }
 
-export function createAuditWriter(moduleConfigs, auditConfig) {
+export function createAuditWriter(auditConfig, AuditModel) {
   if (!auditConfig) return null;
-
-  const auditModule = moduleConfigs.find((moduleConfig) => isAuditModule(moduleConfig));
-  const AuditModel = auditModule?.resource?.model;
   if (!AuditModel) return null;
 
   return async function auditWrite(change) {

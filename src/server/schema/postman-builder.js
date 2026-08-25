@@ -1,7 +1,7 @@
 const POSTMAN_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
 
 export function normalizePostmanConfig(postman, openapi) {
-  if (postman) return postman === true ? {} : postman;
+  if (postman) return { permission: "schema.list", ...(postman === true ? {} : postman) };
   if (!openapi?.postman) return null;
   return {...openapi,path: openapi.postmanPath || "/postman.json"};
 }

@@ -10,7 +10,7 @@ import { normalizePostmanConfig } from "./schema/postman-builder.js";
 import { RouteRegistry } from "./schema/route-registry.js";
 import { loadModels, loadModule } from "./loaders/index.js";
 import { installFrontendInstallRoutes, normalizeInstallableApps } from "./install/install.services.js";
-import { createAuditWriter, installAuditChangesRoute, installAuditHooks, installAuditSseRoute, normalizeAuditConfig } from "./install/audit.services.js";
+import { createAuditResource, createAuditWriter, installAuditChangesRoute, installAuditHooks, installAuditSseRoute, normalizeAuditConfig } from "./install/audit.services.js";
 import { createAuthorizer, installAuthRoutes } from "./install/auth.services.js";
 import { installHttpMiddleware } from "./install/http-middleware.services.js";
 import { installOpenApiRoute, installPostmanRoute } from "./install/schema.services.js";
@@ -36,7 +36,7 @@ export async function createApi(conf = {}) {
       schemas: conf.paths?.schemas || "./schemas",
     },
     auth: conf.auth,
-    cors: conf.cors ?? false,
+    cors: conf.cors ?? { origin: "http://localhost:5173" },
     helmet: conf.helmet ?? false,
     compression: conf.compression ?? false,
     rateLimit: conf.rateLimit ?? false,
@@ -70,13 +70,15 @@ export async function createApi(conf = {}) {
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
   const authBackend = conf.auth ? normalizeAuthBackendConfig(config.auth) : null;
-  const auditWriter = createAuditWriter(moduleConfigs, config.audit);
+  const auditResource = config.audit ? createAuditResource() : null;
+  const auditWriter = createAuditWriter(config.audit, auditResource?.model);
   let authContext = null;
   const authorize = createAuthorizer(() => authContext);
 
-  installAuditHooks(moduleConfigs, config.audit);
+  installAuditHooks(moduleConfigs, config.audit, auditResource?.model);
 
   const explicitModels = { ...config.models };
+  if (auditResource) explicitModels.audit = auditResource.model;
   for (const moduleConfig of moduleConfigs) {
     const resourceModel = moduleConfig.resource?.model;
     const modelName = resourceModel?.modelName || moduleConfig.resource?.options?.modelName || moduleConfig.resource?.model?.name;

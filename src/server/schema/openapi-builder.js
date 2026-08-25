@@ -2,21 +2,22 @@ import { normalizeJsonSchema, normalizeStrategies } from "../utils/normalize.js"
 
 export function normalizeOpenApiConfig(openapi) {
   if (!openapi) return null;
-  if (openapi === true) return {};
-  return openapi;
+  const config = openapi === true ? {} : openapi;
+  return { permission: "schema.list", ...config };
 }
 
-export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {} }) {
+export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {}, session } = {}) {
   const paths = {};
   const schemas = {};
-  const securitySchemes = securitySchemesFor(routes.getAll());
+  const visibleRoutes = routesForSession(routes.getAll(), session);
+  const securitySchemes = securitySchemesFor(visibleRoutes);
 
   for (const mod of modules.values()) {
     const moduleSchemas = schemaComponents(mod);
     for (const [name, schema] of Object.entries(moduleSchemas)) schemas[componentName(mod.name, name)] = schema;
   }
 
-  for (const route of routes.getAll()) {
+  for (const route of visibleRoutes) {
     const path = route.openApiPath;
     if (!paths[path]) paths[path] = {};
     paths[path][route.method.toLowerCase()] = operationFor(route, modules);
@@ -38,6 +39,17 @@ export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config
       }).filter(([, value]) => value && Object.keys(value).length > 0),
     ),
   };
+}
+
+function routesForSession(routes, session) {
+  if (session === undefined) return routes;
+  const permissions = new Set(session?.permissions || []);
+
+  return routes.filter((route) => {
+    if (!route.auth?.required) return true;
+    if (!session) return false;
+    return (route.permissions || []).every((permission) => permissions.has(permission));
+  });
 }
 
 function normalizeServers(servers) {

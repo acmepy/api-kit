@@ -50,7 +50,8 @@ export function normalizeModules(configs, options = {}) {
 
 function normalizeEndpoint(endpoint, moduleConfig, operation) {
   const auth = normalizeAuth(endpoint.auth === undefined ? moduleConfig.auth : endpoint.auth);
-  const permission = endpoint.permission === undefined && auth.required ? `${moduleConfig.name}.${operation}` : endpoint.permission;
+  const permissionOperation = operation === "schema" ? "list" : operation;
+  const permission = endpoint.permission === undefined && auth.required ? `${moduleConfig.name}.${permissionOperation}` : endpoint.permission;
   return { ...endpoint, auth, permission };
 }
 
