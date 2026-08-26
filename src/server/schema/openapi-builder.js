@@ -1,21 +1,15 @@
-import { normalizeJsonSchema, normalizeStrategies } from "../utils/normalize.js";
+import { normalizeStrategies } from "../utils/normalize.js";
+import { jsonSchemaForRoute, normalizeDocumentConfig, routeRequestSchemaName, routesForSession } from "./document-utils.js";
 
 export function normalizeOpenApiConfig(openapi) {
-  if (!openapi) return null;
-  const config = openapi === true ? {} : openapi;
-  return { permission: "schema.list", ...config };
+  return normalizeDocumentConfig(openapi, { permission: "schema.list" });
 }
 
 export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {}, session } = {}) {
   const paths = {};
-  const schemas = {};
   const visibleRoutes = routesForSession(routes.getAll(), session);
+  const schemas = schemaComponentsForRoutes(modules, visibleRoutes);
   const securitySchemes = securitySchemesFor(visibleRoutes);
-
-  for (const mod of modules.values()) {
-    const moduleSchemas = schemaComponents(mod);
-    for (const [name, schema] of Object.entries(moduleSchemas)) schemas[componentName(mod.name, name)] = schema;
-  }
 
   for (const route of visibleRoutes) {
     const path = route.openApiPath;
@@ -41,15 +35,27 @@ export function buildOpenApiDocument({ routes, modules, packageInfo = {}, config
   };
 }
 
-function routesForSession(routes, session) {
-  if (session === undefined) return routes;
-  const permissions = new Set(session?.permissions || []);
+export function schemaComponentsForRoutes(modules, routes) {
+  const schemas = {};
+  const requiredSchemas = new Map();
 
-  return routes.filter((route) => {
-    if (!route.auth?.required) return true;
-    if (!session) return false;
-    return (route.permissions || []).every((permission) => permissions.has(permission));
-  });
+  for (const route of routes) {
+    const schemaName = routeRequestSchemaName(route);
+    if (!schemaName) continue;
+    if (!requiredSchemas.has(route.module)) requiredSchemas.set(route.module, new Set());
+    requiredSchemas.get(route.module).add(schemaName);
+  }
+
+  for (const [moduleName, schemaNames] of requiredSchemas) {
+    const mod = modules.get(moduleName);
+    if (!mod) continue;
+    for (const schemaName of schemaNames) {
+      const jsonSchema = jsonSchemaForRoute(modules, { module: moduleName }, schemaName);
+      if (jsonSchema) schemas[componentName(moduleName, schemaName)] = enrichJsonSchema(jsonSchema, mod, schemaName);
+    }
+  }
+
+  return schemas;
 }
 
 function normalizeServers(servers) {
@@ -191,24 +197,9 @@ function requestBodyFor(route, mod) {
     };
   }
 
-  const bodySchemaName = requestBodySchemaName(route);
+  const bodySchemaName = routeRequestSchemaName(route);
   if (!bodySchemaName || !mod?.schemas?.[bodySchemaName]) return undefined;
   return {required: bodySchemaName === "create", content: {"application/json": {schema: { $ref: `#/components/schemas/${componentName(route.module, bodySchemaName)}`}}}};
-}
-
-function requestBodySchemaName(route) {
-  if (route.serviceMethod === "create") return "create";
-  if (route.serviceMethod === "update") return "update";
-  return null;
-}
-
-function schemaComponents(mod) {
-  const result = {};
-  for (const [name, schema] of Object.entries(mod.schemas || {})) {
-    const jsonSchema = toJsonSchema(schema);
-    if (jsonSchema) result[name] = enrichJsonSchema(jsonSchema, mod, name);
-  }
-  return result;
 }
 
 function enrichJsonSchema(schema, mod, operation) {
@@ -257,8 +248,4 @@ function sanitizeComponentName(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-function toJsonSchema(schema) {
-  if (!schema || typeof schema.toJsonSchema !== "function") return null;
-  return normalizeJsonSchema(schema.toJsonSchema());
-}
 

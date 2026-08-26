@@ -2,6 +2,7 @@ import { createApiClient, LocalStorageAdapter } from "api/client";
 
 const client = createApiClient({
   url: `${window.location.origin}/api`,
+  schemaPath: "/schema.json",
   adapter: new LocalStorageAdapter(),
   createAdapter: (options = {}) => new LocalStorageAdapter(options),
   pingInterval: 5000,

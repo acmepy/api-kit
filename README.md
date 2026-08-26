@@ -20,6 +20,7 @@ El server queda en `http://localhost:3000`:
 - `http://localhost:3000/client`: ejemplo con `api/client`, cache local, pending, push, changes y SSE.
 - `http://localhost:3000/api`: API generada.
 - `http://localhost:3000/api/openapi.json`: OpenAPI.
+- `http://localhost:3000/api/schema.json`: manifiesto de servicios y schemas para el cliente.
 - `http://localhost:3000/api/postman.json`: coleccion Postman.
 
 Usuario del ejemplo:
@@ -73,6 +74,7 @@ const api = await createApi({
   },
   audit: true,
   openapi: true,
+  schema: true,
   postman: true,
   logging: logger,
 });
@@ -339,7 +341,7 @@ Devuelve:
 
 ## Cliente
 
-`api/client` descubre servicios desde OpenAPI, guarda sesion local, usa Bearer token y mantiene cache local mediante adapters.
+`api/client` descubre servicios desde `schema.json`, guarda sesion local, usa Bearer token y mantiene cache local mediante adapters.
 
 ```js
 import { createApiClient, LocalStorageAdapter } from "api/client";
@@ -372,7 +374,7 @@ Metodos publicos principales:
 - `logout()`: llama `POST /logout`, limpia sesion/cache/pending local y vuelve a ping.
 - `session()`: carga sesion local.
 - `clearSession()`: limpia solo sesion local.
-- `discover(openapi?)`: descubre servicios desde OpenAPI.
+- `discover()`: descubre servicios desde `schema.json`.
 - `service(name)`: obtiene un servicio descubierto.
 - `services()`: devuelve un `Map` de servicios.
 - `syncServices(force = false)`: descubre servicios, hace pull de caches faltantes y empuja pending.
@@ -385,7 +387,7 @@ Metodos publicos principales:
 
 `changes` y `sse` estan activados por defecto. Configuralos como `false` para desactivar, respectivamente, la descarga automatica de cambios y la conexion SSE.
 
-`syncCacheTimeout` define por cuantos milisegundos se reutilizan OpenAPI, schemas y datos locales sin consultar la red. Su valor por defecto es 5 minutos; al vencer, el cliente restaura la cache y la actualiza en segundo plano. Usa `syncServices(true)` para forzar una actualizacion inmediata.
+`syncCacheTimeout` define por cuantos milisegundos se reutilizan el manifiesto de schemas y los datos locales sin consultar la red. Su valor por defecto es 5 minutos; al vencer, el cliente restaura la cache y la actualiza en segundo plano. Usa `syncServices(true)` para forzar una actualizacion inmediata.
 - `request(path, options)`: request autenticado.
 - `url(path, query?)`: arma URL absoluta.
 
@@ -638,6 +640,7 @@ const api = await createApi({
   basePath: "/api",
   modules: "./example/modules.js",
   openapi: true,
+  schema: true,
   postman: true,
 });
 ```
@@ -645,9 +648,10 @@ const api = await createApi({
 Rutas:
 
 - `GET /api/openapi.json`
+- `GET /api/schema.json`
 - `GET /api/postman.json`
 
-El cliente usa OpenAPI para descubrir servicios y operaciones.
+`schema` es independiente de `openapi` y se activa con `schema: true` (o con su propia configuracion, por ejemplo `schema: { auth: true }`). El cliente usa `schema.json` para descubrir servicios, operaciones y schemas de validacion en una sola solicitud. El documento solo incluye operaciones y schemas que el usuario puede utilizar. OpenAPI permanece disponible para documentacion.
 
 ## Scripts
 

@@ -162,10 +162,6 @@ export class BaseService {
     }
   }
 
-  async schema() {
-    return this.request("schema");
-  }
-
   async validate(data = {}, operation = "create") {
     const schema = await this.#yepSchema(operation);
     if (!schema) return data;

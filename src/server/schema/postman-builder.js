@@ -1,7 +1,9 @@
+import { jsonSchemaForRoute, normalizeDocumentConfig } from "./document-utils.js";
+
 const POSTMAN_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
 
 export function normalizePostmanConfig(postman, openapi) {
-  if (postman) return { permission: "schema.list", ...(postman === true ? {} : postman) };
+  if (postman) return normalizeDocumentConfig(postman, { permission: "schema.list" });
   if (!openapi?.postman) return null;
   return {...openapi,path: openapi.postmanPath || "/postman.json"};
 }
@@ -101,8 +103,7 @@ function requestBodyExample(route, modules) {
   if (route.operationId === "install.run") return { token: "" };
   if (!["create", "update"].includes(route.serviceMethod)) return null;
 
-  const schema = modules.get(route.module)?.schemas?.[route.serviceMethod];
-  const jsonSchema = schema?.toJsonSchema?.();
+  const jsonSchema = jsonSchemaForRoute(modules, route);
   return jsonSchema ? exampleFromJsonSchema(jsonSchema) : {};
 }
 

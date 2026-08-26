@@ -365,10 +365,6 @@ class BaseService {
     }
   }
 
-  async schema() {
-    return this.request("schema");
-  }
-
   async validate(data = {}, operation = "create") {
     const schema = await this.#yepSchema(operation);
     if (!schema) return data;
@@ -510,93 +506,26 @@ function encodeBody(body, headers) {
   return JSON.stringify(body);
 }
 
-const INTERNAL_SERVICES = new Set(["audit", "auth", "openapi", "postman", "session", "schema", "pending", "system", "install"]);
+const INTERNAL_SERVICES = new Set(["audit", "auth", "postman", "session", "schema", "pending", "system", "install"]);
 
-function discoverServiceDescriptors(openapi, baseUrl = "") {
-  const byName = new Map();
+function discoverServiceDescriptors(document, baseUrl = "") {
+  if (!Array.isArray(document?.services)) return [];
+  return document.services
+    .filter((service) => !INTERNAL_SERVICES.has(service.name))
+    .map((service) => schemaServiceDescriptor(service, baseUrl));
+}
+
+function schemaServiceDescriptor(service, baseUrl) {
   const pathPrefix = String(baseUrl || "").replace(/\/+$/g, "");
-
-  for (const [path, methods] of Object.entries(openapi?.paths || {})) {
-    for (const [method, operation] of Object.entries(methods || {})) {
-      const serviceName = operation.tags?.[0];
-      const serviceMethod = serviceMethodFor(operation.operationId, serviceName);
-      if (!serviceName || !serviceMethod || INTERNAL_SERVICES.has(serviceName)) continue;
-      const clientPath = pathPrefix && path.startsWith(`${pathPrefix}/`) ? path.slice(pathPrefix.length) : path;
-      if (!byName.has(serviceName)) byName.set(serviceName, { name: serviceName, path: clientPath, operations: {} });
-      const descriptor = byName.get(serviceName);
-      descriptor.operations[serviceMethod] = {method: method.toUpperCase(), path: clientPath, permissions: operation["x-permissions"] || []};
-    }
-  }
-  return [...byName.values()];
+  const operations = Object.fromEntries(Object.entries(service.operations || {}).map(([name, operation]) => [name, {
+    ...operation,
+    path: stripPathPrefix(operation.path, pathPrefix),
+  }]));
+  return { ...service, path: operations.list?.path || Object.values(operations)[0]?.path || "", operations };
 }
 
-function serviceMethodFor(operationId = "", serviceName = "") {
-  const normalized = String(operationId).replace(`${serviceName}_`, `${serviceName}.`);
-  const method = normalized.split(/[._-]/).pop();
-  if (["list", "get", "schema", "create", "update", "remove", "changes", "sse"].includes(method)) return method;
-  return method || null;
-}
-
-class OpenapiService extends BaseService {
-  constructor({ client, prefix, createAdapter, path = "/openapi.json" }) {
-    super({ client, name: "openapi", path, operations: {}, schemas: {}, prefix, createAdapter });
-  }
-
-  async list() {
-    throw new Error("OpenapiService.list no implementado");
-  }
-
-  async create(data = {}) {
-    throw new Error("OpenapiService.list no implementado");
-  }
-
-  async update() {
-    throw new Error("OpenapiService.update no implementado");
-  }
-
-  async remove() {
-    throw new Error("OpenapiService.remove no implementado");
-  }
-
-  async pull() {
-    const records = await this.client.request(this.path, { method: "GET", cache: "no-store" });
-    await this.adapter.clear();
-    await this.adapter.put("document", records);
-    return records;
-  }
-
-  async pullOne() {
-    throw new Error("OpenapiService.pullOne no implementado");
-  }
-
-  async push() {
-    throw new Error("OpenapiService.push no implementado");
-  }
-
-  async schema() {
-    throw new Error("OpenapiService.schema no implementado");
-  }
-
-  async loadSchema() {
-    throw new Error("OpenapiService.loadSchema no implementado");
-  }
-
-  async validate() {
-    throw new Error("OpenapiService.validate no implementado");
-  }
-
-  async validateAt() {
-    throw new Error("OpenapiService.validateAt no implementado");
-  }
-
-  async request() {
-    throw new Error("OpenapiService.request no implementado");
-  }
-
-  permissions() {
-    throw new Error("OpenapiService.permissions no implementado");
-  }
-
+function stripPathPrefix(path, prefix) {
+  return prefix && path.startsWith(`${prefix}/`) ? path.slice(prefix.length) : path;
 }
 
 class PendingService extends BaseService {
@@ -607,7 +536,7 @@ class PendingService extends BaseService {
   async list() {
     const pending = [];
     for (const service of this.client.services().values()) {
-      if (service === this || ["session", "openapi", "schema"].includes(service.name) || typeof service.pending !== "function") continue;
+      if (service === this || ["session", "schema"].includes(service.name) || typeof service.pending !== "function") continue;
       const result = await service.pending();
       pending.push(...(result.data || []));
     }
@@ -652,8 +581,8 @@ class PendingService extends BaseService {
 }
 
 class SchemaService extends BaseService {
-  constructor({ client, prefix, createAdapter }) {
-    super({ client, name: "schema", path: "", operations: {}, schemas: {}, prefix, createAdapter });
+  constructor({ client, prefix, createAdapter, path = "/schema.json" }) {
+    super({ client, name: "schema", path, operations: {}, schemas: {}, prefix, createAdapter });
   }
 
   async create(data = {}) {
@@ -673,7 +602,10 @@ class SchemaService extends BaseService {
   }
 
   async pull() {
-    throw new Error("SchemaService.pull no implementado");
+    const document = await this.client.request(this.path, { method: "GET", cache: "no-store" });
+    await this.adapter.clear();
+    await this.adapter.put("document", document);
+    return document;
   }
 
   async pullOne() {
@@ -804,7 +736,6 @@ class ApiClient {
   #sessionKey;
   #session = null;
   #services = new Map();
-  #openapi = null;
   #listeners = new Set();
   #online = false;
   #lastReceivedAt = null;
@@ -849,7 +780,7 @@ class ApiClient {
       logout: options.logoutPath || "/logout",
       session: options.sessionPath || "/session",
       ping: options.pingPath || "/ping",
-      openapi: options.openapiPath || "/openapi.json",
+      schema: options.schemaPath || "/schema.json",
       changes: options.changesPath || "/changes",
       sse: options.ssePath || "/sse",
     };
@@ -940,7 +871,7 @@ class ApiClient {
 
   async syncServices(force = false) {
     if (this.#syncServicesPromise) return this.#syncServicesPromise;
-    if (!force && this.#services.get("openapi")) return;
+    if (!force && this.#services.get("schema")) return;
 
     const sync = this.#synchronizeServices(force);
     this.#syncServicesPromise = sync;
@@ -952,48 +883,53 @@ class ApiClient {
   }
 
   async #synchronizeServices(force) {
-    const openapiService = new OpenapiService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, path: this.#paths.openapi });
-    this.#services.set("openapi", openapiService);
-    const cachedOpenapi = await this.#cachedOpenapi(openapiService);
-    const cacheMetadata = await openapiService.adapter.get("metadata");
+    const schemaService = new SchemaService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, path: this.#paths.schema });
+    this.#services.set("schema", schemaService);
+    const cachedSchema = await this.#cachedDocument(schemaService);
+    const cacheMetadata = await schemaService.adapter.get("metadata");
 
-    if (!force && cachedOpenapi && this.#isSyncCacheFresh(cacheMetadata)) {
-      await this.#registerServices(cachedOpenapi);
+    if (!force && cachedSchema && this.#isSyncCacheFresh(cacheMetadata)) {
+      await this.#registerSchemaServices(cachedSchema, schemaService);
       return;
     }
 
-    if (!force && cachedOpenapi && cacheMetadata) {
-      await this.#registerServices(cachedOpenapi);
-      if (this.#online) this.#refreshServicesInBackground(openapiService);
+    if (!force && cachedSchema && cacheMetadata) {
+      await this.#registerSchemaServices(cachedSchema, schemaService);
+      if (this.#online) this.#refreshSchemaDocumentInBackground(schemaService);
       return;
     }
 
-    await this.#refreshServices(openapiService, force, cachedOpenapi);
+    await this.#refreshSchemaDocument(schemaService, force, cachedSchema);
   }
 
-  async #refreshServices(openapiService, force, fallbackOpenapi = null) {
-    let openapi;
+  async #refreshSchemaDocument(schemaService, force, fallbackSchema = null) {
+    let schema = fallbackSchema;
     try {
-      if(!this.#online) throw Error('OffLine')
-      openapi = await openapiService.pull();
+      if (!this.#online) throw Error("OffLine");
+      const document = await schemaService.pull();
+      if (!Array.isArray(document?.services)) throw new Error("Documento schema invalido");
+      schema = document;
     } catch (error) {
-      if (error.status === 401){
+      if (error.status === 401) {
         await this.#expireSession(error);
         throw error;
-      }else {
-        openapi = fallbackOpenapi || await this.#cachedOpenapi(openapiService);
+      }
+      schema ||= await this.#cachedDocument(schemaService);
+      if (!schema) {
+        if (error.message === "OffLine") return;
+        throw error;
       }
     }
 
-    await this.#registerServices(openapi, { refreshSchemas: Boolean(openapi), force });
-    if (openapi && openapi !== fallbackOpenapi) {
-      await openapiService.adapter.put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+    await this.#registerSchemaServices(schema, schemaService, { force });
+    if (schema && schema !== fallbackSchema) {
+      await schemaService.adapter.put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
     }
   }
 
-  #refreshServicesInBackground(openapiService) {
+  #refreshSchemaDocumentInBackground(schemaService) {
     if (this.#backgroundSyncPromise) return;
-    const refresh = this.#refreshServices(openapiService, false)
+    const refresh = this.#refreshSchemaDocument(schemaService, false)
       .catch((error) => {
         if (error?.status !== 401) console.error("api-client, syncServices", error);
       })
@@ -1001,6 +937,26 @@ class ApiClient {
         if (this.#backgroundSyncPromise === refresh) this.#backgroundSyncPromise = null;
       });
     this.#backgroundSyncPromise = refresh;
+  }
+
+  async #registerSchemaServices(schema, schemaService, { force = false } = {}) {
+    for (const descriptor of discoverServiceDescriptors(schema, this.#baseUrl)) {
+      if (!descriptor.operations.list) continue;
+      const service = new BaseService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, ...descriptor });
+      this.#services.set(descriptor.name, service);
+      if (Object.keys(descriptor.schemas || {}).length > 0) await schemaService.update(descriptor.name, descriptor.schemas);
+      try {
+        const localRecords = (await service.list()).data;
+        if (localRecords.length === 0 || force) await service.pull();
+        else if (!(await this.#isServiceCacheFresh(descriptor.name))) this.#refreshServiceInBackground(service);
+      } catch (error) {
+        if (error?.status === 401) {
+          await this.#expireSession(error);
+          throw error;
+        }
+        console.error("api-client, syncServices", error);
+      }
+    }
   }
 
   #refreshServiceInBackground(service) {
@@ -1033,40 +989,15 @@ class ApiClient {
     return refresh;
   }
 
-  async #cachedOpenapi(openapiService) {
-    const document = await openapiService.adapter.get("document");
+  async #cachedDocument(service) {
+    const document = await service.adapter.get("document");
     if (document) return document;
-    return (await openapiService.adapter.getAll()).find((record) => record?.openapi) || null;
+    return (await service.adapter.getAll()).find((record) => record?.schema) || null;
   }
 
   #isSyncCacheFresh(metadata) {
     const updatedAt = Date.parse(metadata?.lastUpdateAt || "");
     return Number.isFinite(updatedAt) && Date.now() - updatedAt < this.#syncCacheTimeout;
-  }
-
-  async #registerServices(openapi, { refreshSchemas = false, force = false } = {}) {
-    const schemaService = new SchemaService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter });
-    this.#services.set("schema", schemaService);
-
-    for (const descriptor of discoverServiceDescriptors(openapi, this.#baseUrl)) {
-      if (!descriptor.operations.list) continue;
-      const service = new BaseService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, ...descriptor });
-      this.#services.set(descriptor.name, service);
-      try{
-        if (refreshSchemas && descriptor.operations.schema) {
-          const response = await service.schema();
-          await schemaService.update(descriptor.name, response.data || response);
-        }
-        if (force) await service.pull();
-        else if (!(await this.#isServiceCacheFresh(descriptor.name))) this.#refreshServiceInBackground(service);
-      }catch(e){
-        if (e?.status === 401) {
-          await this.#expireSession(e);
-          throw e;
-        }
-        if (![404, 405].includes(e?.status) && e?.message !== "Schema disabled") console.error('api-client, syncServices', e);
-      }
-    }
   }
 
   connected() {
@@ -1384,5 +1315,5 @@ class ApiClient {
   }
 }
 
-export { ApiClient, ApiClientError, BaseAdapter, BaseService, IndexedDbAdapter, LocalStorageAdapter, MapAdapter, OpenapiService, PendingService, SchemaService, SessionService, createAdapter, createApiClient };
+export { ApiClient, ApiClientError, BaseAdapter, BaseService, IndexedDbAdapter, LocalStorageAdapter, MapAdapter, PendingService, SchemaService, SessionService, createAdapter, createApiClient };
 //# sourceMappingURL=api-client.js.map

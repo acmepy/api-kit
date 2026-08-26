@@ -30,6 +30,7 @@ async function main() {
     },
     audit: true,
     openapi: true,
+    schema: { auth: true },
     postman: true,
     logging: logger,
   });

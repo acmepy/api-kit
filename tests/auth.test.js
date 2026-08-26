@@ -19,6 +19,24 @@ const modules = [
 ];
 
 describe("auth", () => {
+  it("does not expose schema.json when only OpenAPI is enabled", async () => {
+    const api = await createApi({
+      seq: createTestSeq({ logging: false }),
+      basePath: "/api",
+      openapi: true,
+      modules,
+    });
+    const server = await listen(api.app);
+
+    try {
+      const response = await request(server, "GET", "/api/schema.json");
+      assert.equal(response.status, 404);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("passes global logging to iam", async () => {
     const events = [];
     const logger = { error(...args) { events.push(args); } };
@@ -42,6 +60,7 @@ describe("auth", () => {
       basePath: "/api",
       auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
       openapi: { auth: true },
+      schema: { auth: true },
       postman: { auth: true },
       modules,
     });
@@ -130,11 +149,19 @@ describe("auth", () => {
       assert.ok(openapi.body.paths["/api/clientes"].post);
       assert.ok(openapi.body.paths["/api/clientes/schema"].get);
       assert.equal(openapi.body.paths["/api/clientes/{id}"], undefined);
+      assert.ok(openapi.body.components.schemas.clientes_create);
+      assert.equal(openapi.body.components.schemas.clientes_update, undefined);
       assert.deepEqual(openapi.body.paths["/api/openapi.json"].get.security, [{ bearerAuth: [] }, { basicAuth: [] }]);
       assert.deepEqual(openapi.body.paths["/api/openapi.json"].get["x-permissions"], ["schema.list"]);
       assert.equal(openapi.body.paths["/api/login"].post.security, undefined);
       assert.equal(openapi.body.paths["/api/login"].post.requestBody.content["application/json"].schema.properties.password.format, "password");
       assert.deepEqual(openapi.body.paths["/api/session"].get.security, [{ bearerAuth: [] }, { basicAuth: [] }]);
+
+      const schemaDocument = await request(server, "GET", "/api/schema.json", { basic: ["admin", "1234"] });
+      assert.equal(schemaDocument.status, 200);
+      assert.deepEqual(schemaDocument.body.services.map((service) => service.name), ["clientes"]);
+      assert.deepEqual(Object.keys(schemaDocument.body.services[0].operations).sort(), ["create", "list", "schema"]);
+      assert.deepEqual(Object.keys(schemaDocument.body.services[0].schemas), ["create"]);
 
       const deniedPostman = await request(server, "GET", "/api/postman.json");
       assert.equal(deniedPostman.status, 401);

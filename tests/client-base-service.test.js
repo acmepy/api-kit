@@ -45,33 +45,6 @@ describe("Client BaseService", () => {
     ]);
   });
 
-  it("loads service schema through the discovered schema operation", async () => {
-    const calls = [];
-    const service = new BaseService({
-      client: {
-        async request(path, options) {
-          calls.push({ path, options });
-          return { ok: true, data: { create: { type: "object" } } };
-        },
-      },
-      name: "clientes",
-      operations: {
-        schema: { path: "/clientes/schema", method: "GET" },
-      },
-      createAdapter: () => memoryAdapter(),
-    });
-
-    const result = await service.schema();
-
-    assert.deepEqual(result, { ok: true, data: { create: { type: "object" } } });
-    assert.deepEqual(calls, [
-      {
-        path: "/clientes/schema",
-        options: { method: "GET", query: {}, body: undefined },
-      },
-    ]);
-  });
-
   it("pulls list pages and stores downloaded records locally", async () => {
     const records = [];
     const adapter = memoryAdapter(records);

@@ -421,6 +421,7 @@ describe("http middleware", () => {
       auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
       audit: true,
       openapi: true,
+      schema: { auth: true },
     });
 
     await seq.authenticate();
@@ -480,6 +481,7 @@ describe("http middleware", () => {
       const asset = await request(server, "GET", "/client/app.js");
       assert.equal(asset.status, 200);
       assert.match(asset.raw, /createApiClient/);
+      assert.match(asset.raw, /schemaPath: "\/schema\.json"/);
       assert.match(asset.raw, /LocalStorageAdapter/);
       assert.match(asset.raw, /client\.connected\(\)/);
       assert.match(asset.raw, /services\.clientes\.list\(\)/);
