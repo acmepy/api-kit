@@ -14,11 +14,19 @@ const DEFAULT_PING_INTERVAL = 5000;
 const DEFAULT_PING_TIMEOUT = 3000;
 const DEFAULT_SSE_WATCHDOG_TIMEOUT = 25000;
 const DEFAULT_SYNC_CACHE_TIMEOUT = 5 * 60 * 1000;
+const DEFAULT_SERVICE_SYNC_DELAY = 1000;
 
 function normalizeCacheTimeout(value, fallback) {
   if (value === undefined || value === null) return fallback;
   const timeout = Number(value);
   return Number.isFinite(timeout) && timeout >= 0 ? timeout : fallback;
+}
+
+function normalizeServiceSyncDelay(value) {
+  if (value === false) return false;
+  if (value === undefined || value === null) return DEFAULT_SERVICE_SYNC_DELAY;
+  const delay = Number(value);
+  return Number.isFinite(delay) && delay >= 0 ? delay : DEFAULT_SERVICE_SYNC_DELAY;
 }
 
 export function createApiClient(options = {}) {
@@ -41,6 +49,7 @@ export class ApiClient {
   #syncServicesPromise = null;
   #backgroundSyncPromise = null;
   #backgroundServiceSyncs = new Map();
+  #scheduledServiceSyncs = new Map();
   #cachedRequests = new Map();
   #changesPromise = null;
   #pingTimer = null;
@@ -54,8 +63,10 @@ export class ApiClient {
   #pingTimeout;
   #sseWatchdogTimeout;
   #syncCacheTimeout;
+  #serviceSyncDelay;
   #changesEnabled;
   #sseEnabled;
+  #logging;
   #paths;
 
   constructor(options = {}) {
@@ -72,8 +83,10 @@ export class ApiClient {
     this.#pingTimeout = normalizeTimeout(options.pingTimeout ?? options.pingTimeoutMs, DEFAULT_PING_TIMEOUT);
     this.#sseWatchdogTimeout = normalizeTimeout(options.sseWatchdogTimeout ?? options.sseWatchdogTimeoutMs, DEFAULT_SSE_WATCHDOG_TIMEOUT);
     this.#syncCacheTimeout = normalizeCacheTimeout(options.syncCacheTimeout, DEFAULT_SYNC_CACHE_TIMEOUT);
+    this.#serviceSyncDelay = normalizeServiceSyncDelay(options.serviceSyncDelay);
     this.#changesEnabled = options.changes !== false;
     this.#sseEnabled = options.sse !== false;
+    this.#logging = options.logging || false;
     this.#paths = {
       login: options.loginPath || "/login",
       logout: options.logoutPath || "/logout",
@@ -169,8 +182,14 @@ export class ApiClient {
   }
 
   async syncServices(force = false) {
-    if (this.#syncServicesPromise) return this.#syncServicesPromise;
-    if (!force && this.#services.get("schema")) return;
+    if (this.#syncServicesPromise) {
+      this.#log("schema", "reutilizando sincronizacion en curso");
+      return this.#syncServicesPromise;
+    }
+    if (!force && this.#services.get("schema")) {
+      this.#log("schema", "servicios ya registrados");
+      return;
+    }
 
     const sync = this.#synchronizeServices(force);
     this.#syncServicesPromise = sync;
@@ -188,11 +207,13 @@ export class ApiClient {
     const cacheMetadata = await schemaService.adapter.get("metadata");
 
     if (!force && cachedSchema && this.#isSyncCacheFresh(cacheMetadata)) {
+      this.#log("schema", "usando manifiesto local vigente");
       await this.#registerSchemaServices(cachedSchema, schemaService);
       return;
     }
 
     if (!force && cachedSchema && cacheMetadata) {
+      this.#log("schema", "usando manifiesto local vencido y actualizando en segundo plano");
       await this.#registerSchemaServices(cachedSchema, schemaService);
       if (this.#online) this.#refreshSchemaDocumentInBackground(schemaService);
       return;
@@ -205,9 +226,11 @@ export class ApiClient {
     let schema = fallbackSchema;
     try {
       if (!this.#online) throw Error("OffLine");
+      this.#log("schema", "descargando", { path: this.#paths.schema, force });
       const document = await schemaService.pull();
       if (!Array.isArray(document?.services)) throw new Error("Documento schema invalido");
       schema = document;
+      this.#log("schema", "descargado", { services: document.services.length });
     } catch (error) {
       if (error.status === 401) {
         await this.#expireSession(error);
@@ -215,19 +238,25 @@ export class ApiClient {
       }
       schema ||= await this.#cachedDocument(schemaService);
       if (!schema) {
-        if (error.message === "OffLine") return;
+        if (error.message === "OffLine") {
+          this.#log("schema", "sin conexion ni manifiesto local");
+          return;
+        }
         throw error;
       }
+      this.#log("schema", "fallo la descarga; usando manifiesto local", { message: error.message, status: error.status });
     }
 
     await this.#registerSchemaServices(schema, schemaService, { force });
     if (schema && schema !== fallbackSchema) {
       await schemaService.adapter.put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+      this.#log("schema", "cache actualizado");
     }
   }
 
   #refreshSchemaDocumentInBackground(schemaService) {
     if (this.#backgroundSyncPromise) return;
+    this.#log("schema", "iniciando actualizacion en segundo plano");
     const refresh = this.#refreshSchemaDocument(schemaService, false)
       .catch((error) => {
         if (error?.status !== 401) console.error("api-client, syncServices", error);
@@ -239,6 +268,7 @@ export class ApiClient {
   }
 
   async #registerSchemaServices(schema, schemaService, { force = false } = {}) {
+    this.#log("schema", "registrando servicios", { services: schema.services?.length || 0 });
     for (const descriptor of discoverServiceDescriptors(schema, this.#baseUrl)) {
       if (!descriptor.operations.list) continue;
       const service = new BaseService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, ...descriptor });
@@ -246,8 +276,10 @@ export class ApiClient {
       if (Object.keys(descriptor.schemas || {}).length > 0) await schemaService.update(descriptor.name, descriptor.schemas);
       try {
         const localRecords = (await service.list()).data;
-        if (localRecords.length === 0 || force) await service.pull();
-        else if (!(await this.#isServiceCacheFresh(descriptor.name))) this.#refreshServiceInBackground(service);
+        const cacheFresh = await this.#isServiceCacheFresh(descriptor.name);
+        if (force || localRecords.length === 0 || !cacheFresh) {
+          this.#scheduleServiceRefresh(service, { force, reason: localRecords.length === 0 ? "sin datos locales" : "cache vencido" });
+        }
       } catch (error) {
         if (error?.status === 401) {
           await this.#expireSession(error);
@@ -260,12 +292,35 @@ export class ApiClient {
 
   #refreshServiceInBackground(service) {
     if (this.#backgroundServiceSyncs.has(service.name)) return;
+    this.#log("service", "actualizando en segundo plano", { service: service.name });
     const refresh = service.pull()
       .catch((error) => {
         if (error?.status !== 401) console.error("api-client, service refresh", service.name, error);
       })
       .finally(() => this.#backgroundServiceSyncs.delete(service.name));
     this.#backgroundServiceSyncs.set(service.name, refresh);
+  }
+
+  #scheduleServiceRefresh(service, { force = false, reason } = {}) {
+    if (this.#serviceSyncDelay === false) {
+      this.#log("service", "precarga desactivada", { service: service.name, reason });
+      return;
+    }
+    if (this.#backgroundServiceSyncs.has(service.name) || this.#scheduledServiceSyncs.has(service.name)) return;
+
+    const delay = force ? 0 : this.#serviceSyncDelay;
+    this.#log("service", "precarga programada", { service: service.name, delay, reason });
+    const timer = setTimeout(async () => {
+      this.#scheduledServiceSyncs.delete(service.name);
+      const localRecords = (await service.list()).data;
+      if (!force && localRecords.length > 0 && await this.#isServiceCacheFresh(service.name)) {
+        this.#log("service", "precarga omitida; cache actualizada", { service: service.name });
+        return;
+      }
+      this.#refreshServiceInBackground(service);
+    }, delay);
+    timer.unref?.();
+    this.#scheduledServiceSyncs.set(service.name, timer);
   }
 
   #serviceCacheKey(name) {
@@ -309,6 +364,7 @@ export class ApiClient {
 
   destroy() {
     this.#stopPing();
+    this.#clearScheduledServiceSyncs();
     this.#closeSse();
     this.#clearWatchdog();
     this.#listeners.clear();
@@ -577,6 +633,7 @@ export class ApiClient {
   }
 
   async #clearServices() {
+    this.#clearScheduledServiceSyncs();
     for (const [serviceName, service] of this.#services.entries()) {
       if (serviceName === "audit") continue;
       await service.clear();
@@ -611,6 +668,17 @@ export class ApiClient {
 
   #normalizeDateTime(value) {
     return value instanceof Date ? value.toISOString() : value;
+  }
+
+  #clearScheduledServiceSyncs() {
+    for (const timer of this.#scheduledServiceSyncs.values()) clearTimeout(timer);
+    this.#scheduledServiceSyncs.clear();
+  }
+
+  #log(...args) {
+    if (!this.#logging) return;
+    const logger = this.#logging === true ? console : this.#logging;
+    logger.log?.("[api-client]", ...args);
   }
 }
 

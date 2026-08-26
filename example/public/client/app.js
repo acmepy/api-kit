@@ -3,6 +3,7 @@ import { createApiClient, LocalStorageAdapter } from "api/client";
 const client = createApiClient({
   url: `${window.location.origin}/api`,
   schemaPath: "/schema.json",
+  serviceSyncDelay: 1000,
   adapter: new LocalStorageAdapter(),
   createAdapter: (options = {}) => new LocalStorageAdapter(options),
   pingInterval: 5000,
@@ -37,7 +38,7 @@ const app = document.querySelector("#app");
 client.onChange((event) => {
   state.connectionSource = event.source || event.type;
   if (event.type === "sync") refreshFromClient({ background: true }).catch(() => {});
-  if (event.type === "changes" || event.type === "sse") {
+  if (event.type === "cache" || event.type === "changes" || event.type === "sse") {
     tryAssignServices();
     refreshLocalState().then(() => renderFromBackground()).catch(() => {});
   }

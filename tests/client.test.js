@@ -128,7 +128,33 @@ describe("client public API", () => {
       id: "clientes",
       create: { type: "object", required: ["nombre"] },
     });
-    assert.deepEqual(calls.filter((pathname) => pathname !== "/api/ping"), ["/api/schema.json", "/api/clientes"]);
+    assert.deepEqual(calls.filter((pathname) => pathname !== "/api/ping"), ["/api/schema.json"]);
+    client.destroy();
+  });
+
+  it("logs schema synchronization decisions when logging is enabled", async () => {
+    const messages = [];
+    const client = createApiClient({
+      url: "http://server/api",
+      logging: { log(...args) { messages.push(args); } },
+      changes: false,
+      sse: false,
+      serviceSyncDelay: 0,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/api/schema.json") return jsonResponse(schemaDocument());
+        if (pathname === "/api/clientes") return jsonResponse({ ok: true, data: [] });
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+
+    await wait(5);
+    await client.syncServices();
+
+    assert.equal(messages.some((args) => args.includes("descargando")), true);
+    assert.equal(messages.some((args) => args.includes("descargado")), true);
+    assert.equal(messages.some((args) => args.includes("cache actualizado")), true);
     client.destroy();
   });
 
@@ -232,6 +258,7 @@ describe("client public API", () => {
       createAdapter: adapters.createAdapter,
       changes: false,
       sse: false,
+      serviceSyncDelay: 0,
       pingInterval: 60_000,
       fetch: async (url) => {
         if (new URL(String(url)).pathname === "/api/clientes") {

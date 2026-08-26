@@ -353,6 +353,7 @@ const client = createApiClient({
   pingTimeout: 3000,
   sseWatchdogTimeout: 25000,
   syncCacheTimeout: 5 * 60_000,
+  serviceSyncDelay: 1000,
   changes: true,
   sse: true,
 });
@@ -375,6 +376,8 @@ Metodos publicos principales:
 - `session()`: carga sesion local.
 - `clearSession()`: limpia solo sesion local.
 - `discover()`: descubre servicios desde `schema.json`.
+- `logging: true` (o un objeto con `log()`): muestra en consola el uso y la actualizacion de cache de `schema.json`.
+- `serviceSyncDelay`: demora la precarga de datos de los servicios para no bloquear el render inicial; por defecto es `1000` ms. Usa `0` para iniciarla enseguida o `false` para desactivarla.
 - `service(name)`: obtiene un servicio descubierto.
 - `services()`: devuelve un `Map` de servicios.
 - `syncServices(force = false)`: descubre servicios, hace pull de caches faltantes y empuja pending.
