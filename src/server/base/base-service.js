@@ -70,16 +70,15 @@ export class BaseService {
     const context = getContext();
     const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
     //if (!instance) throw new NotFoundError(this.#resourceName());
-    if (!instance) throw new NotFoundError(this.#model.modelName)
+    if (!instance) throw new NotFoundError(params.id || this.#model.modelName)
     return { data: instance };
   }
 
   async schema() {
     return {
-      data: Object.fromEntries(
-        Object.entries(this.#schemas).map(([name, schema]) => [name, this.#toJsonSchema(schema, name)]),
-      ),
-    };
+      data: Object.fromEntries(Object.entries(this.#schemas).map(([name, schema]) => 
+        [name, this.#toJsonSchema(schema, name)]
+    ))};
   }
 
   async create({ params, query, body, transaction = null } = {}) {
@@ -106,7 +105,7 @@ export class BaseService {
     const context = getContext();
     const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }) });
     //if (!instance) throw new NotFoundError(this.#resourceName());
-    if (!instance) throw new NotFoundError(this.#model.modelName)
+    if (!instance) throw new NotFoundError(params.id||this.#model.modelName)
     await instance.destroy({ ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
