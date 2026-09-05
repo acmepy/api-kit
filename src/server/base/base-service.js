@@ -1,6 +1,5 @@
 import { NotFoundError } from "../errors/not-found-error.js";
 import { ValidationError } from "../errors/validation-error.js";
-import { normalizeJsonSchema } from "../utils/normalize.js";
 import { Op } from "seq";
 import yep from 'yep'
 import { getContext } from "../context/request-context.js";
@@ -67,7 +66,6 @@ export class BaseService {
   }
 
   async get({ params, query, body, transaction = null } = {}) {
-    const context = getContext();
     const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
     //if (!instance) throw new NotFoundError(this.#resourceName());
     if (!instance) throw new NotFoundError(params.id || this.#model.modelName)
@@ -82,7 +80,6 @@ export class BaseService {
   }
 
   async create({ params, query, body, transaction = null } = {}) {
-    const context = getContext();
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     const data = await this.#schemas.create.validate(masterBody);
     const payload = hasDetails ? { ...body, ...data } : data;
@@ -91,18 +88,18 @@ export class BaseService {
   }
 
   async update({ params, query, body, transaction = null } = {}) {
-    const context = getContext();
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     //const pk = this.#primaryKeyAttribute();
     const pk = this.#model.primaryKeyAttribute;
     const data = await this.#schemas.update.validate({ ...masterBody, __uniqueId: params.id });
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
-    const [instance] = await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
-    return { data: instance?.toJSON() || payload };
+    await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
+    const instance = await this.#model.findByPk(data[pk] ?? params.id, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
+    if (!instance) throw new NotFoundError(params.id || this.#model.modelName);
+    return { data: instance };
   }
 
   async remove({ params, query, body, transaction = null } = {}) {
-    const context = getContext();
     const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }) });
     //if (!instance) throw new NotFoundError(this.#resourceName());
     if (!instance) throw new NotFoundError(params.id||this.#model.modelName)
@@ -111,7 +108,6 @@ export class BaseService {
   }
 
   async createDetail({ params, query, body, transaction = null } = {}) {
-    const context = getContext();
     //const {target, foreignKey} = this.#detailDescriptor(params.detail);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     const parentId = Number.isNaN(Number(params.id)) ? params.id : Number(params.id);
@@ -121,19 +117,18 @@ export class BaseService {
   }
 
   async updateDetail({ params, query, body, transaction = null } = {}) {
-    const context = getContext();
     //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail)
     const data = await target.resourceSchemas.update.validate(body)
     const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
     const where = { [primaryKey]: params.detailId || body[primaryKey], [foreignKey]: params.id }
-    const [instance] = await target.update(data, { where, ...(transaction && { transaction }) })
+    await target.update(data, { where, ...(transaction && { transaction }) })
+    const instance = await target.findOne({ where, plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(name);
-    return { data: instance?.toJSON() }
+    return { data: instance }
   }
 
   async removeDetail({ params, query, body, transaction = null } = {}) {
-    const context = getContext();
     //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail)
     const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
@@ -277,7 +272,7 @@ export class BaseService {
     for (const [key, value] of Object.entries(query)) {
       if (["page", "limit"].includes(key)) continue;
       //const filters = this.#queryFilters(key, value);
-      const [tmp, attribute, operator = 'eq'] = key.match(/^([a-zA-Z0-9_]+)\[([a-zA-Z0-9_]+)\]$/) || ['', key];
+      const [, attribute, operator = 'eq'] = key.match(/^([a-zA-Z0-9_]+)\[([a-zA-Z0-9_]+)\]$/) || ['', key];
       if (!FILTER_OPERATORS[operator]) throw new ValidationError(`Operador de filtro "${operator}" no está soportado`);
       const filters = [{ field: attribute, operator: FILTER_OPERATORS[operator], value }]
       for (const filter of filters) {
@@ -295,34 +290,6 @@ export class BaseService {
 
     if (andFilters.length > 0) where[Op.and] = andFilters;
     return where;
-  }
-
-  /*#queryFilters(key, value) {
-    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
-      const symbolFilters = Object.getOwnPropertySymbols(value).map((operator) => ({ field: key, operator, value: value[operator] }));
-      const namedFilters = Object.entries(value).map(([operatorName, operatorValue]) => {
-        const operator = FILTER_OPERATORS[operatorName];
-        if (!operator) throw new ValidationError(`Operador de filtro "${operatorName}" no está soportado`);
-        return { field: key, operator, value: operatorValue };
-      });
-      return [...symbolFilters, ...namedFilters];
-    }
-
-    return [{ ...this.#parseFilterKey(key), value }];
-  }*/
-
-  #parseFilterKey(key) {
-    const normalizedKey = String(key);
-    const bracket = normalizedKey.match(/^(.+)\[([^\]]+)\]$/);
-    const dotted = normalizedKey.match(/^(.+)\.([^.]+)$/);
-    const underscored = normalizedKey.match(/^(.+)__([^_]+)$/);
-    const match = bracket || dotted || underscored;
-    const field = match ? match[1] : normalizedKey;
-    const operatorName = match ? match[2] : "eq";
-    const operator = FILTER_OPERATORS[operatorName];
-
-    if (!operator) throw new ValidationError(`Operador de filtro "${operatorName}" no está soportado`);
-    return { field, operator };
   }
 
   async #parseFilterValue(field, operator, value, definition) {

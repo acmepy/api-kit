@@ -5,6 +5,7 @@ import express from "express";
 import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi } from "../src/server/index.js";
 import { createAuthContext } from "../src/server/install/auth.services.js";
+import { normalizeAuthBackendConfig } from "../src/server/utils/normalize.js";
 
 const modules = [
   {
@@ -19,6 +20,13 @@ const modules = [
 ];
 
 describe("auth", () => {
+  it("does not provide a development secret when auth is enabled", () => {
+    assert.throws(
+      () => normalizeAuthBackendConfig({ required: true, secret: "" }),
+      /IAM_SECRET debe estar definido/,
+    );
+  });
+
   it("does not expose schema.json when only OpenAPI is enabled", async () => {
     const api = await createApi({
       seq: createTestSeq({ logging: false }),

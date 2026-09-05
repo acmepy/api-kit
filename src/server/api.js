@@ -37,7 +37,7 @@ export async function createApi(conf = {}) {
       schemas: conf.paths?.schemas || "./schemas",
     },
     auth: conf.auth,
-    cors: conf.cors ?? { origin: "http://localhost:5173" },
+    cors: conf.cors ?? false,
     helmet: conf.helmet ?? false,
     compression: conf.compression ?? false,
     rateLimit: conf.rateLimit ?? false,

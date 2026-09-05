@@ -226,6 +226,28 @@ describe("Client BaseService", () => {
     assert.deepEqual(records[0].errors, { ruc: "RUC no cumple con el formato esperado" });
   });
 
+  it("throws an Error with details when a pending update cannot be sent", async () => {
+    const records = [{ id: 1, name: "Ana" }];
+    const service = new BaseService({
+      client: {
+        async request() {
+          const error = new Error("Validacion");
+          error.errors = { name: "Nombre inválido" };
+          throw error;
+        },
+      },
+      name: "clientes",
+      operations: { update: { path: "/clientes/{id}", method: "PUT" } },
+      createAdapter: () => memoryAdapter(records),
+    });
+
+    await assert.rejects(
+      () => service.update(1, { name: "" }, { pending: true }),
+      (error) => error instanceof Error && error.message === "Validacion" && error.errors.name === "Nombre inválido",
+    );
+    assert.equal(records[0].status, "error");
+  });
+
   it("validates records with yep json schemas", async () => {
     const service = new BaseService({
       client: schemaClient("clientes", {

@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { createTestSeq } from "./helpers/seq.js";
-import { BaseService, defineResource, NotFoundError, ValidationError, runWithContext } from "../src/server/index.js";
+import { BaseService, defineResource, NotFoundError, ValidationError, getContext, runWithContext } from "../src/server/index.js";
 
 describe("BaseService list filters", () => {
   let service;
@@ -66,6 +66,14 @@ describe("BaseService list filters", () => {
       next: false,
       prev: "http://localhost/api/products?page=1&limit=1&active=true",
     });
+  });
+
+  it("does not accept a user identity from request headers", async () => {
+    const audit = await runInRequestContext({
+      headers: { "x-user-id": "spoofed", "x-usuario-id": "also-spoofed" },
+    }, () => getContext().audit);
+
+    assert.equal(audit.userId, null);
   });
 
   it("maps greater and less operators", async () => {

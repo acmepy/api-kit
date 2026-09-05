@@ -9,7 +9,7 @@ export class BaseService {
     this.name = name;
     this.path = path;
     this.operations = operations;
-    //this.schemas = schemas;
+    this.schemas = Object.keys(schemas).length > 0 ? schemas : null;
     this.prefix = prefix;
     this.adapter = createAdapter?.({ service: name, prefix: this.prefix });
   }
@@ -59,7 +59,7 @@ export class BaseService {
     await this.adapter.put(data.id ?? id, data)
     this.#notify();
     const ret = await this.pushOne(data);
-    if(!ret.ok) throw ret;
+    this.#throwPushError(ret);
     return { ok: true, data };
   }
 
@@ -282,11 +282,5 @@ export class BaseService {
     return null;
   }
 
-}
-
-function buildYepSchemas(schemas) {
-  return Object.fromEntries(
-    Object.entries(schemas || {}).map(([name, schema]) => [name, yep.fromJsonSchema(schema)]),
-  );
 }
 

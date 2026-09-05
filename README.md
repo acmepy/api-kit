@@ -68,7 +68,7 @@ const api = await createApi({
   modules: "./example/modules.js",
   auth: {
     adapter: iamAdapter,
-    secret: process.env.IAM_SECRET || "dev-secret",
+    secret: process.env.IAM_SECRET,
     strategies: ["bearer", "basic"],
     tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",
   },
@@ -137,13 +137,13 @@ Configuracion tipica:
 
 ```js
 auth: {
-  secret: process.env.IAM_SECRET || "dev-secret",
+  secret: process.env.IAM_SECRET,
   strategies: ["bearer", "basic"],
   tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",
 }
 ```
 
-`tokenExpiresIn` controla la vigencia del Bearer JWT. Las rutas protegidas usan permisos generados por ruta, por ejemplo `clientes.list`, `clientes.create` o `audit.sse`.
+`IAM_SECRET` es obligatorio cuando `auth` esta habilitado. `tokenExpiresIn` controla la vigencia del Bearer JWT. Las rutas protegidas usan permisos generados por ruta, por ejemplo `clientes.list`, `clientes.create` o `audit.sse`.
 
 ## Logger
 
@@ -633,7 +633,7 @@ const api = await createApi({
 });
 ```
 
-`cors`, `helmet`, `compression` y `rateLimit` son dependencias peer opcionales. Si las activas, deben estar instaladas.
+`cors`, `helmet`, `compression` y `rateLimit` son dependencias peer opcionales. CORS esta desactivado por defecto; si activas cualquiera de ellas, debe estar instalada.
 
 ## OpenAPI y Postman
 

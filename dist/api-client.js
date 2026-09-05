@@ -36,7 +36,7 @@ class BaseAdapter {
   }
 
   async delete() {
-    throw new Error("BaseAdapter.det debe implementarse");
+    throw new Error("BaseAdapter.delete debe implementarse");
   }
 
   async clear() {
@@ -155,12 +155,30 @@ class IndexedDbAdapter extends BaseAdapter {
     return this.#transaction("readonly", (store) => store.get(key));
   }
 
-  async set(key, value) {
-    await this.#transaction("readwrite", (store) => store.put(value, key));
+  async getAll() {
+    return this.#transaction("readonly", (store) => store.getAll());
   }
 
-  async remove(key) {
+  async add(value) {
+    if (Array.isArray(value)) {
+      for (const item of value) await this.put(item.id, item);
+      return value;
+    }
+    await this.put(value.id, value);
+    return value;
+  }
+
+  async put(key, value) {
+    await this.#transaction("readwrite", (store) => store.put(value, key));
+    return value;
+  }
+
+  async delete(key) {
     await this.#transaction("readwrite", (store) => store.delete(key));
+  }
+
+  async clear() {
+    await this.#transaction("readwrite", (store) => store.clear());
   }
 
   async #transaction(mode, action) {
@@ -212,7 +230,7 @@ class BaseService {
     this.name = name;
     this.path = path;
     this.operations = operations;
-    //this.schemas = schemas;
+    this.schemas = Object.keys(schemas).length > 0 ? schemas : null;
     this.prefix = prefix;
     this.adapter = createAdapter?.({ service: name, prefix: this.prefix });
   }
@@ -262,7 +280,7 @@ class BaseService {
     await this.adapter.put(data.id ?? id, data);
     this.#notify();
     const ret = await this.pushOne(data);
-    if(!ret.ok) throw ret;
+    this.#throwPushError(ret);
     return { ok: true, data };
   }
 

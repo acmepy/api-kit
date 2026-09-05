@@ -35,7 +35,9 @@ export function normalizeGlobalAuth(auth) {
 
 export function normalizeAuthBackendConfig(auth) {
   if (!auth) return null;
-  return {loginPath: "/login", sessionPath: "/session", logoutPath: "/logout", secret: process.env.IAM_SECRET || "api-dev-secret", tokenExpiresIn: auth?.tokenExpiresIn || "1h", adapter: auth?.adapter, models: auth?.models, ...auth};
+  const secret = auth.secret ?? process.env.IAM_SECRET;
+  if (!secret) throw new Error("IAM_SECRET debe estar definido cuando se habilita auth");
+  return { loginPath: "/login", sessionPath: "/session", logoutPath: "/logout", tokenExpiresIn: "1h", adapter: auth.adapter, models: auth.models, ...auth, secret };
 }
 
 export function normalizeJsonSchema(schema) {
