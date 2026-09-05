@@ -1,6 +1,11 @@
 import { jsonSchemaForRoute, normalizeDocumentConfig } from "./document-utils.js";
 
 const POSTMAN_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
+const OPERATION_ORDER = new Map([
+  ["login", 10], ["session", 20], ["logout", 30],
+  ["list", 10], ["schema", 20], ["get", 30], ["create", 40], ["update", 50], ["remove", 60],
+  ["createDetail", 70], ["updateDetail", 80], ["removeDetail", 90],
+]);
 
 export function normalizePostmanConfig(postman, openapi) {
   if (postman) return normalizeDocumentConfig(postman, { permission: "schema.list" });
@@ -11,6 +16,7 @@ export function normalizePostmanConfig(postman, openapi) {
 export function buildPostmanCollection({ routes, modules = new Map(), packageInfo = {}, config = {} }) {
   const root = { name: basePathName(config.basePath), item: [] };
   const folders = new Map();
+  const itemOrders = new WeakMap();
 
   for (const route of routes.getAll()) {
     if (route.serviceMethod === "postman") continue;
@@ -25,7 +31,13 @@ export function buildPostmanCollection({ routes, modules = new Map(), packageInf
       folders.set(folderName, folder);
       root.item.push(folder);
     }
-    folders.get(folderName).item.push(postmanItemFor(route, modules));
+    const item = postmanItemFor(route, modules);
+    itemOrders.set(item, OPERATION_ORDER.get(route.serviceMethod) ?? 100);
+    folders.get(folderName).item.push(item);
+  }
+
+  for (const folder of folders.values()) {
+    folder.item.sort((left, right) => itemOrders.get(left) - itemOrders.get(right));
   }
 
   return {

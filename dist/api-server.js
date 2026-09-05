@@ -875,6 +875,11 @@ function sanitizeComponentName(value) {
 }
 
 const POSTMAN_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
+const OPERATION_ORDER = new Map([
+  ["login", 10], ["session", 20], ["logout", 30],
+  ["list", 10], ["schema", 20], ["get", 30], ["create", 40], ["update", 50], ["remove", 60],
+  ["createDetail", 70], ["updateDetail", 80], ["removeDetail", 90],
+]);
 
 function normalizePostmanConfig(postman, openapi) {
   if (postman) return normalizeDocumentConfig(postman, { permission: "schema.list" });
@@ -885,6 +890,7 @@ function normalizePostmanConfig(postman, openapi) {
 function buildPostmanCollection({ routes, modules = new Map(), packageInfo = {}, config = {} }) {
   const root = { name: basePathName(config.basePath), item: [] };
   const folders = new Map();
+  const itemOrders = new WeakMap();
 
   for (const route of routes.getAll()) {
     if (route.serviceMethod === "postman") continue;
@@ -899,7 +905,13 @@ function buildPostmanCollection({ routes, modules = new Map(), packageInfo = {},
       folders.set(folderName, folder);
       root.item.push(folder);
     }
-    folders.get(folderName).item.push(postmanItemFor(route, modules));
+    const item = postmanItemFor(route, modules);
+    itemOrders.set(item, OPERATION_ORDER.get(route.serviceMethod) ?? 100);
+    folders.get(folderName).item.push(item);
+  }
+
+  for (const folder of folders.values()) {
+    folder.item.sort((left, right) => itemOrders.get(left) - itemOrders.get(right));
   }
 
   return {
@@ -1506,8 +1518,7 @@ class BaseService {
 
   async get({ params, query, body, transaction = null } = {}) {
     const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
-    //if (!instance) throw new NotFoundError(this.#resourceName());
-    if (!instance) throw new NotFoundError(params.id || this.#model.modelName)
+    if (!instance) throw new NotFoundError(this.#model.modelName)
     return { data: instance };
   }
 
@@ -1534,14 +1545,13 @@ class BaseService {
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
     await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
     const instance = await this.#model.findByPk(data[pk] ?? params.id, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
-    if (!instance) throw new NotFoundError(params.id || this.#model.modelName);
+    if (!instance) throw new NotFoundError(this.#model.modelName);
     return { data: instance };
   }
 
   async remove({ params, query, body, transaction = null } = {}) {
     const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }) });
-    //if (!instance) throw new NotFoundError(this.#resourceName());
-    if (!instance) throw new NotFoundError(params.id||this.#model.modelName)
+    if (!instance) throw new NotFoundError(this.#model.modelName)
     await instance.destroy({ ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }

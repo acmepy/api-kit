@@ -67,8 +67,7 @@ export class BaseService {
 
   async get({ params, query, body, transaction = null } = {}) {
     const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
-    //if (!instance) throw new NotFoundError(this.#resourceName());
-    if (!instance) throw new NotFoundError(params.id || this.#model.modelName)
+    if (!instance) throw new NotFoundError(this.#model.modelName)
     return { data: instance };
   }
 
@@ -95,14 +94,13 @@ export class BaseService {
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
     await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
     const instance = await this.#model.findByPk(data[pk] ?? params.id, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
-    if (!instance) throw new NotFoundError(params.id || this.#model.modelName);
+    if (!instance) throw new NotFoundError(this.#model.modelName);
     return { data: instance };
   }
 
   async remove({ params, query, body, transaction = null } = {}) {
     const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }) });
-    //if (!instance) throw new NotFoundError(this.#resourceName());
-    if (!instance) throw new NotFoundError(params.id||this.#model.modelName)
+    if (!instance) throw new NotFoundError(this.#model.modelName)
     await instance.destroy({ ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
