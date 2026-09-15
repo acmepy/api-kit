@@ -20,6 +20,7 @@ El server queda en `http://localhost:3000`:
 - `http://localhost:3000/client`: ejemplo con `api/client`, cache local, pending, push, changes y SSE.
 - `http://localhost:3000/api`: API generada.
 - `http://localhost:3000/api/openapi.json`: OpenAPI.
+- `http://localhost:3000/api/schema.json`: manifiesto de servicios y schemas para el cliente.
 - `http://localhost:3000/api/postman.json`: coleccion Postman.
 
 Usuario del ejemplo:
@@ -34,6 +35,8 @@ El paquete se importa por subpath explicito:
 
 ```js
 import { createApi } from "api/server";
+import { SeqAdapter } from "iam/adapters";
+import { createLogger, logger, LEVELS } from "logger";
 import { createApiClient } from "api/client";
 import { runApiKitCli } from "api/cli";
 ```
@@ -55,24 +58,23 @@ const adapter = new SQLiteAdapter({
 });
 
 const seq = new Seq({ adapter, logging: false });
+const iamAdapter = new SeqAdapter({ seq });
 
-const logger = {
-  info: (...args) => console.info(...args),
-  warn: (...args) => console.warn(...args),
-  error: (...args) => console.error(...args),
-};
+createLogger({ name: "[api]", displayConsole: true, level: LEVELS.INFO });
 
 const api = await createApi({
   seq,
   basePath: "/api",
   modules: "./example/modules.js",
   auth: {
-    secret: process.env.IAM_SECRET || "dev-secret",
+    adapter: iamAdapter,
+    secret: process.env.IAM_SECRET,
     strategies: ["bearer", "basic"],
     tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",
   },
   audit: true,
   openapi: true,
+  schema: true,
   postman: true,
   logging: logger,
 });
@@ -135,17 +137,17 @@ Configuracion tipica:
 
 ```js
 auth: {
-  secret: process.env.IAM_SECRET || "dev-secret",
+  secret: process.env.IAM_SECRET,
   strategies: ["bearer", "basic"],
   tokenExpiresIn: process.env.IAM_TOKEN_EXPIRES_IN || "1h",
 }
 ```
 
-`tokenExpiresIn` controla la vigencia del Bearer JWT. Las rutas protegidas usan permisos generados por ruta, por ejemplo `clientes.list`, `clientes.create` o `audit.sse`.
+`IAM_SECRET` es obligatorio cuando `auth` esta habilitado. `tokenExpiresIn` controla la vigencia del Bearer JWT. Las rutas protegidas usan permisos generados por ruta, por ejemplo `clientes.list`, `clientes.create` o `audit.sse`.
 
 ## Logger
 
-`logging` puede ser `false`, `true`, una funcion o un objeto tipo logger.
+`logging` puede ser `false`, `true`, una funcion o un objeto tipo logger. Cuando `auth` esta habilitado, el mismo logger se reenvia a `iam`; se puede sobrescribir solo para autenticacion con `auth.logging`.
 
 ```js
 const logger = {
@@ -339,17 +341,21 @@ Devuelve:
 
 ## Cliente
 
-`api/client` descubre servicios desde OpenAPI, guarda sesion local, usa Bearer token y mantiene cache local mediante adapters.
+`api/client` descubre servicios desde `schema.json`, guarda sesion local, usa Bearer token y mantiene cache local mediante adapters.
 
 ```js
 import { createApiClient, LocalStorageAdapter } from "api/client";
 
 const client = createApiClient({
-  baseUrl: "/api",
+  url: "http://localhost:3000/api",
   adapter: new LocalStorageAdapter(),
   pingInterval: 5000,
   pingTimeout: 3000,
   sseWatchdogTimeout: 25000,
+  syncCacheTimeout: 5 * 60_000,
+  serviceSyncDelay: 1000,
+  changes: true,
+  sse: true,
 });
 
 client.onChange((event) => {
@@ -369,7 +375,9 @@ Metodos publicos principales:
 - `logout()`: llama `POST /logout`, limpia sesion/cache/pending local y vuelve a ping.
 - `session()`: carga sesion local.
 - `clearSession()`: limpia solo sesion local.
-- `discover(openapi?)`: descubre servicios desde OpenAPI.
+- `discover()`: descubre servicios desde `schema.json`.
+- `logging: true` (o un objeto con `log()`): muestra en consola el uso y la actualizacion de cache de `schema.json`.
+- `serviceSyncDelay`: demora la precarga de datos de los servicios para no bloquear el render inicial; por defecto es `1000` ms. Usa `0` para iniciarla enseguida o `false` para desactivarla.
 - `service(name)`: obtiene un servicio descubierto.
 - `services()`: devuelve un `Map` de servicios.
 - `syncServices(force = false)`: descubre servicios, hace pull de caches faltantes y empuja pending.
@@ -379,10 +387,89 @@ Metodos publicos principales:
 - `lastReceivedAt()`: ultimo timestamp recibido por `changes` o SSE.
 - `onChange(listener)` / `offChange(listener)`: eventos del cliente.
 - `changes(since?)`: consulta `/changes`.
+
+`changes` y `sse` estan activados por defecto. Configuralos como `false` para desactivar, respectivamente, la descarga automatica de cambios y la conexion SSE.
+
+`syncCacheTimeout` define por cuantos milisegundos se reutilizan el manifiesto de schemas y los datos locales sin consultar la red. Su valor por defecto es 5 minutos; al vencer, el cliente restaura la cache y la actualiza en segundo plano. Usa `syncServices(true)` para forzar una actualizacion inmediata.
 - `request(path, options)`: request autenticado.
 - `url(path, query?)`: arma URL absoluta.
 
 Si `syncServices()` o `changes()` reciben `401`, el cliente hace logout local por expiracion: limpia sesion, caches y pending, cierra SSE, marca offline y vuelve a ping. No llama `POST /logout` en ese caso.
+
+## Vue
+
+`api/vue` conecta un `ApiClient` con Composition API. Vue es una peer dependency opcional: solo es necesaria si importas este subpath.
+
+```bash
+npm install vue
+```
+
+El cliente mantiene cache, operaciones pendientes, `changes` y SSE; los composables exponen esos datos de forma reactiva.
+
+### Instalación
+
+```js
+import { createApp } from "vue";
+import { createApiClient } from "api/client";
+import { createApiVue } from "api/vue";
+import App from "./App.vue";
+
+const client = createApiClient({ url: "http://localhost:3000/api" });
+const api = createApiVue(client);
+
+createApp(App).use(api).mount("#app");
+```
+
+Instala el plugin una sola vez. `createApiVue(client)` devuelve `api`, con refs de `connected`, `session`, `event`, `lastReceivedAt`, `error` y `ready`; los métodos `login()`, `logout()` y `sync()`; la promesa `initialized`; y `dispose()` para retirar su listener global.
+
+Dentro de un componente:
+
+```js
+import { useApi, useApiService } from "api/vue";
+
+const api = useApi();
+const { records: clientes, loading, error, create, update, remove, pull } = useApiService("clientes");
+
+await api.login({ username: "admin", password: "1234" });
+// `clientes` se actualiza automáticamente ante cambios locales, changes y SSE.
+```
+
+`useApi()` expone refs de `connected`, `session`, `event`, `error` y `ready`, además de `login()`, `logout()` y `sync()`. `useApiService(nombre)` expone `records` (también `data`), `loading`, `error`, `empty`, `refresh()` para releer cache y las operaciones `pull`, `create`, `update`, `remove` y `push`.
+
+Para formularios usa `useApiForm()`. Sus `data` y `errors` son reactivos; al modificar un campo valida con debounce, incluidas las reglas `unique` disponibles en la cache local.
+
+```js
+import { useApiForm } from "api/vue";
+
+const clienteForm = useApiForm("clientes", {
+  operation: "create",
+  initial: { ruc: "", nombre: "", email: "" },
+  debounce: 250,
+});
+
+await clienteForm.submit();
+```
+
+```html
+<input v-model="clienteForm.data.ruc">
+<small v-if="clienteForm.errors.ruc">{{ clienteForm.errors.ruc }}</small>
+```
+
+`useApiService(nombre)` maneja una colección reactiva: expone `records`/`data`, `loading`, `error`, `empty`, `refresh()`/`list()` para cache local, `pull()`/`pullOne()` para el servidor y CRUD (`create`, `update`, `remove`, `push`). Vuelve a leer la cache cuando el cliente recibe cambios locales, `changes` o SSE.
+
+`useApiForm(nombre, opciones)` expone `data`, `errors`, `validating`, `submitting`, `valid`, `validateField()`, `validate()`, `submit()`, `reset()` y `clearErrors()`. Los errores devueltos durante `submit()` quedan disponibles en `errors` por campo.
+
+Para editar, configura `operation: "update"` e indica el ID (valor o `ref`):
+
+```js
+const clienteForm = useApiForm("clientes", {
+  operation: "update",
+  id: clienteId,
+  initial: { nombre: "" },
+});
+```
+
+Las reglas `unique` se comprueban en el cliente contra su cache local. Son una validación de experiencia de usuario; el servidor y la restricción de base de datos siguen siendo la autoridad final.
 
 ## Servicios del Cliente
 
@@ -546,7 +633,7 @@ const api = await createApi({
 });
 ```
 
-`cors`, `helmet`, `compression` y `rateLimit` son dependencias peer opcionales. Si las activas, deben estar instaladas.
+`cors`, `helmet`, `compression` y `rateLimit` son dependencias peer opcionales. CORS esta desactivado por defecto; si activas cualquiera de ellas, debe estar instalada.
 
 ## OpenAPI y Postman
 
@@ -556,6 +643,7 @@ const api = await createApi({
   basePath: "/api",
   modules: "./example/modules.js",
   openapi: true,
+  schema: true,
   postman: true,
 });
 ```
@@ -563,9 +651,10 @@ const api = await createApi({
 Rutas:
 
 - `GET /api/openapi.json`
+- `GET /api/schema.json`
 - `GET /api/postman.json`
 
-El cliente usa OpenAPI para descubrir servicios y operaciones.
+`schema` es independiente de `openapi` y se activa con `schema: true` (o con su propia configuracion, por ejemplo `schema: { auth: true }`). El cliente usa `schema.json` para descubrir servicios, operaciones y schemas de validacion en una sola solicitud. El documento solo incluye operaciones y schemas que el usuario puede utilizar. OpenAPI permanece disponible para documentacion.
 
 ## Scripts
 

@@ -8,7 +8,7 @@ export class PendingService extends BaseService {
   async list() {
     const pending = [];
     for (const service of this.client.services().values()) {
-      if (service === this || ["session", "openapi", "schema"].includes(service.name) || typeof service.pending !== "function") continue;
+      if (service === this || ["session", "schema"].includes(service.name) || typeof service.pending !== "function") continue;
       const result = await service.pending();
       pending.push(...(result.data || []));
     }

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createApiClient, BaseService, OpenapiService, SchemaService, SessionService } from "../src/client/index.js";
+import { createApiClient, BaseService, SchemaService, SessionService } from "../src/client/index.js";
 
 describe("client public API", () => {
   it("builds urls from the configured base url and query params", () => {
@@ -68,7 +68,7 @@ describe("client public API", () => {
     await assert.rejects(
       () => client.request("/clientes"),
       (error) => {
-        assert.equal(error.name, "ApiKitClientError");
+        assert.equal(error.name, "ApiClientError");
         assert.equal(error.status, 0);
         assert.equal(error.response.ok, false);
         assert.equal(error.response.message, "Failed to fetch");
@@ -77,21 +77,41 @@ describe("client public API", () => {
     );
   });
 
-  it("syncServices downloads OpenAPI, registers services and stores schemas", async () => {
+  it("can disable automatic changes and SSE", async () => {
+    const calls = [];
+    const client = createApiClient({
+      url: "http://server/api",
+      changes: false,
+      sse: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push(pathname);
+        if (pathname === "/api/login") return jsonResponse({ ok: true, data: { token: "token", user: { id: "admin" } } });
+        if (pathname === "/api/schema.json") return jsonResponse({ schema: "1.0.0", services: [] });
+        return jsonResponse({ ok: true, data: {} });
+      },
+    });
+
+    await client.login({ username: "admin", password: "1234" });
+
+    assert.equal(calls.includes("/api/changes"), false);
+    assert.equal(calls.includes("/api/sse"), false);
+    client.destroy();
+  });
+
+  it("syncServices uses the schema document without downloading other schemas", async () => {
     const calls = [];
     const adapters = adapterRegistry();
-    const openapi = openapiDocument();
+    const document = schemaDocument();
     const client = createApiClient({
       url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
-      fetch: async (url, options = {}) => {
+      fetch: async (url) => {
         const pathname = new URL(String(url)).pathname;
-        calls.push({ pathname, method: options.method || "GET", cache: options.cache });
-        if (pathname === "/api/openapi.json") return jsonResponse(openapi);
-        if (pathname === "/api/clientes/schema") {
-          return jsonResponse({ ok: true, data: { create: { type: "object", required: ["nombre"] } } });
-        }
+        calls.push(pathname);
+        if (pathname === "/api/schema.json") return jsonResponse(document);
         if (pathname === "/api/clientes") return jsonResponse({ ok: true, data: [{ id: 1, nombre: "Ana" }] });
         return jsonResponse({ ok: true, data: { pong: true } });
       },
@@ -102,30 +122,53 @@ describe("client public API", () => {
     calls.length = 0;
     await client.syncServices();
 
-    assert.ok(client.service("openapi") instanceof OpenapiService);
-    assert.ok(client.service("schema") instanceof SchemaService);
     assert.ok(client.service("clientes") instanceof BaseService);
-    assert.deepEqual(await adapters.forService("openapi").get("document"), openapi);
+    assert.ok(client.service("schema") instanceof SchemaService);
     assert.deepEqual(await adapters.forService("schema").get("clientes"), {
       id: "clientes",
       create: { type: "object", required: ["nombre"] },
     });
-    assert.deepEqual(calls.map((call) => call.pathname).filter((pathname) => pathname !== "/api/ping"), ["/api/openapi.json", "/api/clientes/schema", "/api/clientes"]);
-    assert.equal(calls.find((call) => call.pathname === "/api/openapi.json").cache, "no-store");
+    assert.deepEqual(calls.filter((pathname) => pathname !== "/api/ping"), ["/api/schema.json"]);
+    client.destroy();
   });
 
-  it("syncServices uses cached OpenAPI when the download fails", async () => {
+  it("logs schema synchronization decisions when logging is enabled", async () => {
+    const messages = [];
+    const client = createApiClient({
+      url: "http://server/api",
+      logging: { log(...args) { messages.push(args); } },
+      changes: false,
+      sse: false,
+      serviceSyncDelay: 0,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/api/schema.json") return jsonResponse(schemaDocument());
+        if (pathname === "/api/clientes") return jsonResponse({ ok: true, data: [] });
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+
+    await wait(5);
+    await client.syncServices();
+
+    assert.equal(messages.some((args) => args.includes("descargando")), true);
+    assert.equal(messages.some((args) => args.includes("descargado")), true);
+    assert.equal(messages.some((args) => args.includes("cache actualizado")), true);
+    client.destroy();
+  });
+
+  it("syncServices uses the cached schema document when the download fails", async () => {
     const adapters = adapterRegistry();
-    const cachedOpenapi = openapiDocument();
-    await adapters.forService("openapi").add(cachedOpenapi);
+    const cachedSchema = schemaDocument();
+    await adapters.forService("schema").put("document", cachedSchema);
     const client = createApiClient({
       url: "http://server/api",
       adapter: adapters.root,
       createAdapter: adapters.createAdapter,
       fetch: async (url) => {
         const pathname = new URL(String(url)).pathname;
-        if (pathname === "/api/openapi.json") throw new Error("offline");
-        if (pathname === "/api/clientes/schema") return jsonResponse({ ok: true, data: { create: { type: "object" } } });
+        if (pathname === "/api/schema.json") throw new Error("offline");
         return jsonResponse({ ok: true, data: { pong: true } });
       },
       pingInterval: 60_000,
@@ -136,17 +179,182 @@ describe("client public API", () => {
     assert.ok(client.service("clientes") instanceof BaseService);
     assert.deepEqual(await adapters.forService("schema").get("clientes"), {
       id: "clientes",
-      create: { type: "object" },
+      create: { type: "object", required: ["nombre"] },
     });
+  });
+
+  it("uses a fresh cached schema document and records without network requests", async () => {
+    const adapters = adapterRegistry();
+    const schema = schemaDocument();
+    const calls = [];
+    await adapters.forService("schema").put("document", schema);
+    await adapters.forService("schema").put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+    await adapters.forService("schema").put("clientes", { id: "clientes", create: { type: "object" } });
+    await adapters.forService("clientes").put(1, { id: 1, nombre: "Ana" });
+    await adapters.root.put("sync:clientes", { id: "sync:clientes", lastUpdateAt: new Date().toISOString() });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        calls.push(new URL(String(url)).pathname);
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+
+    await client.syncServices();
+
+    assert.ok(client.service("clientes") instanceof BaseService);
+    assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }] });
+    assert.equal(calls.includes("/api/schema.json"), false);
+    assert.equal(calls.includes("/api/clientes"), false);
+    client.destroy();
+  });
+
+  it("returns a fresh cached request without contacting the server", async () => {
+    const adapters = adapterRegistry();
+    const calls = [];
+    await adapters.root.put("cache:portal.dash:admin", {
+      id: "cache:portal.dash:admin",
+      data: { nombre: "Ana" },
+      lastUpdateAt: new Date().toISOString(),
+    });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      fetch: async (url) => {
+        calls.push(new URL(String(url)).pathname);
+        return jsonResponse({ ok: true, data: { nombre: "Servidor" } });
+      },
+      pingInterval: 60_000,
+    });
+
+    const response = await client.cachedRequest("portal.dash:admin", "/portal/dash");
+
+    assert.deepEqual(response.data, { nombre: "Ana" });
+    assert.equal(response.cached, true);
+    assert.equal(response.refresh, undefined);
+    assert.equal(calls.includes("/api/portal/dash"), false);
+    client.destroy();
+  });
+
+  it("refreshes an expired service cache in the background", async () => {
+    const adapters = adapterRegistry();
+    const schema = schemaDocument();
+    let releasePull;
+    const pullPending = new Promise((resolve) => { releasePull = resolve; });
+    await adapters.forService("schema").put("document", schema);
+    await adapters.forService("schema").put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+    await adapters.forService("schema").put("clientes", { id: "clientes", create: { type: "object" } });
+    await adapters.forService("clientes").put(1, { id: 1, nombre: "Ana" });
+    await adapters.root.put("sync:clientes", { id: "sync:clientes", lastUpdateAt: "2020-01-01T00:00:00.000Z" });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      serviceSyncDelay: 0,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        if (new URL(String(url)).pathname === "/api/clientes") {
+          await pullPending;
+          return jsonResponse({ ok: true, data: [{ id: 2, nombre: "Actualizado" }] });
+        }
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+
+    await client.syncServices();
+    assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }] });
+
+    releasePull();
+    await wait(5);
+    assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }, { id: 2, nombre: "Actualizado" }] });
+    assert.equal(typeof (await adapters.root.get("sync:clientes")).lastUpdateAt, "string");
+    client.destroy();
+  });
+
+  it("refreshes an expired cached request in the background", async () => {
+    const adapters = adapterRegistry();
+    await adapters.root.put("cache:portal.dash:admin", {
+      id: "cache:portal.dash:admin",
+      data: { nombre: "Ana" },
+      lastUpdateAt: "2020-01-01T00:00:00.000Z",
+    });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      fetch: async (url) => {
+        assert.equal(new URL(String(url)).pathname, "/api/portal/dash");
+        return jsonResponse({ ok: true, data: { nombre: "Actualizado" } });
+      },
+      pingInterval: 60_000,
+    });
+
+    const response = await client.cachedRequest("portal.dash:admin", "/portal/dash");
+    const refreshed = await response.refresh;
+
+    assert.deepEqual(response.data, { nombre: "Ana" });
+    assert.deepEqual(refreshed.data, { nombre: "Actualizado" });
+    assert.deepEqual((await adapters.root.get("cache:portal.dash:admin")).data, { nombre: "Actualizado" });
+    client.destroy();
+  });
+
+  it("refreshes an expired cache in the background", async () => {
+    const adapters = adapterRegistry();
+    const schema = schemaDocument();
+    const calls = [];
+    let releaseSchema;
+    const schemaPending = new Promise((resolve) => { releaseSchema = resolve; });
+    await adapters.forService("schema").put("document", schema);
+    await adapters.forService("schema").put("metadata", { id: "metadata", lastUpdateAt: "2020-01-01T00:00:00.000Z" });
+    await adapters.forService("schema").put("clientes", { id: "clientes", create: { type: "object" } });
+    await adapters.forService("clientes").put(1, { id: 1, nombre: "Ana" });
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push(pathname);
+        if (pathname === "/api/schema.json") {
+          await schemaPending;
+          return jsonResponse(schema);
+        }
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+
+    await wait(5);
+    calls.length = 0;
+    await client.syncServices();
+
+    assert.ok(client.service("clientes") instanceof BaseService);
+    assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }] });
+    assert.equal(calls.includes("/api/schema.json"), true);
+
+    releaseSchema();
+    await wait(5);
+    assert.equal(typeof (await adapters.forService("schema").get("metadata")).lastUpdateAt, "string");
+    client.destroy();
   });
 
   it("reuses an in-flight syncServices call", async () => {
     const adapters = adapterRegistry();
-    const openapi = openapiDocument();
+    const schema = schemaDocument();
     const calls = [];
-    let releaseOpenapi;
-    const openapiStarted = new Promise((resolve) => {
-      releaseOpenapi = resolve;
+    let releaseSchema;
+    const schemaStarted = new Promise((resolve) => {
+      releaseSchema = resolve;
     });
     const client = createApiClient({
       url: "http://server/api",
@@ -155,11 +363,10 @@ describe("client public API", () => {
       fetch: async (url) => {
         const pathname = new URL(String(url)).pathname;
         calls.push(pathname);
-        if (pathname === "/api/openapi.json") {
-          await openapiStarted;
-          return jsonResponse(openapi);
+        if (pathname === "/api/schema.json") {
+          await schemaStarted;
+          return jsonResponse(schema);
         }
-        if (pathname === "/api/clientes/schema") return jsonResponse({ ok: true, data: { create: { type: "object" } } });
         if (pathname === "/api/clientes") return jsonResponse({ ok: true, data: [] });
         return jsonResponse({ ok: true, data: { pong: true } });
       },
@@ -170,15 +377,113 @@ describe("client public API", () => {
     calls.length = 0;
     const first = client.syncServices();
     const second = client.syncServices();
-    releaseOpenapi();
+    let secondFinished = false;
+    second.then(() => { secondFinished = true; });
+    await wait(1);
+    assert.equal(secondFinished, false);
+    releaseSchema();
     await Promise.all([first, second]);
 
-    assert.equal(calls.filter((pathname) => pathname === "/api/openapi.json").length, 1);
+    assert.equal(calls.filter((pathname) => pathname === "/api/schema.json").length, 1);
+    assert.ok(client.service("clientes") instanceof BaseService);
   });
 
-  it("expires the local session when schema download returns unauthorized", async () => {
+  it("reuses an in-flight changes request", async () => {
+    const calls = [];
+    let releaseChanges;
+    const changesStarted = new Promise((resolve) => {
+      releaseChanges = resolve;
+    });
+    const client = createApiClient({
+      url: "http://server/api",
+      changes: false,
+      sse: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        calls.push(pathname);
+        if (pathname === "/api/changes") await changesStarted;
+        return jsonResponse({ ok: true, data: [] });
+      },
+    });
+
+    await wait(5);
+    calls.length = 0;
+    const first = client.changes("2026-01-01T00:00:00.000Z");
+    const second = client.changes("2026-01-02T00:00:00.000Z");
+    await wait(1);
+    assert.equal(calls.filter((pathname) => pathname === "/api/changes").length, 1);
+
+    releaseChanges();
+    await Promise.all([first, second]);
+    client.destroy();
+  });
+
+  it("does not overlap pings while the initial changes request is pending", async () => {
     const adapters = adapterRegistry();
-    const openapi = openapiDocument();
+    await adapters.forService("session").put("session", { token: "local-token", user: { id: "admin" } });
+    let changesCalls = 0;
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      sse: false,
+      pingInterval: 10,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/api/schema.json") return jsonResponse({ schema: "1.0.0", services: [] });
+        if (pathname === "/api/changes") {
+          changesCalls += 1;
+          await wait(50);
+        }
+        return jsonResponse({ ok: true, data: [] });
+      },
+    });
+
+    await wait(35);
+    assert.equal(changesCalls, 1);
+    client.destroy();
+  });
+
+  it("opens one SSE connection when login and ping complete together", async () => {
+    const adapters = adapterRegistry();
+    await adapters.forService("session").put("session", { token: "local-token", user: { id: "admin" } });
+    let releaseSchema;
+    const schemaStarted = new Promise((resolve) => {
+      releaseSchema = resolve;
+    });
+    let sseCalls = 0;
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === "/api/schema.json") {
+          await schemaStarted;
+          return jsonResponse({ schema: "1.0.0", services: [] });
+        }
+        if (pathname === "/api/login") return jsonResponse({ ok: true, data: { token: "new-token", user: { id: "admin" } } });
+        if (pathname === "/api/sse") {
+          sseCalls += 1;
+          return new Promise(() => {});
+        }
+        return jsonResponse({ ok: true, data: [] });
+      },
+    });
+
+    await wait(5);
+    const login = client.login({ username: "admin", password: "1234" });
+    releaseSchema();
+    await login;
+    await wait(5);
+    assert.equal(sseCalls, 1);
+    client.destroy();
+  });
+
+  it("expires the local session when schema document download returns unauthorized", async () => {
+    const adapters = adapterRegistry();
     const events = [];
     const client = createApiClient({
       url: "http://server/api",
@@ -186,8 +491,7 @@ describe("client public API", () => {
       createAdapter: adapters.createAdapter,
       fetch: async (url) => {
         const pathname = new URL(String(url)).pathname;
-        if (pathname === "/api/openapi.json") return jsonResponse(openapi);
-        if (pathname === "/api/clientes/schema") return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
+        if (pathname === "/api/schema.json") return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
         return jsonResponse({ ok: true, data: { pong: true } });
       },
       pingInterval: 60_000,
@@ -230,23 +534,21 @@ describe("client public API", () => {
   });
 });
 
-function openapiDocument() {
+function schemaDocument() {
   return {
-    openapi: "3.0.3",
-    paths: {
-      "/api/clientes": {
-        get: { tags: ["clientes"], operationId: "clientes_list" },
+    schema: "1.0.0",
+    services: [
+      {
+        name: "clientes",
+        operations: {
+          list: { method: "GET", path: "/api/clientes", permissions: ["clientes.list"] },
+          create: { method: "POST", path: "/api/clientes", permissions: ["clientes.create"] },
+        },
+        schemas: {
+          create: { type: "object", required: ["nombre"] },
+        },
       },
-      "/api/clientes/schema": {
-        get: { tags: ["clientes"], operationId: "clientes_schema" },
-      },
-      "/api/ping": {
-        get: { tags: ["system"], operationId: "system_ping" },
-      },
-      "/api/audit": {
-        get: { tags: ["audit"], operationId: "audit_changes" },
-      },
-    },
+    ],
   };
 }
 

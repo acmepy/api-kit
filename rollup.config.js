@@ -16,6 +16,7 @@ const external = (id) => (
     "iam/express",
     "logger",
     "seq",
+    "vue",
     "yep",
   ].includes(id)
 );
@@ -23,6 +24,7 @@ const external = (id) => (
 const bundles = [
   ["src/server/index.js", "dist/api-server"],
   ["src/client/index.js", "dist/api-client"],
+  ["src/vue/index.js", "dist/api-vue"],
   ["src/cli/index.js", "dist/api-cli"],
 ];
 

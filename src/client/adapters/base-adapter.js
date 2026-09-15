@@ -17,7 +17,7 @@ export class BaseAdapter {
   }
 
   async delete() {
-    throw new Error("BaseAdapter.det debe implementarse");
+    throw new Error("BaseAdapter.delete debe implementarse");
   }
 
   async clear() {

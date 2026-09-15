@@ -1,8 +1,8 @@
 import { BaseService } from "./base-service.js";
 
 export class SchemaService extends BaseService {
-  constructor({ client, prefix, createAdapter }) {
-    super({ client, name: "schema", path: "", operations: {}, schemas: {}, prefix, createAdapter });
+  constructor({ client, prefix, createAdapter, path = "/schema.json" }) {
+    super({ client, name: "schema", path, operations: {}, schemas: {}, prefix, createAdapter });
   }
 
   async create(data = {}) {
@@ -22,7 +22,10 @@ export class SchemaService extends BaseService {
   }
 
   async pull() {
-    throw new Error("SchemaService.pull no implementado");
+    const document = await this.client.request(this.path, { method: "GET", cache: "no-store" });
+    await this.adapter.clear();
+    await this.adapter.put("document", document);
+    return document;
   }
 
   async pullOne() {

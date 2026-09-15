@@ -9,7 +9,7 @@ export function runWithContext(req, res, next) {
     txId,
     audit: {
       clientIp: req.ip || req.socket?.remoteAddress || "",
-      userId: req.user?.id || req.headers["x-user-id"] || req.headers["x-usuario-id"] || null,
+      userId: req.user?.id || null,
     },
     baseUrl: `${req.protocol}://${req.get("host")}${req.originalUrl}`
   };

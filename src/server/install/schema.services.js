@@ -1,5 +1,6 @@
 import { buildOpenApiDocument } from "../schema/openapi-builder.js";
 import { buildPostmanCollection } from "../schema/postman-builder.js";
+import { buildSchemaDocument } from "../schema/schema-builder.js";
 import { joinPaths } from "../utils/paths.js";
 
 export function installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize }) {
@@ -10,7 +11,19 @@ export function installOpenApiRoute({ mainRouter, routeRegistry, modules, packag
   routeRegistry.register({ module: "openapi", operationId: "openapi.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "openapi", auth, permissions, summary: "OpenAPI document", description: "", tags: ["openapi"], deprecated: false});
   const handlers = [];
   if (authorize) handlers.push(authorize({ auth, permissions }));
-  handlers.push((_req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi}))});
+  handlers.push((req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi, session: req.session || null }))});
+  mainRouter.get(fullPath, ...handlers);
+}
+
+export function installSchemaDocumentRoute({ mainRouter, routeRegistry, modules, config, schema, authorize }) {
+  if (!schema) return;
+  const fullPath = joinPaths(config.basePath, schema.path || "/schema.json");
+  const auth = normalizeRouteAuth(schema.auth);
+  const permissions = schema.permission ? [schema.permission] : [];
+  routeRegistry.register({ module: "schema", operationId: "schema.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "schemaDocument", auth, permissions, summary: "Client schema document", description: "", tags: ["schema"], deprecated: false});
+  const handlers = [];
+  if (authorize) handlers.push(authorize({ auth, permissions }));
+  handlers.push((req, res) => { res.json(buildSchemaDocument({ routes: routeRegistry, modules, session: req.session || null })); });
   mainRouter.get(fullPath, ...handlers);
 }
 

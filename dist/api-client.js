@@ -36,7 +36,7 @@ class BaseAdapter {
   }
 
   async delete() {
-    throw new Error("BaseAdapter.det debe implementarse");
+    throw new Error("BaseAdapter.delete debe implementarse");
   }
 
   async clear() {
@@ -155,12 +155,30 @@ class IndexedDbAdapter extends BaseAdapter {
     return this.#transaction("readonly", (store) => store.get(key));
   }
 
-  async set(key, value) {
-    await this.#transaction("readwrite", (store) => store.put(value, key));
+  async getAll() {
+    return this.#transaction("readonly", (store) => store.getAll());
   }
 
-  async remove(key) {
+  async add(value) {
+    if (Array.isArray(value)) {
+      for (const item of value) await this.put(item.id, item);
+      return value;
+    }
+    await this.put(value.id, value);
+    return value;
+  }
+
+  async put(key, value) {
+    await this.#transaction("readwrite", (store) => store.put(value, key));
+    return value;
+  }
+
+  async delete(key) {
     await this.#transaction("readwrite", (store) => store.delete(key));
+  }
+
+  async clear() {
+    await this.#transaction("readwrite", (store) => store.clear());
   }
 
   async #transaction(mode, action) {
@@ -212,7 +230,7 @@ class BaseService {
     this.name = name;
     this.path = path;
     this.operations = operations;
-    //this.schemas = schemas;
+    this.schemas = Object.keys(schemas).length > 0 ? schemas : null;
     this.prefix = prefix;
     this.adapter = createAdapter?.({ service: name, prefix: this.prefix });
   }
@@ -236,11 +254,13 @@ class BaseService {
     const pending = options.pending ?? !this.client.connected?.();
     if (!pending) {
       const response = await this.#send("create", { body: record });
-      if (!response.ok) await this.adapter.add(response.data);
+      if (response.data) await this.adapter.add(response.data);
+      this.#notify();
       return response;
     }
     data = {...record, id: record.id ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
     await this.adapter.add(data);
+    this.#notify();
     this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
@@ -253,12 +273,14 @@ class BaseService {
       const response = await this.#send("update", { params: { id }, body: data });
       const nextRecord = response.data || record;
       await this.adapter.put(nextRecord.id ?? id, nextRecord);
+      this.#notify();
       return response;
     }
     data = {...current, ...data, pending: true, operation:'update', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id ?? id, data);
+    this.#notify();
     const ret = await this.pushOne(data);
-    if(!ret.ok) throw ret;
+    this.#throwPushError(ret);
     return { ok: true, data };
   }
 
@@ -268,10 +290,12 @@ class BaseService {
     if (!pending) {
       const response = await this.#send("remove", { params: { id } });
       await this.adapter.delete(id);
+      this.#notify();
       return response;
     }
     const data = {...current, id, pending: true, operation:'remove', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id, data);
+    this.#notify();
     this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
@@ -288,30 +312,42 @@ class BaseService {
     }
 
     if (records.length > 0) await this.adapter.add(records);
+    await this.client.markServiceCacheUpdated?.(this.name);
+    this.#notify();
     return { ok: true, data: records };
   }
 
   async pullOne(id, query = {}) {
     const response = await this.#send("get", { params: { id }, query });
-    if (response.data?.id !== undefined) await this.adapter.add(response.data);
+    if (response.data?.id !== undefined) {
+      await this.adapter.add(response.data);
+      this.#notify();
+    }
     return response;
   }
 
   async applyData(data) {
     if (!data || typeof data !== "object") return;
-    const action = data.action || data.type;
-    if (action === "create" || action === "update") {
-      const record = data.new && typeof data.new === "object" ? { ...data.new } : null;
-      if (!record) return;
-      //if (record.id === undefined && data.rowId !== undefined && data.rowId !== null) record.id = data.rowId;
-      if (record.id === undefined || record.id === null) return;
-      await this.adapter.put(record.id, record);
+    const action = String(data.action || data.type || "").toLowerCase();
+    const isCreate = action === "create" || action === "bulk-create";
+    const isUpdate = action === "update" || action === "bulk-update";
+    if (isCreate || isUpdate) {
+      const changes = data.new && typeof data.new === "object" ? { ...data.new } : null;
+      if (!changes) return;
+      const current = await this.#recordForChange(data, changes.id);
+      const id = current?.id ?? changes.id ?? data.rowId ?? data.id ?? data.old?.id;
+      if (id === undefined || id === null) return;
+      const record = isUpdate ? { ...current, ...changes, id } : { ...changes, id };
+      await this.adapter.put(id, record);
+      this.#notify();
       return;
     }
-    if (action === "delete") {
-      const id = data.old?.id ?? data.rowId ?? data.id;
+    if (action === "delete" || action === "bulk-delete" || action === "remove" || action === "bulk-remove") {
+      const current = await this.#recordForChange(data);
+      const id = current?.id ?? data.old?.id ?? data.rowId ?? data.id;
       if (id === undefined || id === null) return;
       await this.adapter.delete(id);
+      this.#notify();
       return;
     }
   }
@@ -336,17 +372,15 @@ class BaseService {
     try {
       const response = await this.#sendPendingOperation(record);
       if (record.operation === "create") await this.adapter.delete(record.id);
+      this.#notify();
       return { ok: true, id: record.id, operation: record.operation, response };
     } catch (error) {
       const errors = error.errors || error.response?.errors || null;
       const nextRecord = {...record, pending: true, status: "error", message: error.message, errors};
       await this.adapter.put(record.id, nextRecord);
+      this.#notify();
       return { ok: false, id: record.id, operation: record.operation, error: error.message, errors };
     }
-  }
-
-  async schema() {
-    return this.request("schema");
   }
 
   async validate(data = {}, operation = "create") {
@@ -359,6 +393,16 @@ class BaseService {
     const schema = await this.#yepSchema(operation);
     if (!schema) return data?.[attribute];
     return schema.validateAt(attribute, data);
+  }
+
+  async unique(field, value, data = {}) {
+    if (value === undefined || value === null) return null;
+    const currentId = data?.id;
+    const records = (await this.list()).data;
+    const duplicate = records.find((record) => (
+      record?.[field] === value && (currentId === undefined || String(record.id) !== String(currentId))
+    ));
+    return duplicate ? new Error("Ya existe un registro con este valor") : null;
   }
 
   permissions(operation) {
@@ -377,6 +421,19 @@ class BaseService {
 
   async clear() {
     await this.adapter.clear();
+    this.#notify();
+  }
+
+  #notify() {
+    this.client.notifyChange?.({ service: this.name });
+  }
+
+  async #recordForChange(data, preferredId) {
+    const id = preferredId ?? data.rowId ?? data.id ?? data.old?.id;
+    if (id === undefined || id === null) return null;
+    const direct = await this.adapter.get(id);
+    if (direct) return direct;
+    return (await this.adapter.getAll()).find((record) => String(record?.id) === String(id)) || null;
   }
 
   async #sendPendingOperation(record) {
@@ -416,8 +473,18 @@ class BaseService {
       const { id, ...schemas } = (await this.client.service("schema").get(this.name))?.data || {};
       this.schemas = schemas;
     }
-    const schema = this.schemas?.[operation];
-    return schema ? yep.fromJsonSchema(schema) : null;
+    const jsonSchema = this.schemas?.[operation];
+    if (!jsonSchema) return null;
+    const schema = yep.fromJsonSchema(jsonSchema);
+    this.#applyUniqueRules(schema, jsonSchema);
+    return schema;
+  }
+
+  #applyUniqueRules(schema, jsonSchema) {
+    for (const [field, property] of Object.entries(jsonSchema?.properties || {})) {
+      if (property?.unique !== true || typeof schema.shapeDefinition?.[field]?.unique !== "function") continue;
+      schema.shapeDefinition[field].unique((value, attribute, data) => this.unique(attribute, value, data));
+    }
   }
 
 
@@ -438,10 +505,10 @@ class BaseService {
 
 }
 
-class ApiKitClientError extends Error {
+class ApiClientError extends Error {
   constructor(message, { status = 0, response = null } = {}) {
     super(message);
-    this.name = "ApiKitClientError";
+    this.name = "ApiClientError";
     this.status = status;
     this.response = response;
     this.errors = response?.errors || null;
@@ -457,93 +524,26 @@ function encodeBody(body, headers) {
   return JSON.stringify(body);
 }
 
-const INTERNAL_SERVICES = new Set(["audit", "auth", "openapi", "postman", "session", "schema", "pending", "system", "install"]);
+const INTERNAL_SERVICES = new Set(["audit", "auth", "postman", "session", "schema", "pending", "system", "install"]);
 
-function discoverServiceDescriptors(openapi, baseUrl = "") {
-  const byName = new Map();
+function discoverServiceDescriptors(document, baseUrl = "") {
+  if (!Array.isArray(document?.services)) return [];
+  return document.services
+    .filter((service) => !INTERNAL_SERVICES.has(service.name))
+    .map((service) => schemaServiceDescriptor(service, baseUrl));
+}
+
+function schemaServiceDescriptor(service, baseUrl) {
   const pathPrefix = String(baseUrl || "").replace(/\/+$/g, "");
-
-  for (const [path, methods] of Object.entries(openapi?.paths || {})) {
-    for (const [method, operation] of Object.entries(methods || {})) {
-      const serviceName = operation.tags?.[0];
-      const serviceMethod = serviceMethodFor(operation.operationId, serviceName);
-      if (!serviceName || !serviceMethod || INTERNAL_SERVICES.has(serviceName)) continue;
-      const clientPath = pathPrefix && path.startsWith(`${pathPrefix}/`) ? path.slice(pathPrefix.length) : path;
-      if (!byName.has(serviceName)) byName.set(serviceName, { name: serviceName, path: clientPath, operations: {} });
-      const descriptor = byName.get(serviceName);
-      descriptor.operations[serviceMethod] = {method: method.toUpperCase(), path: clientPath, permissions: operation["x-permissions"] || []};
-    }
-  }
-  return [...byName.values()];
+  const operations = Object.fromEntries(Object.entries(service.operations || {}).map(([name, operation]) => [name, {
+    ...operation,
+    path: stripPathPrefix(operation.path, pathPrefix),
+  }]));
+  return { ...service, path: operations.list?.path || Object.values(operations)[0]?.path || "", operations };
 }
 
-function serviceMethodFor(operationId = "", serviceName = "") {
-  const normalized = String(operationId).replace(`${serviceName}_`, `${serviceName}.`);
-  const method = normalized.split(/[._-]/).pop();
-  if (["list", "get", "schema", "create", "update", "remove", "changes", "sse"].includes(method)) return method;
-  return method || null;
-}
-
-class OpenapiService extends BaseService {
-  constructor({ client, prefix, createAdapter, path = "/openapi.json" }) {
-    super({ client, name: "openapi", path, operations: {}, schemas: {}, prefix, createAdapter });
-  }
-
-  async list() {
-    throw new Error("OpenapiService.list no implementado");
-  }
-
-  async create(data = {}) {
-    throw new Error("OpenapiService.list no implementado");
-  }
-
-  async update() {
-    throw new Error("OpenapiService.update no implementado");
-  }
-
-  async remove() {
-    throw new Error("OpenapiService.remove no implementado");
-  }
-
-  async pull() {
-    const records = await this.client.request(this.path, { method: "GET", cache: "no-store" });
-    await this.adapter.clear();
-    await this.adapter.put("document", records);
-    return records;
-  }
-
-  async pullOne() {
-    throw new Error("OpenapiService.pullOne no implementado");
-  }
-
-  async push() {
-    throw new Error("OpenapiService.push no implementado");
-  }
-
-  async schema() {
-    throw new Error("OpenapiService.schema no implementado");
-  }
-
-  async loadSchema() {
-    throw new Error("OpenapiService.loadSchema no implementado");
-  }
-
-  async validate() {
-    throw new Error("OpenapiService.validate no implementado");
-  }
-
-  async validateAt() {
-    throw new Error("OpenapiService.validateAt no implementado");
-  }
-
-  async request() {
-    throw new Error("OpenapiService.request no implementado");
-  }
-
-  permissions() {
-    throw new Error("OpenapiService.permissions no implementado");
-  }
-
+function stripPathPrefix(path, prefix) {
+  return prefix && path.startsWith(`${prefix}/`) ? path.slice(prefix.length) : path;
 }
 
 class PendingService extends BaseService {
@@ -554,7 +554,7 @@ class PendingService extends BaseService {
   async list() {
     const pending = [];
     for (const service of this.client.services().values()) {
-      if (service === this || ["session", "openapi", "schema"].includes(service.name) || typeof service.pending !== "function") continue;
+      if (service === this || ["session", "schema"].includes(service.name) || typeof service.pending !== "function") continue;
       const result = await service.pending();
       pending.push(...(result.data || []));
     }
@@ -599,8 +599,8 @@ class PendingService extends BaseService {
 }
 
 class SchemaService extends BaseService {
-  constructor({ client, prefix, createAdapter }) {
-    super({ client, name: "schema", path: "", operations: {}, schemas: {}, prefix, createAdapter });
+  constructor({ client, prefix, createAdapter, path = "/schema.json" }) {
+    super({ client, name: "schema", path, operations: {}, schemas: {}, prefix, createAdapter });
   }
 
   async create(data = {}) {
@@ -620,7 +620,10 @@ class SchemaService extends BaseService {
   }
 
   async pull() {
-    throw new Error("SchemaService.pull no implementado");
+    const document = await this.client.request(this.path, { method: "GET", cache: "no-store" });
+    await this.adapter.clear();
+    await this.adapter.put("document", document);
+    return document;
   }
 
   async pullOne() {
@@ -729,12 +732,27 @@ const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
 const DEFAULT_PING_INTERVAL = 5000;
 const DEFAULT_PING_TIMEOUT = 3000;
 const DEFAULT_SSE_WATCHDOG_TIMEOUT = 25000;
+const DEFAULT_SYNC_CACHE_TIMEOUT = 5 * 60 * 1000;
+const DEFAULT_SERVICE_SYNC_DELAY = 1000;
 
-function createApiClient(options = {}) {
-  return new ApiKitClient(options);
+function normalizeCacheTimeout(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  const timeout = Number(value);
+  return Number.isFinite(timeout) && timeout >= 0 ? timeout : fallback;
 }
 
-class ApiKitClient {
+function normalizeServiceSyncDelay(value) {
+  if (value === false) return false;
+  if (value === undefined || value === null) return DEFAULT_SERVICE_SYNC_DELAY;
+  const delay = Number(value);
+  return Number.isFinite(delay) && delay >= 0 ? delay : DEFAULT_SERVICE_SYNC_DELAY;
+}
+
+function createApiClient(options = {}) {
+  return new ApiClient(options);
+}
+
+class ApiClient {
   #host;
   #baseUrl;
   #fetch;
@@ -744,19 +762,30 @@ class ApiKitClient {
   #sessionKey;
   #session = null;
   #services = new Map();
-  #openapi = null;
   #listeners = new Set();
   #online = false;
   #lastReceivedAt = null;
   #syncServicesPromise = null;
+  #backgroundSyncPromise = null;
+  #backgroundServiceSyncs = new Map();
+  #scheduledServiceSyncs = new Map();
+  #cachedRequests = new Map();
+  #changesPromise = null;
   #pingTimer = null;
   #pingAbort = null;
+  #pingPromise = null;
   #sseAbort = null;
   #sseReader = null;
+  #sseOpenPromise = null;
   #watchdogTimer = null;
   #pingInterval;
   #pingTimeout;
   #sseWatchdogTimeout;
+  #syncCacheTimeout;
+  #serviceSyncDelay;
+  #changesEnabled;
+  #sseEnabled;
+  #logging;
   #paths;
 
   constructor(options = {}) {
@@ -772,17 +801,22 @@ class ApiKitClient {
     this.#pingInterval = normalizeTimeout(options.pingInterval ?? options.pingIntervalMs, DEFAULT_PING_INTERVAL);
     this.#pingTimeout = normalizeTimeout(options.pingTimeout ?? options.pingTimeoutMs, DEFAULT_PING_TIMEOUT);
     this.#sseWatchdogTimeout = normalizeTimeout(options.sseWatchdogTimeout ?? options.sseWatchdogTimeoutMs, DEFAULT_SSE_WATCHDOG_TIMEOUT);
+    this.#syncCacheTimeout = normalizeCacheTimeout(options.syncCacheTimeout, DEFAULT_SYNC_CACHE_TIMEOUT);
+    this.#serviceSyncDelay = normalizeServiceSyncDelay(options.serviceSyncDelay);
+    this.#changesEnabled = options.changes !== false;
+    this.#sseEnabled = options.sse !== false;
+    this.#logging = options.logging || false;
     this.#paths = {
       login: options.loginPath || "/login",
       logout: options.logoutPath || "/logout",
       session: options.sessionPath || "/session",
       ping: options.pingPath || "/ping",
-      openapi: options.openapiPath || "/openapi.json",
+      schema: options.schemaPath || "/schema.json",
       changes: options.changesPath || "/changes",
       sse: options.ssePath || "/sse",
     };
 
-    if (!this.#fetch) throw new Error("ApiKitClient requiere fetch");
+    if (!this.#fetch) throw new Error("ApiClient requiere fetch");
     queueMicrotask(() => this.#startPing());
   }
 
@@ -800,9 +834,9 @@ class ApiKitClient {
     this.#onLine("login", response.data);
 
     await this.syncServices();
-    await this.changes();
+    if (this.#changesEnabled) await this.changes();
     this.#stopPing();
-    await this.#openSse();
+    if (this.#sseEnabled) await this.#openSse();
     return response;
   }
 
@@ -823,7 +857,7 @@ class ApiKitClient {
   }
   async session() {
     const session = (await this.sessionService().adapter.getAll())[0] || {};
-    if (session?.token) await this.syncServices();
+    if (session?.token && !this.#syncServicesPromise) await this.syncServices();
     return session;
   }
 
@@ -850,44 +884,193 @@ class ApiKitClient {
     return new Map(this.#services);
   }
 
+  async cachedRequest(key, path, { force = false, ...options } = {}) {
+    const cacheKey = `cache:${key}`;
+    const cached = await this.#adapter.get(cacheKey);
+    if (!force && cached && Object.hasOwn(cached, "data")) {
+      const response = { ok: true, data: cached.data, cached: true };
+      if (!this.#isSyncCacheFresh(cached)) response.refresh = this.#refreshCachedRequest(cacheKey, path, options);
+      return response;
+    }
+    return this.#refreshCachedRequest(cacheKey, path, options);
+  }
+
+  async markServiceCacheUpdated(name) {
+    const id = this.#serviceCacheKey(name);
+    await this.#adapter.put(id, { id, lastUpdateAt: new Date().toISOString() });
+  }
+
   async syncServices(force = false) {
-    if(!force && this.#services.get('openapi')) return; //para evitar que se ejecute varias veces.
-    const openapiService = new OpenapiService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, path: this.#paths.openapi });
-    this.#services.set("openapi", openapiService);
-    let openapi;
+    if (this.#syncServicesPromise) {
+      this.#log("schema", "reutilizando sincronizacion en curso");
+      return this.#syncServicesPromise;
+    }
+    if (!force && this.#services.get("schema")) {
+      this.#log("schema", "servicios ya registrados");
+      return;
+    }
+
+    const sync = this.#synchronizeServices(force);
+    this.#syncServicesPromise = sync;
     try {
-      if(!this.#online) throw Error('OffLine')
-      openapi = await openapiService.pull();
+      return await sync;
+    } finally {
+      if (this.#syncServicesPromise === sync) this.#syncServicesPromise = null;
+    }
+  }
+
+  async #synchronizeServices(force) {
+    const schemaService = new SchemaService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, path: this.#paths.schema });
+    this.#services.set("schema", schemaService);
+    const cachedSchema = await this.#cachedDocument(schemaService);
+    const cacheMetadata = await schemaService.adapter.get("metadata");
+
+    if (!force && cachedSchema && this.#isSyncCacheFresh(cacheMetadata)) {
+      this.#log("schema", "usando manifiesto local vigente");
+      await this.#registerSchemaServices(cachedSchema, schemaService);
+      return;
+    }
+
+    if (!force && cachedSchema && cacheMetadata) {
+      this.#log("schema", "usando manifiesto local vencido y actualizando en segundo plano");
+      await this.#registerSchemaServices(cachedSchema, schemaService);
+      if (this.#online) this.#refreshSchemaDocumentInBackground(schemaService);
+      return;
+    }
+
+    await this.#refreshSchemaDocument(schemaService, force, cachedSchema);
+  }
+
+  async #refreshSchemaDocument(schemaService, force, fallbackSchema = null) {
+    let schema = fallbackSchema;
+    try {
+      if (!this.#online) throw Error("OffLine");
+      this.#log("schema", "descargando", { path: this.#paths.schema, force });
+      const document = await schemaService.pull();
+      if (!Array.isArray(document?.services)) throw new Error("Documento schema invalido");
+      schema = document;
+      this.#log("schema", "descargado", { services: document.services.length });
     } catch (error) {
-      if (error.status === 401){
+      if (error.status === 401) {
         await this.#expireSession(error);
         throw error;
-      }else {
-        openapi = (await openapiService.adapter.getAll())[0] || null;
       }
+      schema ||= await this.#cachedDocument(schemaService);
+      if (!schema) {
+        if (error.message === "OffLine") {
+          this.#log("schema", "sin conexion ni manifiesto local");
+          return;
+        }
+        throw error;
+      }
+      this.#log("schema", "fallo la descarga; usando manifiesto local", { message: error.message, status: error.status });
     }
-    
-    const schemaService = new SchemaService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter });
-    this.#services.set("schema", schemaService);
 
-    for (const descriptor of discoverServiceDescriptors(openapi, this.#baseUrl)) {
+    await this.#registerSchemaServices(schema, schemaService, { force });
+    if (schema && schema !== fallbackSchema) {
+      await schemaService.adapter.put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+      this.#log("schema", "cache actualizado");
+    }
+  }
+
+  #refreshSchemaDocumentInBackground(schemaService) {
+    if (this.#backgroundSyncPromise) return;
+    this.#log("schema", "iniciando actualizacion en segundo plano");
+    const refresh = this.#refreshSchemaDocument(schemaService, false)
+      .catch((error) => {
+        if (error?.status !== 401) console.error("api-client, syncServices", error);
+      })
+      .finally(() => {
+        if (this.#backgroundSyncPromise === refresh) this.#backgroundSyncPromise = null;
+      });
+    this.#backgroundSyncPromise = refresh;
+  }
+
+  async #registerSchemaServices(schema, schemaService, { force = false } = {}) {
+    this.#log("schema", "registrando servicios", { services: schema.services?.length || 0 });
+    for (const descriptor of discoverServiceDescriptors(schema, this.#baseUrl)) {
       if (!descriptor.operations.list) continue;
       const service = new BaseService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, ...descriptor });
       this.#services.set(descriptor.name, service);
-      try{
-        if (descriptor.operations.schema) {
-          const response = await service.schema();
-          await schemaService.update(descriptor.name, response.data || response);
+      if (Object.keys(descriptor.schemas || {}).length > 0) await schemaService.update(descriptor.name, descriptor.schemas);
+      try {
+        const localRecords = (await service.list()).data;
+        const cacheFresh = await this.#isServiceCacheFresh(descriptor.name);
+        if (force || localRecords.length === 0 || !cacheFresh) {
+          this.#scheduleServiceRefresh(service, { force, reason: localRecords.length === 0 ? "sin datos locales" : "cache vencido" });
         }
-        if ((await service.list()).data.length==0 || force) await service.pull();
-      }catch(e){
-        if (e?.status === 401) {
-          await this.#expireSession(e);
-          throw e;
+      } catch (error) {
+        if (error?.status === 401) {
+          await this.#expireSession(error);
+          throw error;
         }
-        if (![404, 405].includes(e?.status) && e?.message !== "Schema disabled") console.error('api-client, syncServices', e);
+        console.error("api-client, syncServices", error);
       }
     }
+  }
+
+  #refreshServiceInBackground(service) {
+    if (this.#backgroundServiceSyncs.has(service.name)) return;
+    this.#log("service", "actualizando en segundo plano", { service: service.name });
+    const refresh = service.pull()
+      .catch((error) => {
+        if (error?.status !== 401) console.error("api-client, service refresh", service.name, error);
+      })
+      .finally(() => this.#backgroundServiceSyncs.delete(service.name));
+    this.#backgroundServiceSyncs.set(service.name, refresh);
+  }
+
+  #scheduleServiceRefresh(service, { force = false, reason } = {}) {
+    if (this.#serviceSyncDelay === false) {
+      this.#log("service", "precarga desactivada", { service: service.name, reason });
+      return;
+    }
+    if (this.#backgroundServiceSyncs.has(service.name) || this.#scheduledServiceSyncs.has(service.name)) return;
+
+    const delay = force ? 0 : this.#serviceSyncDelay;
+    this.#log("service", "precarga programada", { service: service.name, delay, reason });
+    const timer = setTimeout(async () => {
+      this.#scheduledServiceSyncs.delete(service.name);
+      const localRecords = (await service.list()).data;
+      if (!force && localRecords.length > 0 && await this.#isServiceCacheFresh(service.name)) {
+        this.#log("service", "precarga omitida; cache actualizada", { service: service.name });
+        return;
+      }
+      this.#refreshServiceInBackground(service);
+    }, delay);
+    timer.unref?.();
+    this.#scheduledServiceSyncs.set(service.name, timer);
+  }
+
+  #serviceCacheKey(name) {
+    return `sync:${name}`;
+  }
+
+  async #isServiceCacheFresh(name) {
+    return this.#isSyncCacheFresh(await this.#adapter.get(this.#serviceCacheKey(name)));
+  }
+
+  #refreshCachedRequest(cacheKey, path, options) {
+    if (this.#cachedRequests.has(cacheKey)) return this.#cachedRequests.get(cacheKey);
+    const refresh = this.request(path, options)
+      .then(async (response) => {
+        await this.#adapter.put(cacheKey, { id: cacheKey, data: response.data, lastUpdateAt: new Date().toISOString() });
+        return response;
+      })
+      .finally(() => this.#cachedRequests.delete(cacheKey));
+    this.#cachedRequests.set(cacheKey, refresh);
+    return refresh;
+  }
+
+  async #cachedDocument(service) {
+    const document = await service.adapter.get("document");
+    if (document) return document;
+    return (await service.adapter.getAll()).find((record) => record?.schema) || null;
+  }
+
+  #isSyncCacheFresh(metadata) {
+    const updatedAt = Date.parse(metadata?.lastUpdateAt || "");
+    return Number.isFinite(updatedAt) && Date.now() - updatedAt < this.#syncCacheTimeout;
   }
 
   connected() {
@@ -900,6 +1083,7 @@ class ApiKitClient {
 
   destroy() {
     this.#stopPing();
+    this.#clearScheduledServiceSyncs();
     this.#closeSse();
     this.#clearWatchdog();
     this.#listeners.clear();
@@ -919,14 +1103,30 @@ class ApiKitClient {
     this.#listeners.delete(listener);
   }
 
+  notifyChange(event = {}) {
+    this.#emitChange({ type: "cache", ...event });
+  }
+
   async changes(since) {
+    if (this.#changesPromise) return this.#changesPromise;
+
+    const changes = this.#requestChanges(since);
+    this.#changesPromise = changes;
+    try {
+      return await changes;
+    } finally {
+      if (this.#changesPromise === changes) this.#changesPromise = null;
+    }
+  }
+
+  async #requestChanges(since) {
     const requestedSince = since ? this.#normalizeDateTime(since) : this.#lastReceivedAt || this.#now();
     const query = { since: requestedSince };
     let response;
     try {
       response = await this.request(this.#paths.changes, { query });
     } catch (error) {
-      if (error instanceof ApiKitClientError && error.status === 401) await this.#expireSession(error);
+      if (error instanceof ApiClientError && error.status === 401) await this.#expireSession(error);
       throw error;
     }
     const receivedAt = this.#touchLastReceivedAt();
@@ -941,7 +1141,7 @@ class ApiKitClient {
     const headers = { Accept: "application/json", ...(options.headers || {}) };
     const body = encodeBody(options.body, headers);
     const token = options.token || await this.token() || null;
-    if (options.requireToken && !token) throw new ApiKitClientError("Sesion local requerida", { status: 401 });
+    if (options.requireToken && !token) throw new ApiClientError("Sesion local requerida", { status: 401 });
     if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`;
 
     let response;
@@ -949,12 +1149,12 @@ class ApiKitClient {
       response = await this.#fetch(url, { method: options.method || "GET", headers, body, signal: options.signal, cache: options.cache });
     } catch (error) {
       const payload = { ok: false, message: error.message || "Error de red", error };
-      throw new ApiKitClientError(payload.message, { response: payload });
+      throw new ApiClientError(payload.message, { response: payload });
     }
     const contentType = response.headers?.get?.("content-type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok || payload?.ok === false){
-      throw new ApiKitClientError(payload?.message || response.statusText, { status: response.status, response: payload });
+      throw new ApiClientError(payload?.message || response.statusText, { status: response.status, response: payload });
     }
 
     return payload;
@@ -970,6 +1170,18 @@ class ApiKitClient {
   }
 
   async #ping() {
+    if (this.#pingPromise) return this.#pingPromise;
+
+    const ping = this.#runPing();
+    this.#pingPromise = ping;
+    try {
+      return await ping;
+    } finally {
+      if (this.#pingPromise === ping) this.#pingPromise = null;
+    }
+  }
+
+  async #runPing() {
     const controller = new AbortController();
     this.#pingAbort = controller;
     const timeout = setTimeout(() => controller.abort(), this.#pingTimeout);
@@ -985,11 +1197,11 @@ class ApiKitClient {
 
     try {
       const localSession = await this.session() || null;
-      if (!localSession?.token) throw new ApiKitClientError("Sesion local requerida", { status: 401 });
+      if (!localSession?.token) throw new ApiClientError("Sesion local requerida", { status: 401 });
       await this.syncServices();
-      await this.changes();
+      if (this.#changesEnabled) await this.changes();
       this.#stopPing();
-      await this.#openSse();
+      if (this.#sseEnabled) await this.#openSse();
     } catch {
       this.#closeSse();
     } finally {
@@ -1021,8 +1233,23 @@ class ApiKitClient {
   }
 
   async #openSse() {
+    if (!this.#sseEnabled) return;
     if (this.#sseAbort) return;
+
+    if (this.#sseOpenPromise) return this.#sseOpenPromise;
+
+    const opening = this.#startSse();
+    this.#sseOpenPromise = opening;
+    try {
+      return await opening;
+    } finally {
+      if (this.#sseOpenPromise === opening) this.#sseOpenPromise = null;
+    }
+  }
+
+  async #startSse() {
     if (!(await this.token())) return;
+    if (this.#sseAbort) return;
     const controller = new AbortController();
     this.#sseAbort = controller;
     const headers = { Accept: "text/event-stream" };
@@ -1125,9 +1352,11 @@ class ApiKitClient {
   }
 
   async #clearServices() {
+    this.#clearScheduledServiceSyncs();
     for (const [serviceName, service] of this.#services.entries()) {
       if (serviceName === "audit") continue;
       await service.clear();
+      await this.#adapter.delete(this.#serviceCacheKey(serviceName));
     }
   }
 
@@ -1159,7 +1388,18 @@ class ApiKitClient {
   #normalizeDateTime(value) {
     return value instanceof Date ? value.toISOString() : value;
   }
+
+  #clearScheduledServiceSyncs() {
+    for (const timer of this.#scheduledServiceSyncs.values()) clearTimeout(timer);
+    this.#scheduledServiceSyncs.clear();
+  }
+
+  #log(...args) {
+    if (!this.#logging) return;
+    const logger = this.#logging === true ? console : this.#logging;
+    logger.log?.("[api-client]", ...args);
+  }
 }
 
-export { ApiKitClient, ApiKitClientError, BaseAdapter, BaseService, IndexedDbAdapter, LocalStorageAdapter, MapAdapter, OpenapiService, PendingService, SchemaService, SessionService, createAdapter, createApiClient };
+export { ApiClient, ApiClientError, BaseAdapter, BaseService, IndexedDbAdapter, LocalStorageAdapter, MapAdapter, PendingService, SchemaService, SessionService, createAdapter, createApiClient };
 //# sourceMappingURL=api-client.js.map

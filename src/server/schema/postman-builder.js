@@ -1,7 +1,14 @@
+import { jsonSchemaForRoute, normalizeDocumentConfig } from "./document-utils.js";
+
 const POSTMAN_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
+const OPERATION_ORDER = new Map([
+  ["login", 10], ["session", 20], ["logout", 30],
+  ["list", 10], ["schema", 20], ["get", 30], ["create", 40], ["update", 50], ["remove", 60],
+  ["createDetail", 70], ["updateDetail", 80], ["removeDetail", 90],
+]);
 
 export function normalizePostmanConfig(postman, openapi) {
-  if (postman) return postman === true ? {} : postman;
+  if (postman) return normalizeDocumentConfig(postman, { permission: "schema.list" });
   if (!openapi?.postman) return null;
   return {...openapi,path: openapi.postmanPath || "/postman.json"};
 }
@@ -9,6 +16,7 @@ export function normalizePostmanConfig(postman, openapi) {
 export function buildPostmanCollection({ routes, modules = new Map(), packageInfo = {}, config = {} }) {
   const root = { name: basePathName(config.basePath), item: [] };
   const folders = new Map();
+  const itemOrders = new WeakMap();
 
   for (const route of routes.getAll()) {
     if (route.serviceMethod === "postman") continue;
@@ -23,7 +31,13 @@ export function buildPostmanCollection({ routes, modules = new Map(), packageInf
       folders.set(folderName, folder);
       root.item.push(folder);
     }
-    folders.get(folderName).item.push(postmanItemFor(route, modules));
+    const item = postmanItemFor(route, modules);
+    itemOrders.set(item, OPERATION_ORDER.get(route.serviceMethod) ?? 100);
+    folders.get(folderName).item.push(item);
+  }
+
+  for (const folder of folders.values()) {
+    folder.item.sort((left, right) => itemOrders.get(left) - itemOrders.get(right));
   }
 
   return {
@@ -44,7 +58,7 @@ function isRootPostmanItem(route) {
 
 function collectionDescription(config, packageInfo) {
   const description = config.description || packageInfo.description || "";
-  const loginHelp = "Use el request Login para obtener el token. Al ejecutarlo, la coleccion actualiza automaticamente la variable bearerToken con el token recibido para usar el resto de los recursos protegidos. Use el request Logout para cerrar la sesion y limpiar bearerToken.";
+  const loginHelp = "Use el request Login para obtener el token.";
   return [description, loginHelp].filter(Boolean).join("\n\n");
 }
 
@@ -101,8 +115,7 @@ function requestBodyExample(route, modules) {
   if (route.operationId === "install.run") return { token: "" };
   if (!["create", "update"].includes(route.serviceMethod)) return null;
 
-  const schema = modules.get(route.module)?.schemas?.[route.serviceMethod];
-  const jsonSchema = schema?.toJsonSchema?.();
+  const jsonSchema = jsonSchemaForRoute(modules, route);
   return jsonSchema ? exampleFromJsonSchema(jsonSchema) : {};
 }
 

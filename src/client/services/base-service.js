@@ -9,7 +9,7 @@ export class BaseService {
     this.name = name;
     this.path = path;
     this.operations = operations;
-    //this.schemas = schemas;
+    this.schemas = Object.keys(schemas).length > 0 ? schemas : null;
     this.prefix = prefix;
     this.adapter = createAdapter?.({ service: name, prefix: this.prefix });
   }
@@ -33,11 +33,13 @@ export class BaseService {
     const pending = options.pending ?? !this.client.connected?.();
     if (!pending) {
       const response = await this.#send("create", { body: record });
-      if (!response.ok) await this.adapter.add(response.data);
+      if (response.data) await this.adapter.add(response.data);
+      this.#notify();
       return response;
     }
     data = {...record, id: record.id ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
     await this.adapter.add(data);
+    this.#notify();
     this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
@@ -50,12 +52,14 @@ export class BaseService {
       const response = await this.#send("update", { params: { id }, body: data });
       const nextRecord = response.data || record;
       await this.adapter.put(nextRecord.id ?? id, nextRecord);
+      this.#notify();
       return response;
     }
     data = {...current, ...data, pending: true, operation:'update', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id ?? id, data)
+    this.#notify();
     const ret = await this.pushOne(data);
-    if(!ret.ok) throw ret;
+    this.#throwPushError(ret);
     return { ok: true, data };
   }
 
@@ -65,10 +69,12 @@ export class BaseService {
     if (!pending) {
       const response = await this.#send("remove", { params: { id } });
       await this.adapter.delete(id);
+      this.#notify();
       return response;
     }
     const data = {...current, id, pending: true, operation:'remove', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id, data);
+    this.#notify();
     this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
@@ -85,30 +91,42 @@ export class BaseService {
     }
 
     if (records.length > 0) await this.adapter.add(records);
+    await this.client.markServiceCacheUpdated?.(this.name);
+    this.#notify();
     return { ok: true, data: records };
   }
 
   async pullOne(id, query = {}) {
     const response = await this.#send("get", { params: { id }, query });
-    if (response.data?.id !== undefined) await this.adapter.add(response.data);
+    if (response.data?.id !== undefined) {
+      await this.adapter.add(response.data);
+      this.#notify();
+    }
     return response;
   }
 
   async applyData(data) {
     if (!data || typeof data !== "object") return;
-    const action = data.action || data.type;
-    if (action === "create" || action === "update") {
-      const record = data.new && typeof data.new === "object" ? { ...data.new } : null;
-      if (!record) return;
-      //if (record.id === undefined && data.rowId !== undefined && data.rowId !== null) record.id = data.rowId;
-      if (record.id === undefined || record.id === null) return;
-      await this.adapter.put(record.id, record);
+    const action = String(data.action || data.type || "").toLowerCase();
+    const isCreate = action === "create" || action === "bulk-create";
+    const isUpdate = action === "update" || action === "bulk-update";
+    if (isCreate || isUpdate) {
+      const changes = data.new && typeof data.new === "object" ? { ...data.new } : null;
+      if (!changes) return;
+      const current = await this.#recordForChange(data, changes.id);
+      const id = current?.id ?? changes.id ?? data.rowId ?? data.id ?? data.old?.id;
+      if (id === undefined || id === null) return;
+      const record = isUpdate ? { ...current, ...changes, id } : { ...changes, id };
+      await this.adapter.put(id, record);
+      this.#notify();
       return;
     }
-    if (action === "delete") {
-      const id = data.old?.id ?? data.rowId ?? data.id;
+    if (action === "delete" || action === "bulk-delete" || action === "remove" || action === "bulk-remove") {
+      const current = await this.#recordForChange(data);
+      const id = current?.id ?? data.old?.id ?? data.rowId ?? data.id;
       if (id === undefined || id === null) return;
       await this.adapter.delete(id);
+      this.#notify();
       return;
     }
   }
@@ -133,17 +151,15 @@ export class BaseService {
     try {
       const response = await this.#sendPendingOperation(record);
       if (record.operation === "create") await this.adapter.delete(record.id);
+      this.#notify();
       return { ok: true, id: record.id, operation: record.operation, response };
     } catch (error) {
       const errors = error.errors || error.response?.errors || null;
       const nextRecord = {...record, pending: true, status: "error", message: error.message, errors};
       await this.adapter.put(record.id, nextRecord);
+      this.#notify();
       return { ok: false, id: record.id, operation: record.operation, error: error.message, errors };
     }
-  }
-
-  async schema() {
-    return this.request("schema");
   }
 
   async validate(data = {}, operation = "create") {
@@ -156,6 +172,16 @@ export class BaseService {
     const schema = await this.#yepSchema(operation);
     if (!schema) return data?.[attribute];
     return schema.validateAt(attribute, data);
+  }
+
+  async unique(field, value, data = {}) {
+    if (value === undefined || value === null) return null;
+    const currentId = data?.id;
+    const records = (await this.list()).data;
+    const duplicate = records.find((record) => (
+      record?.[field] === value && (currentId === undefined || String(record.id) !== String(currentId))
+    ));
+    return duplicate ? new Error("Ya existe un registro con este valor") : null;
   }
 
   permissions(operation) {
@@ -174,6 +200,19 @@ export class BaseService {
 
   async clear() {
     await this.adapter.clear();
+    this.#notify();
+  }
+
+  #notify() {
+    this.client.notifyChange?.({ service: this.name });
+  }
+
+  async #recordForChange(data, preferredId) {
+    const id = preferredId ?? data.rowId ?? data.id ?? data.old?.id;
+    if (id === undefined || id === null) return null;
+    const direct = await this.adapter.get(id);
+    if (direct) return direct;
+    return (await this.adapter.getAll()).find((record) => String(record?.id) === String(id)) || null;
   }
 
   async #sendPendingOperation(record) {
@@ -213,8 +252,18 @@ export class BaseService {
       const { id, ...schemas } = (await this.client.service("schema").get(this.name))?.data || {};
       this.schemas = schemas;
     }
-    const schema = this.schemas?.[operation];
-    return schema ? yep.fromJsonSchema(schema) : null;
+    const jsonSchema = this.schemas?.[operation];
+    if (!jsonSchema) return null;
+    const schema = yep.fromJsonSchema(jsonSchema);
+    this.#applyUniqueRules(schema, jsonSchema);
+    return schema;
+  }
+
+  #applyUniqueRules(schema, jsonSchema) {
+    for (const [field, property] of Object.entries(jsonSchema?.properties || {})) {
+      if (property?.unique !== true || typeof schema.shapeDefinition?.[field]?.unique !== "function") continue;
+      schema.shapeDefinition[field].unique((value, attribute, data) => this.unique(attribute, value, data));
+    }
   }
 
 
@@ -233,11 +282,5 @@ export class BaseService {
     return null;
   }
 
-}
-
-function buildYepSchemas(schemas) {
-  return Object.fromEntries(
-    Object.entries(schemas || {}).map(([name, schema]) => [name, yep.fromJsonSchema(schema)]),
-  );
 }
 

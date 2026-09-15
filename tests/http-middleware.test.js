@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { createTestSeq } from "./helpers/seq.js";
+import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi, defineResource } from "../src/server/index.js";
 
 function loggedClienteResource() {
@@ -124,6 +124,24 @@ describe("http middleware", () => {
       assert.equal(res.headers["access-control-allow-origin"], "https://example.com");
       assert.equal(res.headers["x-dns-prefetch-control"], "off");
       assert.equal(res.headers["content-encoding"], "gzip");
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("does not enable cors by default", async () => {
+    const seq = createTestSeq({ logging: false });
+    const api = await createApi({ seq, basePath: "/api", modules: [] });
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+    const server = await listen(api.app);
+
+    try {
+      const res = await request(server, "GET", "/api/ping", { headers: { Origin: "http://localhost:5173" } });
+      assert.equal(res.status, 200);
+      assert.equal(res.headers["access-control-allow-origin"], undefined);
     } finally {
       await api.close();
       await close(server);
@@ -400,9 +418,10 @@ describe("http middleware", () => {
       seq,
       basePath: "/api",
       modules: "./example/modules.js",
-      auth: { required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
       audit: true,
       openapi: true,
+      schema: { auth: true },
     });
 
     await seq.authenticate();
@@ -438,7 +457,7 @@ describe("http middleware", () => {
       seq,
       basePath: "/api",
       modules: "./example/modules.js",
-      auth: { required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", strategies: ["bearer", "basic"] },
       audit: true,
       openapi: true,
     });
@@ -462,6 +481,7 @@ describe("http middleware", () => {
       const asset = await request(server, "GET", "/client/app.js");
       assert.equal(asset.status, 200);
       assert.match(asset.raw, /createApiClient/);
+      assert.match(asset.raw, /schemaPath: "\/schema\.json"/);
       assert.match(asset.raw, /LocalStorageAdapter/);
       assert.match(asset.raw, /client\.connected\(\)/);
       assert.match(asset.raw, /services\.clientes\.list\(\)/);
@@ -716,7 +736,7 @@ describe("http middleware", () => {
     }
   });
 
-  it("returns conflict errors for duplicated unique values", async () => {
+  it("validates duplicated unique values before persisting", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({
       seq,
@@ -748,9 +768,9 @@ describe("http middleware", () => {
       const list = await request(server, "GET", "/api/clientes");
 
       assert.equal(first.status, 200);
-      assert.equal(duplicated.status, 409);
-      assert.equal(duplicated.body.ok, false);
-      assert.equal(duplicated.body.code, "CONFLICT");
+        assert.equal(duplicated.status, 400);
+        assert.equal(duplicated.body.ok, false);
+        assert.equal(duplicated.body.code, "VALIDATION_ERROR");
       assert.equal(typeof duplicated.body.message, "string");
       assert.deepEqual(duplicated.body.errors, { ruc: "Ya existe un registro con este valor" });
       assert.equal(list.status, 200);

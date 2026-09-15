@@ -1,5 +1,6 @@
 import { afterEach } from "node:test";
 import { MySQLAdapter, Seq, SQLiteAdapter } from "seq";
+import { SeqAdapter } from "iam/adapters";
 
 const openSeqs = new Set();
 
@@ -14,6 +15,10 @@ export function createTestSeq(options = {}) {
 
   if (!shared) trackSeq(seq);
   return seq;
+}
+
+export function createIamAdapter(seq, options = {}) {
+  return new SeqAdapter({ seq, ...options });
 }
 
 export async function closeOpenTestSeqs() {

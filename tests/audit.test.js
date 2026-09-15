@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { createTestSeq } from "./helpers/seq.js";
+import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi, defineResource } from "../src/server/index.js";
 
 const modules = [
@@ -26,26 +26,40 @@ const modules = [
       descripcion: { type: "string", allowNull: false },
     },
   },
-  {
-    modelName: "audit",
-    tableName: "audit",
-    timestamps: true,
-    audit: false,
-    attributes: {
-      id: { type: "integer", primaryKey: true, autoIncrement: true },
-      txId: { type: "string", maxLength: 50, allowNull: false },
-      clientIp: { type: "string", maxLength: 50, allowNull: false },
-      userId: { type: "string", maxLength: 20 },
-      tableName: { type: "string", maxLength: 50, allowNull: false },
-      rowId: { type: "string", maxLength: 50, allowNull: false },
-      action: { type: "string", maxLength: 20, allowNull: false },
-      old: { type: "json" },
-      new: { type: "json" },
-    },
-  },
 ];
 
 describe("audit", () => {
+  it("registers its internal model and documents only audit routes in Postman", async () => {
+    const seq = createTestSeq({ logging: false });
+    const api = await createApi({ seq, basePath: "/api", audit: true, postman: true, modules });
+
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(api.router);
+    app.use(api.errorHandler);
+    const server = await listen(app);
+
+    try {
+      assert.ok(api.models.get("audit"));
+      assert.deepEqual(api.models.get("audit").options.indexes, [
+        { name: "idx_audit_created_at", columns: ["createdAt"] },
+      ]);
+      assert.deepEqual([...api.routes.findBy({ module: "audit" })].map((route) => route.operationId), ["audit.changes", "audit.sse"]);
+
+      const postman = await request(server, "GET", "/api/postman.json");
+      const root = postman.body.item.find((item) => item.name === "api");
+      const audit = root.item.find((item) => item.name === "audit");
+      assert.deepEqual(audit.item.map((item) => item.name), ["Cambios desde una fecha", "Cambios en vivo"]);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("audits enabled modules and skips disabled/audit modules", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({ seq, audit: true, modules });
@@ -213,7 +227,7 @@ describe("audit", () => {
       seq,
       basePath: "/api",
       audit: true,
-      auth: { required: true, secret: "test-secret" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret" },
       modules,
     });
 
@@ -247,13 +261,13 @@ describe("audit", () => {
     }
   });
 
-  it("audits IAM session changes without exposing them through changes or sse events", async () => {
+  it("does not audit IAM sessions when its adapter has no auditable configuration", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({
       seq,
       basePath: "/api",
       audit: true,
-      auth: { required: true, secret: "test-secret" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret" },
       modules,
     });
 
@@ -286,13 +300,11 @@ describe("audit", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       const Audit = api.models.get("audit");
-      const sessionTableName = tableNameForModel(api.auth.models.Session);
+      const sessionTableName = tableNameForModel(api.auth.models.sessions);
       const rows = await Audit.findAll({ order: [["id", "ASC"]] });
       const sessionRows = rows.map((row) => row.toJSON()).filter((row) => row.tableName === sessionTableName);
 
-      assert.deepEqual(sessionRows.map((row) => row.action), ["create", "update"]);
-      assert.equal(sessionRows[0].new.userId, "admin");
-      assert.equal(sessionRows[1].new.active, false);
+      assert.deepEqual(sessionRows, []);
       assert.equal(emitted.some((change) => change.tableName === sessionTableName), false);
 
       const changes = await request(server, "GET", `/api/changes?since=${encodeURIComponent(since)}`, {
@@ -478,7 +490,7 @@ describe("audit", () => {
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 50 },
-      auth: { required: true, secret: "test-secret", tokenExpiresIn: "1s" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn: "1s" },
       modules,
     });
 
@@ -521,7 +533,7 @@ describe("audit", () => {
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 50 },
-      auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn: "5m" },
       modules,
     });
 
@@ -568,7 +580,7 @@ describe("audit", () => {
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 20 },
-      auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn: "5m" },
       modules,
     });
 
@@ -622,18 +634,18 @@ async function seedAuditAuth(models, users) {
   const permissionNames = new Set(Object.values(users).flat());
 
   for (const permissionName of permissionNames) {
-    const permission = await models.Permission.create({ permission: permissionName, active: true });
+    const permission = await models.permissions.create({ permission: permissionName, active: true });
     permissionModels.set(permissionName, permission);
   }
 
   for (const [userId, permissions] of Object.entries(users)) {
-    const user = await models.User.create({ id: userId, password: "1234", name: userId, email: `${userId}@example.com`, active: true });
-    const role = await models.Role.create({ role: userId, active: true });
-    await models.UserRole.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
+    const user = await models.users.create({ id: userId, password: "1234", name: userId, email: `${userId}@example.com`, active: true });
+    const role = await models.roles.create({ role: userId, active: true });
+    await models.usersRoles.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
 
     for (const permissionName of permissions) {
       const permission = permissionModels.get(permissionName);
-      await models.RolePermission.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
+      await models.rolesPermissions.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
     }
   }
 }

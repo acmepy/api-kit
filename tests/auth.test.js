@@ -2,8 +2,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
-import { createTestSeq } from "./helpers/seq.js";
+import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi } from "../src/server/index.js";
+import { createAuthContext } from "../src/server/install/auth.services.js";
+import { normalizeAuthBackendConfig } from "../src/server/utils/normalize.js";
 
 const modules = [
   {
@@ -18,21 +20,65 @@ const modules = [
 ];
 
 describe("auth", () => {
+  it("does not provide a development secret when auth is enabled", () => {
+    assert.throws(
+      () => normalizeAuthBackendConfig({ required: true, secret: "" }),
+      /IAM_SECRET debe estar definido/,
+    );
+  });
+
+  it("does not expose schema.json when only OpenAPI is enabled", async () => {
+    const api = await createApi({
+      seq: createTestSeq({ logging: false }),
+      basePath: "/api",
+      openapi: true,
+      modules,
+    });
+    const server = await listen(api.app);
+
+    try {
+      const response = await request(server, "GET", "/api/schema.json");
+      assert.equal(response.status, 404);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
+  it("passes global logging to iam", async () => {
+    const events = [];
+    const logger = { error(...args) { events.push(args); } };
+    const auth = createAuthContext(
+      { logging: logger },
+      { adapter: {}, secret: "test-secret" },
+    );
+    const req = { method: "POST", path: "/login", body: {} };
+    const res = { status() { return this; }, json() {} };
+
+    await auth.middleware(req, res, () => {});
+
+    assert.equal(auth.logging, logger);
+    assert.ok(events.some(([prefix, message]) => prefix === "[IAM]" && message === "Error de inicio de sesión"));
+  });
+
   it("logs in, authorizes bearer/basic requests, checks permissions, and logs out", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({
       seq,
       basePath: "/api",
       auth: { required: true, secret: "test-secret", tokenExpiresIn: "5m" },
-      openapi: { auth: true, permission: "openapi.read" },
-      postman: { auth: true, permission: "openapi.read" },
+      openapi: { auth: true },
+      schema: { auth: true },
+      postman: { auth: true },
       modules,
     });
+
+    assert.equal(api.auth.adapter.seq, seq);
 
     await seq.authenticate();
     await seq.init();
     await seq.sync({ force: true });
-    await seedIam(api.auth.models, ["clientes.list", "clientes.create", "openapi.read"]);
+    await seedIam(api.auth.models, ["clientes.list", "clientes.create", "schema.list"]);
 
     const app = express();
     app.use(express.json());
@@ -76,6 +122,11 @@ describe("auth", () => {
       assert.equal(listed.status, 200);
       assert.equal(listed.body.data.length, 1);
 
+      const schema = await request(server, "GET", "/api/clientes/schema", {
+        basic: ["admin", "1234"],
+      });
+      assert.equal(schema.status, 200);
+
       const forbidden = await request(server, "PUT", `/api/clientes/${created.body.data.id}`, {
         token: login.body.data.token,
         body: { activo: false },
@@ -103,11 +154,22 @@ describe("auth", () => {
       assert.equal(openapi.body.components.securitySchemes.basicAuth.scheme, "basic");
       assert.deepEqual(openapi.body.paths["/api/clientes"].get.security, [{ bearerAuth: [] }, { basicAuth: [] }]);
       assert.deepEqual(openapi.body.paths["/api/clientes"].get["x-permissions"], ["clientes.list"]);
+      assert.ok(openapi.body.paths["/api/clientes"].post);
+      assert.ok(openapi.body.paths["/api/clientes/schema"].get);
+      assert.equal(openapi.body.paths["/api/clientes/{id}"], undefined);
+      assert.ok(openapi.body.components.schemas.clientes_create);
+      assert.equal(openapi.body.components.schemas.clientes_update, undefined);
       assert.deepEqual(openapi.body.paths["/api/openapi.json"].get.security, [{ bearerAuth: [] }, { basicAuth: [] }]);
-      assert.deepEqual(openapi.body.paths["/api/openapi.json"].get["x-permissions"], ["openapi.read"]);
+      assert.deepEqual(openapi.body.paths["/api/openapi.json"].get["x-permissions"], ["schema.list"]);
       assert.equal(openapi.body.paths["/api/login"].post.security, undefined);
       assert.equal(openapi.body.paths["/api/login"].post.requestBody.content["application/json"].schema.properties.password.format, "password");
       assert.deepEqual(openapi.body.paths["/api/session"].get.security, [{ bearerAuth: [] }, { basicAuth: [] }]);
+
+      const schemaDocument = await request(server, "GET", "/api/schema.json", { basic: ["admin", "1234"] });
+      assert.equal(schemaDocument.status, 200);
+      assert.deepEqual(schemaDocument.body.services.map((service) => service.name), ["clientes"]);
+      assert.deepEqual(Object.keys(schemaDocument.body.services[0].operations).sort(), ["create", "list", "schema"]);
+      assert.deepEqual(Object.keys(schemaDocument.body.services[0].schemas), ["create"]);
 
       const deniedPostman = await request(server, "GET", "/api/postman.json");
       assert.equal(deniedPostman.status, 401);
@@ -140,7 +202,7 @@ describe("auth", () => {
     const api = await createApi({
       seq,
       basePath: "/api",
-      auth: { required: true, strategies: ["bearer"], secret: "test-secret" },
+      auth: { adapter: createIamAdapter(seq), required: true, strategies: ["bearer"], secret: "test-secret" },
       modules,
     });
 
@@ -168,13 +230,13 @@ describe("auth", () => {
 });
 
 async function seedIam(models, permissions) {
-  const user = await models.User.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
-  const role = await models.Role.create({ role: "admin", active: true });
-  await models.UserRole.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
+  const user = await models.users.create({ id: "admin", password: "1234", name: "Admin", email: "admin@example.com", active: true });
+  const role = await models.roles.create({ role: "admin", active: true });
+  await models.usersRoles.create({ userId: user.get("id"), roleId: role.get("id"), active: true });
 
   for (const permissionName of permissions) {
-    const permission = await models.Permission.create({ permission: permissionName, active: true });
-    await models.RolePermission.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
+    const permission = await models.permissions.create({ permission: permissionName, active: true });
+    await models.rolesPermissions.create({ roleId: role.get("id"), permissionId: permission.get("id"), active: true });
   }
 }
 

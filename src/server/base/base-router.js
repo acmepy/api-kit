@@ -30,8 +30,8 @@ export class BaseRouter {
   }
 
   build() {
-    const endpoints = this.#config.endpoints || {};
-    for (const [op, endpoint] of Object.entries(endpoints)) {
+    const endpoints = Object.entries(this.#config.endpoints || {}).sort(([, left], [, right]) => endpointSpecificity(right) - endpointSpecificity(left));
+    for (const [op, endpoint] of endpoints) {
       if (!endpoint.enabled) {
         if (op === "schema") this.disabledRoute(endpoint.method || "get", endpoint.path || "/schema", "SCHEMA_DISABLED", "Schema disabled");
         continue;
@@ -94,5 +94,12 @@ export class BaseRouter {
 
     this.#expressRouter[method](expressPath, ...handlers);
   }
+}
+
+function endpointSpecificity(endpoint = {}) {
+  return String(endpoint.path || "/")
+    .split("/")
+    .filter(Boolean)
+    .reduce((score, segment) => score + (segment.startsWith(":") ? 1 : 10), 0);
 }
 

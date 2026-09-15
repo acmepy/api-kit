@@ -3,6 +3,21 @@ import assert from "node:assert/strict";
 import { BaseService } from "../src/client/services/base-service.js";
 
 describe("Client BaseService", () => {
+  it("applies partial audit SSE updates and deletes using rowId", async () => {
+    const records = [{ id: 1, nombre: "Ana", activo: true }];
+    const service = new BaseService({
+      client: {},
+      name: "clientes",
+      createAdapter: () => memoryAdapter(records),
+    });
+
+    await service.applyData({ action: "bulk-update", rowId: "1", new: { activo: false } });
+    assert.deepEqual(records, [{ id: 1, nombre: "Ana", activo: false }]);
+
+    await service.applyData({ action: "bulk-delete", rowId: "1", old: { nombre: "Ana" }, new: {} });
+    assert.deepEqual(records, []);
+  });
+
   it("sends discovered operations through the public request helper", async () => {
     const calls = [];
     const service = new BaseService({
@@ -26,33 +41,6 @@ describe("Client BaseService", () => {
       {
         path: "/clientes/ruc/123",
         options: { method: "GET", query: { exact: true }, body: undefined },
-      },
-    ]);
-  });
-
-  it("loads service schema through the discovered schema operation", async () => {
-    const calls = [];
-    const service = new BaseService({
-      client: {
-        async request(path, options) {
-          calls.push({ path, options });
-          return { ok: true, data: { create: { type: "object" } } };
-        },
-      },
-      name: "clientes",
-      operations: {
-        schema: { path: "/clientes/schema", method: "GET" },
-      },
-      createAdapter: () => memoryAdapter(),
-    });
-
-    const result = await service.schema();
-
-    assert.deepEqual(result, { ok: true, data: { create: { type: "object" } } });
-    assert.deepEqual(calls, [
-      {
-        path: "/clientes/schema",
-        options: { method: "GET", query: {}, body: undefined },
       },
     ]);
   });
@@ -238,6 +226,28 @@ describe("Client BaseService", () => {
     assert.deepEqual(records[0].errors, { ruc: "RUC no cumple con el formato esperado" });
   });
 
+  it("throws an Error with details when a pending update cannot be sent", async () => {
+    const records = [{ id: 1, name: "Ana" }];
+    const service = new BaseService({
+      client: {
+        async request() {
+          const error = new Error("Validacion");
+          error.errors = { name: "Nombre inválido" };
+          throw error;
+        },
+      },
+      name: "clientes",
+      operations: { update: { path: "/clientes/{id}", method: "PUT" } },
+      createAdapter: () => memoryAdapter(records),
+    });
+
+    await assert.rejects(
+      () => service.update(1, { name: "" }, { pending: true }),
+      (error) => error instanceof Error && error.message === "Validacion" && error.errors.name === "Nombre inválido",
+    );
+    assert.equal(records[0].status, "error");
+  });
+
   it("validates records with yep json schemas", async () => {
     const service = new BaseService({
       client: schemaClient("clientes", {
@@ -263,6 +273,29 @@ describe("Client BaseService", () => {
         return true;
       },
     );
+  });
+
+  it("validates unique fields against the local service list", async () => {
+    const service = new BaseService({
+      client: schemaClient("clientes", {
+        create: {
+          type: "object",
+          properties: { email: { type: "string", unique: true } },
+        },
+        update: {
+          type: "object",
+          properties: { email: { type: "string", unique: true } },
+        },
+      }),
+      name: "clientes",
+      createAdapter: () => memoryAdapter([{ id: 1, email: "ana@example.com" }]),
+    });
+
+    await assert.rejects(
+      () => service.validate({ email: "ana@example.com" }, "create"),
+      (error) => error.errors.email === "Ya existe un registro con este valor",
+    );
+    assert.deepEqual(await service.validate({ id: 1, email: "ana@example.com" }, "update"), { email: "ana@example.com" });
   });
 
   it("validates one field with validateAt", async () => {

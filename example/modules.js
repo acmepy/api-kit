@@ -1,12 +1,7 @@
 export const modules = [
-  {
-    mountPath: "/basic",
-    path: "./example/public/basic",
-  },
-  {
-    mountPath: "/client",
-    path: "./example/public/client",
-  },
+  { mountPath: "/basic", path: "./example/public/basic" },
+  { mountPath: "/client", path: "./example/public/client" },
+  { mountPath: "/vue", path: "./example/public/vue" },
   {
     modelName: "Cliente",
     tableName: "clientes",
@@ -60,25 +55,7 @@ export const modules = [
         removeMissing: true,
       },
     ],
-  },
-  {
-    modelName: "audit",
-    tableName: "audit",
-    timestamps: true,
-    audit: false,
-    endpoints: { schema: false, create: false, update: false, remove: false },
-    attributes: {
-      id: { type: "integer", primaryKey: true, autoIncrement: true },
-      txId: { type: "string", maxLength: 50, allowNull: false },
-      clientIp: { type: "string", maxLength: 50, allowNull: false },
-      userId: { type: "string", maxLength: 20 },
-      tableName: { type: "string", maxLength: 50, allowNull: false },
-      rowId: { type: "string", maxLength: 50, allowNull: false },
-      action: { type: "string", maxLength: 20, allowNull: false },
-      old: { type: "json" },
-      new: { type: "json" },
-    },
-  },
+  }
 ];
 
 

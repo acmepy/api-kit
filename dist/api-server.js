@@ -66,7 +66,7 @@ async function fileExists(filePath) {
   }
 }
 
-const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks"]);
+const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes"]);
 const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
 const DECLARATIVE_RULE_KEYS = new Set(["title", "required", "nullable", "default", "defaultValue", "oneOf", "notOneOf", "in", "pattern", "regexp", "matches", "email", "positive", "min", "max", "maxLength", "between"]);
 const ATTRIBUTE_METADATA_KEYS = new Set([...ATTRIBUTE_OPTION_KEYS, ...DECLARATIVE_RULE_KEYS, "schema", "create", "update", "precision", "scale", "itemType", "items", "of", "returnType", "fields"]);
@@ -90,10 +90,10 @@ function defineResource(definition = {}) {
   const modelOptions = pickModelOptions(definition);
   const normalizedAttributes = normalizeAttributes(attributes);
   const modelAttributes = buildModelAttributes(normalizedAttributes);
-  const generatedSchemas = buildSchemas(normalizedAttributes, schemas, definition);
   const ResourceModel = CustomModel || class extends Model {
     static define(seq) {return this.init(modelAttributes, { ...modelOptions, seq })}
   };
+  const generatedSchemas = buildSchemas(normalizedAttributes, schemas, definition, ResourceModel);
 
   ResourceModel.attributes = modelAttributes;
   ResourceModel.resourceSchemas = generatedSchemas;
@@ -166,10 +166,10 @@ function buildModelAttributes(attributes) {
   return modelAttributes;
 }
 
-function buildSchemas(attributes, explicitSchemas, definition = {}) {
+function buildSchemas(attributes, explicitSchemas, definition = {}, model) {
   const generated = {
-    create: explicitSchemas.create || yep.object(buildShape(attributes, "create")),
-    update: explicitSchemas.update || yep.object(buildShape(attributes, "update")),
+    create: explicitSchemas.create || yep.object(buildShape(attributes, "create", model)),
+    update: explicitSchemas.update || yep.object(buildShape(attributes, "update", model)),
     ...explicitSchemas,
   };
   applyObjectRules(generated.create, definition, "create");
@@ -177,11 +177,11 @@ function buildSchemas(attributes, explicitSchemas, definition = {}) {
   return generated;
 }
 
-function buildShape(attributes, operation) {
+function buildShape(attributes, operation, model) {
   const shape = {};
   for (const [name, definition] of Object.entries(attributes)) {
     if (!shouldIncludeInSchema(definition, operation)) continue;
-    const schema = resolveValidation(definition, operation);
+    const schema = resolveValidation(definition, operation, model, primaryKeyName(attributes));
     if (schema) shape[name] = schema;
   }
   return shape;
@@ -201,13 +201,29 @@ function isVirtualDataType(type) {
   return type?.key === "VIRTUAL" || type?.constructor?.name === "VirtualType";
 }
 
-function resolveValidation(definition, operation) {
+function resolveValidation(definition, operation, model, primaryKey) {
   const schema = applyDeclarativeRules(inferValidation(definition), definition);
   if (!schema || typeof schema.validate !== "function") return null;
   if (operation === "create" && definition.allowNull === false && typeof schema.required === "function") schema.required();
   if (definition.allowNull === true && typeof schema.nullable === "function") schema.nullable();
   if (operation === "create" && definition.defaultValue !== undefined && typeof schema.default === "function") schema.default(definition.defaultValue);
+  if (definition.unique === true && typeof schema.unique === "function") schema.unique(uniqueValidator(model, primaryKey));
   return schema;
+}
+
+function primaryKeyName(attributes) {
+  return Object.entries(attributes).find(([, definition]) => definition.primaryKey)?.[0] || "id";
+}
+
+function uniqueValidator(model, primaryKey) {
+  return async (value, field, data = {}) => {
+    const existing = await model.findOne({ where: { [field]: value } });
+    if (!existing) return null;
+    const existingId = typeof existing.get === "function" ? existing.get(primaryKey) : existing[primaryKey];
+    const currentId = data.__uniqueId ?? data[primaryKey];
+    if (currentId !== undefined && String(existingId) === String(currentId)) return null;
+    return new Error("Ya existe un registro con este valor");
+  };
 }
 
 function applyDeclarativeRules(schema, definition) {
@@ -290,23 +306,9 @@ function camelCase(str) {
   return str.replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : "")).replace(/^(.)/, (_, c) => c.toLowerCase());
 }
 
-function snakeCase(str) {
-  return String(str).replace(/([a-z])([A-Z])/g, "$1_$2").replace(/([A-Z])([A-Z][a-z])/g, "$1_$2").replace(/[-\s]+/g, "_").toLowerCase();
-}
-
 function pascalCase(str) {
   const cc = camelCase(str);
   return cc.charAt(0).toUpperCase() + cc.slice(1);
-}
-
-function applyNamingConvention(name, naming = {}) {
-  let value = String(name);
-  if (naming.tables === "snake_case") value = snakeCase(value);
-  if (naming.tables === "camelCase") value = camelCase(value);
-  if (naming.prefix && naming.tables) value = `${naming.prefix}_${value}`;
-  if (naming.caseStyle === "upper") value = value.toUpperCase();
-  if (naming.caseStyle === "lower") value = value.toLowerCase();
-  return value;
 }
 
 async function loadModuleBundle(input, baseDir) {
@@ -505,7 +507,8 @@ function normalizeModules(configs, options = {}) {
 
 function normalizeEndpoint(endpoint, moduleConfig, operation) {
   const auth = normalizeAuth(endpoint.auth === undefined ? moduleConfig.auth : endpoint.auth);
-  const permission = endpoint.permission === undefined && auth.required ? `${moduleConfig.name}.${operation}` : endpoint.permission;
+  const permissionOperation = operation === "schema" ? "list" : operation;
+  const permission = endpoint.permission === undefined && auth.required ? `${moduleConfig.name}.${permissionOperation}` : endpoint.permission;
   return { ...endpoint, auth, permission };
 }
 
@@ -566,7 +569,9 @@ function normalizeGlobalAuth(auth) {
 
 function normalizeAuthBackendConfig(auth) {
   if (!auth) return null;
-  return {loginPath: "/login", sessionPath: "/session", logoutPath: "/logout", secret: process.env.IAM_SECRET || "api-dev-secret", tokenExpiresIn: auth?.tokenExpiresIn || "1h", adapter: auth?.adapter, models: auth?.models, ...auth};
+  const secret = auth.secret ?? process.env.IAM_SECRET;
+  if (!secret) throw new Error("IAM_SECRET debe estar definido cuando se habilita auth");
+  return { loginPath: "/login", sessionPath: "/session", logoutPath: "/logout", tokenExpiresIn: "1h", adapter: auth.adapter, models: auth.models, ...auth, secret };
 }
 
 function normalizeJsonSchema(schema) {
@@ -594,23 +599,45 @@ function normalizeJsonSchema(schema) {
   return normalized;
 }
 
-function normalizeOpenApiConfig(openapi) {
-  if (!openapi) return null;
-  if (openapi === true) return {};
-  return openapi;
+function normalizeDocumentConfig(config, defaults = {}) {
+  if (!config) return null;
+  return { ...defaults, ...(config === true ? {} : config) };
 }
 
-function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {} }) {
+function routesForSession(routes, session) {
+  if (session === undefined) return routes;
+  const permissions = new Set(session?.permissions || []);
+
+  return routes.filter((route) => {
+    if (!route.auth?.required) return true;
+    if (!session) return false;
+    return (route.permissions || []).every((permission) => permissions.has(permission));
+  });
+}
+
+function routeRequestSchemaName(route) {
+  if (route.serviceMethod === "create") return "create";
+  if (route.serviceMethod === "update") return "update";
+  return null;
+}
+
+function jsonSchemaForRoute(modules, route, schemaName = route.serviceMethod) {
+  const schema = modules.get(route.module)?.schemas?.[schemaName];
+  if (!schema || typeof schema.toJsonSchema !== "function") return null;
+  return normalizeJsonSchema(schema.toJsonSchema());
+}
+
+function normalizeOpenApiConfig(openapi) {
+  return normalizeDocumentConfig(openapi, { permission: "schema.list" });
+}
+
+function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {}, session } = {}) {
   const paths = {};
-  const schemas = {};
-  const securitySchemes = securitySchemesFor(routes.getAll());
+  const visibleRoutes = routesForSession(routes.getAll(), session);
+  const schemas = schemaComponentsForRoutes(modules, visibleRoutes);
+  const securitySchemes = securitySchemesFor(visibleRoutes);
 
-  for (const mod of modules.values()) {
-    const moduleSchemas = schemaComponents(mod);
-    for (const [name, schema] of Object.entries(moduleSchemas)) schemas[componentName(mod.name, name)] = schema;
-  }
-
-  for (const route of routes.getAll()) {
+  for (const route of visibleRoutes) {
     const path = route.openApiPath;
     if (!paths[path]) paths[path] = {};
     paths[path][route.method.toLowerCase()] = operationFor(route, modules);
@@ -632,6 +659,29 @@ function buildOpenApiDocument({ routes, modules, packageInfo = {}, config = {} }
       }).filter(([, value]) => value && Object.keys(value).length > 0),
     ),
   };
+}
+
+function schemaComponentsForRoutes(modules, routes) {
+  const schemas = {};
+  const requiredSchemas = new Map();
+
+  for (const route of routes) {
+    const schemaName = routeRequestSchemaName(route);
+    if (!schemaName) continue;
+    if (!requiredSchemas.has(route.module)) requiredSchemas.set(route.module, new Set());
+    requiredSchemas.get(route.module).add(schemaName);
+  }
+
+  for (const [moduleName, schemaNames] of requiredSchemas) {
+    const mod = modules.get(moduleName);
+    if (!mod) continue;
+    for (const schemaName of schemaNames) {
+      const jsonSchema = jsonSchemaForRoute(modules, { module: moduleName }, schemaName);
+      if (jsonSchema) schemas[componentName(moduleName, schemaName)] = enrichJsonSchema(jsonSchema, mod, schemaName);
+    }
+  }
+
+  return schemas;
 }
 
 function normalizeServers(servers) {
@@ -773,24 +823,9 @@ function requestBodyFor(route, mod) {
     };
   }
 
-  const bodySchemaName = requestBodySchemaName(route);
+  const bodySchemaName = routeRequestSchemaName(route);
   if (!bodySchemaName || !mod?.schemas?.[bodySchemaName]) return undefined;
   return {required: bodySchemaName === "create", content: {"application/json": {schema: { $ref: `#/components/schemas/${componentName(route.module, bodySchemaName)}`}}}};
-}
-
-function requestBodySchemaName(route) {
-  if (route.serviceMethod === "create") return "create";
-  if (route.serviceMethod === "update") return "update";
-  return null;
-}
-
-function schemaComponents(mod) {
-  const result = {};
-  for (const [name, schema] of Object.entries(mod.schemas || {})) {
-    const jsonSchema = toJsonSchema(schema);
-    if (jsonSchema) result[name] = enrichJsonSchema(jsonSchema, mod, name);
-  }
-  return result;
 }
 
 function enrichJsonSchema(schema, mod, operation) {
@@ -839,15 +874,15 @@ function sanitizeComponentName(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-function toJsonSchema(schema) {
-  if (!schema || typeof schema.toJsonSchema !== "function") return null;
-  return normalizeJsonSchema(schema.toJsonSchema());
-}
-
 const POSTMAN_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
+const OPERATION_ORDER = new Map([
+  ["login", 10], ["session", 20], ["logout", 30],
+  ["list", 10], ["schema", 20], ["get", 30], ["create", 40], ["update", 50], ["remove", 60],
+  ["createDetail", 70], ["updateDetail", 80], ["removeDetail", 90],
+]);
 
 function normalizePostmanConfig(postman, openapi) {
-  if (postman) return postman === true ? {} : postman;
+  if (postman) return normalizeDocumentConfig(postman, { permission: "schema.list" });
   if (!openapi?.postman) return null;
   return {...openapi,path: openapi.postmanPath || "/postman.json"};
 }
@@ -855,6 +890,7 @@ function normalizePostmanConfig(postman, openapi) {
 function buildPostmanCollection({ routes, modules = new Map(), packageInfo = {}, config = {} }) {
   const root = { name: basePathName(config.basePath), item: [] };
   const folders = new Map();
+  const itemOrders = new WeakMap();
 
   for (const route of routes.getAll()) {
     if (route.serviceMethod === "postman") continue;
@@ -869,7 +905,13 @@ function buildPostmanCollection({ routes, modules = new Map(), packageInfo = {},
       folders.set(folderName, folder);
       root.item.push(folder);
     }
-    folders.get(folderName).item.push(postmanItemFor(route, modules));
+    const item = postmanItemFor(route, modules);
+    itemOrders.set(item, OPERATION_ORDER.get(route.serviceMethod) ?? 100);
+    folders.get(folderName).item.push(item);
+  }
+
+  for (const folder of folders.values()) {
+    folder.item.sort((left, right) => itemOrders.get(left) - itemOrders.get(right));
   }
 
   return {
@@ -890,7 +932,7 @@ function isRootPostmanItem(route) {
 
 function collectionDescription(config, packageInfo) {
   const description = config.description || packageInfo.description || "";
-  const loginHelp = "Use el request Login para obtener el token. Al ejecutarlo, la coleccion actualiza automaticamente la variable bearerToken con el token recibido para usar el resto de los recursos protegidos. Use el request Logout para cerrar la sesion y limpiar bearerToken.";
+  const loginHelp = "Use el request Login para obtener el token.";
   return [description, loginHelp].filter(Boolean).join("\n\n");
 }
 
@@ -947,8 +989,7 @@ function requestBodyExample(route, modules) {
   if (route.operationId === "install.run") return { token: "" };
   if (!["create", "update"].includes(route.serviceMethod)) return null;
 
-  const schema = modules.get(route.module)?.schemas?.[route.serviceMethod];
-  const jsonSchema = schema?.toJsonSchema?.();
+  const jsonSchema = jsonSchemaForRoute(modules, route);
   return jsonSchema ? exampleFromJsonSchema(jsonSchema) : {};
 }
 
@@ -1092,6 +1133,37 @@ function emptyEvents() {
   ];
 }
 
+function normalizeSchemaDocumentConfig(schema) {
+  return normalizeDocumentConfig(schema, { permission: "schema.list" });
+}
+
+function buildSchemaDocument({ routes, modules, session } = {}) {
+  const services = new Map();
+
+  for (const route of routesForSession(routes.getAll(), session)) {
+    const module = modules.get(route.module);
+    if (!module) continue;
+
+    if (!services.has(route.module)) services.set(route.module, {
+      name: route.module,
+      operations: {},
+      schemas: {},
+    });
+
+    const service = services.get(route.module);
+    service.operations[route.serviceMethod] = {
+      method: route.method.toUpperCase(),
+      path: route.openApiPath,
+      permissions: route.permissions || [],
+    };
+
+    const jsonSchema = jsonSchemaForRoute(modules, route);
+    if (jsonSchema) service.schemas[route.serviceMethod] = jsonSchema;
+  }
+
+  return { schema: "1.0.0", services: [...services.values()] };
+}
+
 class RouteRegistry {
   #routes = new Map();
 
@@ -1179,7 +1251,7 @@ function runWithContext(req, res, next) {
     txId,
     audit: {
       clientIp: req.ip || req.socket?.remoteAddress || "",
-      userId: req.user?.id || req.headers["x-user-id"] || req.headers["x-usuario-id"] || null,
+      userId: req.user?.id || null,
     },
     baseUrl: `${req.protocol}://${req.get("host")}${req.originalUrl}`
   };
@@ -1298,8 +1370,8 @@ class BaseRouter {
   }
 
   build() {
-    const endpoints = this.#config.endpoints || {};
-    for (const [op, endpoint] of Object.entries(endpoints)) {
+    const endpoints = Object.entries(this.#config.endpoints || {}).sort(([, left], [, right]) => endpointSpecificity(right) - endpointSpecificity(left));
+    for (const [op, endpoint] of endpoints) {
       if (!endpoint.enabled) {
         if (op === "schema") this.disabledRoute(endpoint.method || "get", endpoint.path || "/schema", "SCHEMA_DISABLED", "Schema disabled");
         continue;
@@ -1362,6 +1434,13 @@ class BaseRouter {
 
     this.#expressRouter[method](expressPath, ...handlers);
   }
+}
+
+function endpointSpecificity(endpoint = {}) {
+  return String(endpoint.path || "/")
+    .split("/")
+    .filter(Boolean)
+    .reduce((score, segment) => score + (segment.startsWith(":") ? 1 : 10), 0);
 }
 
 class NotFoundError extends AppError {
@@ -1438,23 +1517,19 @@ class BaseService {
   }
 
   async get({ params, query, body, transaction = null } = {}) {
-    getContext();
     const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
-    //if (!instance) throw new NotFoundError(this.#resourceName());
     if (!instance) throw new NotFoundError(this.#model.modelName)
     return { data: instance };
   }
 
   async schema() {
     return {
-      data: Object.fromEntries(
-        Object.entries(this.#schemas).map(([name, schema]) => [name, this.#toJsonSchema(schema, name)]),
-      ),
-    };
+      data: Object.fromEntries(Object.entries(this.#schemas).map(([name, schema]) => 
+        [name, this.#toJsonSchema(schema, name)]
+    ))};
   }
 
   async create({ params, query, body, transaction = null } = {}) {
-    getContext();
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     const data = await this.#schemas.create.validate(masterBody);
     const payload = hasDetails ? { ...body, ...data } : data;
@@ -1463,27 +1538,25 @@ class BaseService {
   }
 
   async update({ params, query, body, transaction = null } = {}) {
-    getContext();
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     //const pk = this.#primaryKeyAttribute();
     const pk = this.#model.primaryKeyAttribute;
-    const data = await this.#schemas.update.validate(masterBody);
+    const data = await this.#schemas.update.validate({ ...masterBody, __uniqueId: params.id });
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
-    const [instance] = await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
-    return { data: instance?.toJSON() || payload };
+    await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
+    const instance = await this.#model.findByPk(data[pk] ?? params.id, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
+    if (!instance) throw new NotFoundError(this.#model.modelName);
+    return { data: instance };
   }
 
   async remove({ params, query, body, transaction = null } = {}) {
-    getContext();
     const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }) });
-    //if (!instance) throw new NotFoundError(this.#resourceName());
     if (!instance) throw new NotFoundError(this.#model.modelName)
     await instance.destroy({ ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
   async createDetail({ params, query, body, transaction = null } = {}) {
-    getContext();
     //const {target, foreignKey} = this.#detailDescriptor(params.detail);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     const parentId = Number.isNaN(Number(params.id)) ? params.id : Number(params.id);
@@ -1493,19 +1566,18 @@ class BaseService {
   }
 
   async updateDetail({ params, query, body, transaction = null } = {}) {
-    getContext();
     //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     const data = await target.resourceSchemas.update.validate(body);
     const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
     const where = { [primaryKey]: params.detailId || body[primaryKey], [foreignKey]: params.id };
-    const [instance] = await target.update(data, { where, ...(transaction && { transaction }) });
+    await target.update(data, { where, ...(transaction && { transaction }) });
+    const instance = await target.findOne({ where, plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(name);
-    return { data: instance?.toJSON() }
+    return { data: instance }
   }
 
   async removeDetail({ params, query, body, transaction = null } = {}) {
-    getContext();
     //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
@@ -1649,7 +1721,7 @@ class BaseService {
     for (const [key, value] of Object.entries(query)) {
       if (["page", "limit"].includes(key)) continue;
       //const filters = this.#queryFilters(key, value);
-      const [tmp, attribute, operator = 'eq'] = key.match(/^([a-zA-Z0-9_]+)\[([a-zA-Z0-9_]+)\]$/) || ['', key];
+      const [, attribute, operator = 'eq'] = key.match(/^([a-zA-Z0-9_]+)\[([a-zA-Z0-9_]+)\]$/) || ['', key];
       if (!FILTER_OPERATORS[operator]) throw new ValidationError(`Operador de filtro "${operator}" no está soportado`);
       const filters = [{ field: attribute, operator: FILTER_OPERATORS[operator], value }];
       for (const filter of filters) {
@@ -1667,34 +1739,6 @@ class BaseService {
 
     if (andFilters.length > 0) where[Op.and] = andFilters;
     return where;
-  }
-
-  /*#queryFilters(key, value) {
-    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
-      const symbolFilters = Object.getOwnPropertySymbols(value).map((operator) => ({ field: key, operator, value: value[operator] }));
-      const namedFilters = Object.entries(value).map(([operatorName, operatorValue]) => {
-        const operator = FILTER_OPERATORS[operatorName];
-        if (!operator) throw new ValidationError(`Operador de filtro "${operatorName}" no está soportado`);
-        return { field: key, operator, value: operatorValue };
-      });
-      return [...symbolFilters, ...namedFilters];
-    }
-
-    return [{ ...this.#parseFilterKey(key), value }];
-  }*/
-
-  #parseFilterKey(key) {
-    const normalizedKey = String(key);
-    const bracket = normalizedKey.match(/^(.+)\[([^\]]+)\]$/);
-    const dotted = normalizedKey.match(/^(.+)\.([^.]+)$/);
-    const underscored = normalizedKey.match(/^(.+)__([^_]+)$/);
-    const match = bracket || dotted || underscored;
-    const field = match ? match[1] : normalizedKey;
-    const operatorName = match ? match[2] : "eq";
-    const operator = FILTER_OPERATORS[operatorName];
-
-    if (!operator) throw new ValidationError(`Operador de filtro "${operatorName}" no está soportado`);
-    return { field, operator };
   }
 
   async #parseFilterValue(field, operator, value, definition) {
@@ -1809,12 +1853,13 @@ function installFrontendInstallRoutes({ mainRouter, routeRegistry, config, autho
   if (apps.length === 0) return;
 
   const auth = config.auth || { required: false, strategies: [] };
+  const permissions = ["install"];
   const handlers = [];
-  if (authorize) handlers.push(authorize({ auth, permissions: [] }));
+  if (authorize) handlers.push(authorize({ auth, permissions }));
 
-  routeRegistry.register({ module: "install", operationId: "install.list", method: "get", expressPath: "/install", openApiPath: "/install", serviceMethod: "installList", auth, permissions: [], summary: "Instalador de frontends", description: "", tags: ["install"], deprecated: false });
-  routeRegistry.register({ module: "install", operationId: "install.script", method: "get", expressPath: "/install/app.js", openApiPath: "/install/app.js", serviceMethod: "installScript", auth, permissions: [], summary: "Script del instalador", description: "", tags: ["install"], deprecated: false });
-  routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions: [], summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.list", method: "get", expressPath: "/install", openApiPath: "/install", serviceMethod: "installList", auth, permissions, summary: "Instalador de frontends", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.script", method: "get", expressPath: "/install/app.js", openApiPath: "/install/app.js", serviceMethod: "installScript", auth, permissions, summary: "Script del instalador", description: "", tags: ["install"], deprecated: false });
+  routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions, summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
 
   mainRouter.get("/install", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps));});
   mainRouter.get("/install/", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps));});
@@ -1829,19 +1874,15 @@ function installFrontendInstallRoutes({ mainRouter, routeRegistry, config, autho
 }
 
 async function installApp(app, { token, fetch: fetchImpl = globalThis.fetch } = {}) {
-  try {
-    const tokenValue = stringValue(token) || tokenForProvider(app.provider);
-    const tag = app.version === "latest" ? await getLatestTag({ app, token: tokenValue, fetch: fetchImpl }) : app.version;
-    const installedTag = readInstalledTag(app.target);
+  const tokenValue = stringValue(token) || tokenForProvider(app.provider);
+  const tag = app.version === "latest" ? await getLatestTag({ app, token: tokenValue, fetch: fetchImpl }) : app.version;
+  const installedTag = readInstalledTag(app.target);
 
-    if (installedTag === tag) return installResult(app, tag, "skipped");
+  if (installedTag === tag) return installResult(app, tag, "skipped");
 
-    const archive = await downloadArchive({ app, tag, token: tokenValue, fetch: fetchImpl });
-    await extractAndReplace({ app, archive, tag });
-    return installResult(app, tag, "updated");
-  } catch (error) {
-    return { ...installResult(app, app.version, "failed"), error: error.message };
-  }
+  const archive = await downloadArchive({ app, tag, token: tokenValue, fetch: fetchImpl });
+  await extractAndReplace({ app, archive, tag });
+  return installResult(app, tag, "updated");
 }
 
 function renderInstallHtml(apps) {
@@ -1971,7 +2012,7 @@ async function githubFetch(url, token, fetch) {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(url, { headers, redirect: "follow" });
-  if (!res.ok) throw new AppError(`GitHub respondio ${res.status}: ${await res.text()}`, { status: 502, code: "GITHUB_ERROR" });
+  if (!res.ok) throw new AppError(`GitHub respondio ${res.status}: ${url}`, { status: 502, code: "GITHUB_ERROR" });
   return res;
 }
 
@@ -2152,6 +2193,28 @@ function errorLogger(err, req, { txId, status, code, errors }) {
   );
 }
 
+function createAuditResource() {
+  return defineResource({
+    modelName: "audit",
+    tableName: "audit",
+    timestamps: true,
+    indexes: [
+      { name: "idx_audit_created_at", columns: ["createdAt"] },
+    ],
+    attributes: {
+      id: { type: "integer", primaryKey: true, autoIncrement: true },
+      txId: { type: "string", maxLength: 50, allowNull: false },
+      clientIp: { type: "string", maxLength: 50, allowNull: false },
+      userId: { type: "string", maxLength: 20 },
+      tableName: { type: "string", maxLength: 50, allowNull: false },
+      rowId: { type: "string", maxLength: 50, allowNull: false },
+      action: { type: "string", maxLength: 20, allowNull: false },
+      old: { type: "json" },
+      new: { type: "json" },
+    },
+  });
+}
+
 function normalizeAuditConfig(audit) {
   if (!audit) return false;
   const defaults = { changesPath: "/changes", ssePath: "/sse", heartbeatTimeout: 15000 };
@@ -2159,11 +2222,8 @@ function normalizeAuditConfig(audit) {
   return { ...defaults, ...audit, heartbeatTimeout: normalizeAuditHeartbeatTimeout(audit.heartbeatTimeout, defaults.heartbeatTimeout) };
 }
 
-function installAuditHooks(moduleConfigs, auditConfig) {
+function installAuditHooks(moduleConfigs, auditConfig, AuditModel) {
   if (!auditConfig) return;
-
-  const auditModule = moduleConfigs.find((moduleConfig) => isAuditModule(moduleConfig));
-  const AuditModel = auditModule?.resource?.model;
   if (!AuditModel) return;
 
   for (const moduleConfig of moduleConfigs) {
@@ -2235,11 +2295,8 @@ function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, 
   });
 }
 
-function createAuditWriter(moduleConfigs, auditConfig) {
+function createAuditWriter(auditConfig, AuditModel) {
   if (!auditConfig) return null;
-
-  const auditModule = moduleConfigs.find((moduleConfig) => isAuditModule(moduleConfig));
-  const AuditModel = auditModule?.resource?.model;
   if (!AuditModel) return null;
 
   return async function auditWrite(change) {
@@ -2485,8 +2542,8 @@ async function writeAudit(AuditModel, auditConfig, moduleConfig, action, model, 
 }
 
 async function findSessionById(adapter, sessionId, options = {}) {
-  if (options.transaction && adapter?.models?.Session?.findByPk) {
-    const session = await adapter.models.Session.findByPk(sessionId, { transaction: options.transaction });
+  if (options.transaction && adapter?.models?.sessions?.findByPk) {
+    const session = await adapter.models.sessions.findByPk(sessionId, { transaction: options.transaction });
     if (!session) return null;
     if (typeof session.get === "function") return session.get();
     if (typeof session.toJSON === "function") return session.toJSON();
@@ -2570,8 +2627,9 @@ function plainAuditModel(change) {
   };
 }
 
-function installAuthRoutes({ mainRouter, routeRegistry, config, authContext }) {
-  if (!authContext) return;
+function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
+  if (!auth) return null;
+  const authContext = createAuthContext(config, auth);
 
   const loginPath = joinPaths(config.basePath, authContext.loginPath);
   const sessionPath = joinPaths(config.basePath, authContext.sessionPath);
@@ -2587,28 +2645,32 @@ function installAuthRoutes({ mainRouter, routeRegistry, config, authContext }) {
   authRouter.get(authContext.sessionPath, authContext.middleware);
   authRouter.post(authContext.logoutPath, authContext.middleware);
   mainRouter.use(basePath, authRouter);
+  return authContext;
 }
 
-function createAuthContext(config, authBackend, { auditWriter } = {}) {
-  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models, auditable: authAuditable(config, authBackend, auditWriter) });
+function createAuthContext(config, authBackend) {
+  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models });
   const rbac = new RBAC({ adapter });
-  const middleware = auth(iamAuthOptions(authBackend, adapter));
-  return { ...authBackend, adapter, rbac, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
+  const logging = authBackend.logging ?? config.logging;
+  const authConfig = { ...authBackend, logging };
+  const middleware = auth(iamAuthOptions(authConfig, adapter));
+  return { ...authConfig, adapter, rbac, middleware, models: adapter.models || authBackend.models || null, seq: config.seq};
 }
 
-function createAuthorizer(authContext) {
-  return ({ auth: auth$1 = { required: false }, permissions = [] } = {}) => {
-    if (!auth$1?.required) return (_req, _res, next) => next();
-    if (!authContext) return (_req, res) => res.status(401).json({ ok: false, message: "Auth no configurado" });
+function createAuthorizer(resolveAuthContext) {
+  return ({ auth = { required: false }, permissions = [] } = {}) => {
+    if (!auth?.required) return (_req, _res, next) => next();
+    return (req, res, next) => {
+      const authContext = typeof resolveAuthContext === "function" ? resolveAuthContext() : resolveAuthContext;
+      if (!authContext) return res.status(401).json({ ok: false, message: "Auth no configurado" });
 
-    const handlers = [
-      auth(iamAuthOptions({ ...authContext, ...auth$1 }, authContext.adapter)),
-      syncAuthContext,
-      ...(permissions || []).filter(Boolean).map((permission) => can(permission)),
-      syncAuthContext,
-    ];
-
-    return composeMiddlewares(handlers);
+      return composeMiddlewares([
+        authContext.middleware,
+        syncAuthContext,
+        ...(permissions || []).filter(Boolean).map((permission) => can(permission)),
+        syncAuthContext,
+      ])(req, res, next);
+    };
   };
 }
 
@@ -2648,20 +2710,13 @@ function composeMiddlewares(middlewares) {
 function iamAuthOptions(auth, adapter) {
   return {
     adapter,
+    logging: auth.logging,
     jwt: {
       secret: auth.secret,
       expiresIn: auth.tokenExpiresIn,
     },
     strategies: toIamStrategies(auth.strategies || ["bearer", "basic"]),
     createSession: auth.createSession,
-  };
-}
-
-function authAuditable(config, authBackend, auditWriter) {
-  if (!auditWriter || authBackend.auditable === false) return null;
-  return {
-    tableName: authBackend.tableNames?.Session || applyNamingConvention("Session", config.seq?.adapter?.naming),
-    write: auditWriter,
   };
 }
 
@@ -2712,7 +2767,19 @@ function installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, 
   routeRegistry.register({ module: "openapi", operationId: "openapi.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "openapi", auth, permissions, summary: "OpenAPI document", description: "", tags: ["openapi"], deprecated: false});
   const handlers = [];
   if (authorize) handlers.push(authorize({ auth, permissions }));
-  handlers.push((_req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi}));});
+  handlers.push((req, res) => {res.json(buildOpenApiDocument({ routes: routeRegistry, modules, packageInfo, config: openapi, session: req.session || null }));});
+  mainRouter.get(fullPath, ...handlers);
+}
+
+function installSchemaDocumentRoute({ mainRouter, routeRegistry, modules, config, schema, authorize }) {
+  if (!schema) return;
+  const fullPath = joinPaths(config.basePath, schema.path || "/schema.json");
+  const auth = normalizeRouteAuth(schema.auth);
+  const permissions = schema.permission ? [schema.permission] : [];
+  routeRegistry.register({ module: "schema", operationId: "schema.get", method: "get", expressPath: fullPath, openApiPath: fullPath, serviceMethod: "schemaDocument", auth, permissions, summary: "Client schema document", description: "", tags: ["schema"], deprecated: false});
+  const handlers = [];
+  if (authorize) handlers.push(authorize({ auth, permissions }));
+  handlers.push((req, res) => { res.json(buildSchemaDocument({ routes: routeRegistry, modules, session: req.session || null })); });
   mainRouter.get(fullPath, ...handlers);
 }
 
@@ -2822,6 +2889,8 @@ async function createApi(conf = {}) {
     trustProxy: conf.trustProxy ?? false,
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
+    // El manifiesto del cliente se configura de forma independiente de OpenAPI.
+    schema: normalizeSchemaDocumentConfig(conf.schema),
     postman: conf.postman ?? null,
     logging: conf.logging ?? false,
     sse: conf.sse || { enabled: false },
@@ -2845,14 +2914,16 @@ async function createApi(conf = {}) {
 
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
-  const authBackend = normalizeAuthBackendConfig(config.auth);
-  const auditWriter = createAuditWriter(moduleConfigs, config.audit);
-  const authContext = authBackend ? createAuthContext(config, authBackend, { auditWriter }) : null;
-  const authorize = createAuthorizer(authContext);
+  const authBackend = conf.auth ? normalizeAuthBackendConfig(config.auth) : null;
+  const auditResource = config.audit ? createAuditResource() : null;
+  createAuditWriter(config.audit, auditResource?.model);
+  let authContext = null;
+  const authorize = createAuthorizer(() => authContext);
 
-  installAuditHooks(moduleConfigs, config.audit);
+  installAuditHooks(moduleConfigs, config.audit, auditResource?.model);
 
   const explicitModels = { ...config.models };
+  if (auditResource) explicitModels.audit = auditResource.model;
   for (const moduleConfig of moduleConfigs) {
     const resourceModel = moduleConfig.resource?.model;
     const modelName = resourceModel?.modelName || moduleConfig.resource?.options?.modelName || moduleConfig.resource?.model?.name;
@@ -2895,11 +2966,12 @@ async function createApi(conf = {}) {
 
   installWelcomeRoute({ mainRouter, routeRegistry, config, packageInfo });
   installPingRoute({ mainRouter, routeRegistry, config });
-  installAuthRoutes({ mainRouter, routeRegistry, config, authContext });
+  authContext = installAuthRoutes({ mainRouter, routeRegistry, config, auth: authBackend });
   for (const mod of modules.values()) mainRouter.use(mod.mount());
   installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   const auditSse = installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext });
   installFrontendInstallRoutes({ mainRouter, routeRegistry, config, authorize });
+  installSchemaDocumentRoute({ mainRouter, routeRegistry, modules, config, schema: config.schema, authorize });
   installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize });
   installPostmanRoute({ mainRouter, routeRegistry, modules, packageInfo, config, postman, authorize });
   installStaticFiles(mainRouter, config);
