@@ -9,8 +9,8 @@ const STRING_TYPE_NORMALIZERS = {
   integer: () => DataTypes.INTEGER,
   int: () => DataTypes.INTEGER,
   string: (definition) => DataTypes.STRING(definition.maxLength),
-  decimal: (definition) => DataTypes.DECIMAL(numberPrecision(definition), numberScale(definition)),
-  number: (definition) => DataTypes.NUMBER(numberPrecision(definition), numberScale(definition)),
+  decimal: (definition) => DataTypes.DECIMAL(definition.precision, definition.scale),
+  number: (definition) => DataTypes.NUMBER(definition.precision, definition.scale),
   boolean: () => DataTypes.BOOLEAN,
   bool: () => DataTypes.BOOLEAN,
   date: () => DataTypes.DATE,
@@ -81,14 +81,6 @@ function isSeqDataTypeFactory(type) {
 
 function isSeqDataType(type) {
   return type && typeof type === "object" && typeof type.key === "string" && typeof type.validate === "function";
-}
-
-function numberPrecision(definition) {
-  return definition.precision;
-}
-
-function numberScale(definition) {
-  return definition.scale;
 }
 
 function buildModelAttributes(attributes) {

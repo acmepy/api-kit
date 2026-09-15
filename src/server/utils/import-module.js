@@ -1,3 +1,4 @@
+import { access } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
@@ -15,7 +16,6 @@ export async function importModuleNamespace(filePath) {
 }
 
 export async function fileExists(filePath) {
-  const { access } = await import("node:fs/promises");
   try {
     await access(filePath);
     return true;

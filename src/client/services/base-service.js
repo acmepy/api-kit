@@ -1,9 +1,10 @@
 import yep from "yep";
 import { fillPath } from "../utils.js";
 import {defaultAdapter} from "../adapters/index.js";
-let temporaryStorage;
 
 export class BaseService {
+  #temporaryStorage = null;
+
   constructor({ client, name, path, operations = {}, schemas = {}, prefix = "api", createAdapter }) {
     this.client = client;
     this.name = name;
@@ -132,10 +133,10 @@ export class BaseService {
   }
 
   async nextTemporaryId() {
-    if (!temporaryStorage) temporaryStorage = defaultAdapter({ prefix: this.prefix, service: "temporaryKey" });
-    const record = await temporaryStorage.get("temporaryKey");
+    if (!this.#temporaryStorage) this.#temporaryStorage = defaultAdapter({ prefix: this.prefix, service: "temporaryKey" });
+    const record = await this.#temporaryStorage.get("temporaryKey");
     const value = Number(record?.value || 0) + 1;
-    await temporaryStorage.put("temporaryKey", { id: "temporaryKey", value });
+    await this.#temporaryStorage.put("temporaryKey", { id: "temporaryKey", value });
     return value;
   }
 
@@ -221,18 +222,6 @@ export class BaseService {
     if (record.operation === "remove") return this.#send("remove", { params: { id: record.id } });
     throw new Error(`Operacion pendiente "${record.operation}" no soportada`);
   }
-/*
-  async #applyPushedRecord(record, response) {
-    if (record.operation === "remove") {
-      await this.adapter.delete(record.id);
-      return;
-    }
-
-    const data = response.data || this.#pendingBody(record);
-    await this.adapter.put(data.id ?? record.id, {...data,pending: false,status: "synced",message: "",errors: null});
-    if (data.id !== undefined && String(data.id) !== String(record.id)) await this.adapter.delete(record.id);
-  }
-*/
   #pendingBody(record) {
     const { pending, operation, status, message, errors, ...body } = record;
     return body;

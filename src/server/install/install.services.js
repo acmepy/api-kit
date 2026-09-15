@@ -27,7 +27,6 @@ export function installFrontendInstallRoutes({ mainRouter, routeRegistry, config
   routeRegistry.register({ module: "install", operationId: "install.run", method: "post", expressPath: "/install/:app", openApiPath: "/install/{app}", serviceMethod: "install", auth, permissions, summary: "Instalar frontend", description: "", tags: ["install"], deprecated: false });
 
   mainRouter.get("/install", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps));});
-  mainRouter.get("/install/", ...handlers, (_req, res) => {res.type("html").send(renderInstallHtml(apps))});
   mainRouter.get("/install/app.js", ...handlers, (_req, res) => {res.type("application/javascript").send(renderInstallScript());});
 
   mainRouter.post("/install/:app", ...handlers, async (req, res) => {
@@ -208,7 +207,7 @@ async function extractAndReplace({ app, archive, tag }) {
     assertInside(distSrc, repoRoot, "dist debe estar dentro del proyecto descargado");
     if (!fs.existsSync(distSrc)) throw new ValidationError(`No existe la carpeta ${app.dist} en el proyecto descargado.`);
 
-    copyDir(distSrc, staging);
+    await copyDir(distSrc, staging);
     writePackageJson({ repoRoot, staging, app, tag });
     replaceTarget({ source: staging, target: app.target, publicRoot: app.publicRoot });
   } finally {
@@ -242,18 +241,8 @@ function replaceTarget({ source, target, publicRoot }) {
   }
 }
 
-function copyDir(src, dest) {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const file of fs.readdirSync(src)) {
-    const srcFile = path.join(src, file);
-    const destFile = path.join(dest, file);
-    const stat = fs.statSync(srcFile);
-    if (stat.isDirectory()) {
-      copyDir(srcFile, destFile);
-    } else {
-      fs.copyFileSync(srcFile, destFile);
-    }
-  }
+async function copyDir(src, dest) {
+  await fs.promises.cp(src, dest, { recursive: true });
 }
 
 function firstDirectory(dir) {
@@ -299,7 +288,8 @@ function assertInsidePublic(target, publicRoot) {
 
 function assertInside(target, root, message) {
   const relative = path.relative(root, target);
-  if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) return;
+  const normalized = relative.replace(/\\/g, "/");
+  if (!path.isAbsolute(relative) && !normalized.startsWith("../") && normalized !== "..") return;
   throw new ValidationError(message);
 }
 

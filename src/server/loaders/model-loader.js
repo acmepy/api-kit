@@ -21,21 +21,12 @@ export async function loadModels({ seq, explicitModels = {}, modelsDir, moduleCo
       const filePath = path.join(modelsDir, file);
       const exported = await importModule(filePath);
 
-      const modelClass = normalizeModel(exported, pascal);
+      const modelClass = exported;
       if (modelClass) loaded.set(pascal, modelClass);
     }
   }
 
   return loaded;
-}
-
-function normalizeModel(exported, name) {
-  if (typeof exported === "function") {
-    if (exported.prototype && typeof exported.define === "function") return exported;
-    if (exported.prototype && exported.prototype.constructor) return exported;
-  }
-  if (typeof exported === "function" && !exported.prototype?.define) return exported;
-  return exported;
 }
 
 export function getModelForModule(moduleConfig, modelsMap) {

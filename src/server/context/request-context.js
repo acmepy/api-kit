@@ -20,7 +20,3 @@ export function getContext() {
   return storage.getStore() || null;
 }
 
-export function setContextValue(key, value) {
-  const ctx = getContext();
-  if (ctx) ctx[key] = value;
-}

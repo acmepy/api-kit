@@ -58,7 +58,6 @@ export class BaseService {
     const limit = Math.min(maxSize, Math.max(1, parseInt(query?.limit, 10) || 20));
     const offset = (page - 1) * limit;
     const where = await this.#buildWhere(query);
-    //const include = this.#detailDescriptors().map((descriptor) => ({ model: descriptor.target, as: descriptor.as }));
     const include = this.#model.getAssociationIncludes();
     const { count, rows } = await this.#model.findAndCountAll({ where, limit, offset, order: this.#config.defaultOrder || [], include: include.length ? include : undefined, distinct: Boolean(include.length), plain: true, ...(transaction && { transaction }) });
     const pages = Math.ceil(count / limit);
@@ -88,7 +87,6 @@ export class BaseService {
 
   async update({ params, query, body, transaction = null } = {}) {
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
-    //const pk = this.#primaryKeyAttribute();
     const pk = this.#model.primaryKeyAttribute;
     const data = await this.#schemas.update.validate({ ...masterBody, __uniqueId: params.id });
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
@@ -106,7 +104,6 @@ export class BaseService {
   }
 
   async createDetail({ params, query, body, transaction = null } = {}) {
-    //const {target, foreignKey} = this.#detailDescriptor(params.detail);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     const parentId = Number.isNaN(Number(params.id)) ? params.id : Number(params.id);
     const data = await target.resourceSchemas.create.validate(body)
@@ -115,7 +112,6 @@ export class BaseService {
   }
 
   async updateDetail({ params, query, body, transaction = null } = {}) {
-    //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail)
     const data = await target.resourceSchemas.update.validate(body)
     const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
@@ -127,7 +123,6 @@ export class BaseService {
   }
 
   async removeDetail({ params, query, body, transaction = null } = {}) {
-    //const {name, target, primaryKey, foreignKey} = this.#detailDescriptor(params.detail);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail)
     const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
     const where = { [primaryKey]: params.detailId || body?.[primaryKey], [foreignKey]: params.id }
@@ -150,43 +145,11 @@ export class BaseService {
 
     const masterBody = { ...body };
     for (const key of detailNames) delete masterBody[key];
-    //const descriptors = detailNames ? detailNames.map((name) => this.#detailDescriptor(name)) : this.#detailDescriptors();
-    //const include = descriptors.map((descriptor) => ({ model: descriptor.target, as: descriptor.as }))
     const include = this.#model.getAssociationIncludes();
 
     return { masterBody, include, hasDetails: true };
   }
 
-  /*#detailDescriptors() {
-    return Object.keys(this.#detailsConfig()).map((name) => this.#detailDescriptor(name));
-  }*/
-
-  /*#detailDescriptor(name) {
-    const detailsConfig = this.#detailsConfig();
-    const config = detailsConfig[name];
-    if (!config) throw new ValidationError(`Detalle "${name}" no estÃ¡ configurado`, { errors: { detail: "No configurado" } });
-
-    const associationName = typeof config === "string" ? config : config.association || config.as || name;
-    const association = this.#association(associationName);
-    if (!association || association.type !== "hasMany") throw new ValidationError(`Detalle "${name}" debe usar una asociaciÃ³n hasMany`);
-
-    return {
-      name,
-      association,
-      as: association.as || associationName,
-      target: association.target,
-      foreignKey: association.foreignKey,
-      primaryKey: association.target?.primaryKeyAttribute || "id",
-      parentPrimaryKey: association.source?.primaryKeyAttribute || this.#primaryKeyAttribute(),
-    };
-  }
-*/
-  /*
-    #association(name) {
-      if (this.#model?.associations?.[name]) return this.#model.associations[name];
-      return [...new Set(Object.values(this.#model?.associations || {}))].find((association) => association?.as === name) || null;
-    }
-  */
   #detailsConfig() {
     if (!this.#config.details || typeof this.#config.details !== "object" || Array.isArray(this.#config.details)) return {};
     return this.#config.details;
@@ -196,50 +159,7 @@ export class BaseService {
     if (!schema) return {};
     if (typeof schema.toJsonSchema !== "function") return {};
     return schema.toJsonSchema()
-    //return this.#enrichJsonSchema(normalizeJsonSchema(schema.toJsonSchema()), operation);
   }
-  /*
-    #enrichJsonSchema(schema, operation) {
-      if (!schema?.properties) return schema;
-  
-      const enriched = { ...schema, properties: { ...schema.properties } };
-      const definitions = this.#config.resource?.definition || this.#model?.resourceDefinition?.attributes || {};
-  
-      for (const [field, property] of Object.entries(enriched.properties)) {
-        const definition = definitions[field];
-        if (!definition) continue;
-        if (operation === "create" && definition.create === false) continue;
-        if (operation === "update" && definition.update === false) continue;
-  
-        enriched.properties[field] = this.#enrichPropertySchema(property, definition);
-      }
-  
-      return enriched;
-    }
-  */
-  /*
-    #enrichPropertySchema(property, definition) {
-      const enriched = { ...property };
-      const type = definition.type;
-      const typeName = type?.key || type?.constructor?.name || "";
-      const normalized = typeName.toLowerCase();
-      const options = type?.options || {};
-      if (normalized.includes("string") && options.length !== undefined) enriched.maxLength = options.length;
-      if ((normalized.includes("decimal") || normalized.includes("number")) && options.precision !== undefined) {
-        enriched.precision = options.precision;
-        if (options.scale !== undefined) enriched.scale = options.scale;
-      }
-      return enriched;
-    }
-  */
-  /*
-  #resourceName() {
-    if (typeof this.#config.resourceName === "string") return this.#config.resourceName;
-    if (typeof this.#config.title === "string") return this.#config.title;
-    if (typeof this.#config.resource === "string") return this.#config.resource;
-    return this.#model?.modelName || this.#config.name || "Recurso";
-  }
-  */
 
   #buildPagination({ page, limit, offset, total, pages, baseUrl }) {
     const pagination = { page, limit, offset, total, pages };
@@ -269,21 +189,18 @@ export class BaseService {
     const definitions = this.#model.attributes;
     for (const [key, value] of Object.entries(query)) {
       if (["page", "limit"].includes(key)) continue;
-      //const filters = this.#queryFilters(key, value);
       const [, attribute, operator = 'eq'] = key.match(/^([a-zA-Z0-9_]+)\[([a-zA-Z0-9_]+)\]$/) || ['', key];
       if (!FILTER_OPERATORS[operator]) throw new ValidationError(`Operador de filtro "${operator}" no está soportado`);
-      const filters = [{ field: attribute, operator: FILTER_OPERATORS[operator], value }]
-      for (const filter of filters) {
-        if (whitelist.length > 0 && !whitelist.includes(filter.field)) continue;
-        const definition = definitions[filter.field];
-        if (!definition && Object.keys(definitions).length > 0) throw new ValidationError(`Filtro "${filter.field}" no está permitido`);
-        const parsedValue = await this.#parseFilterValue(filter.field, filter.operator, filter.value, definition);
-        if (filter.operator === Op.eq) {
-          where[filter.field] = parsedValue;
-          continue;
-        }
-        andFilters.push({ [filter.field]: { [filter.operator]: parsedValue } });
+      if (whitelist.length > 0 && !whitelist.includes(attribute)) continue;
+      const definition = definitions[attribute];
+      if (!definition && Object.keys(definitions).length > 0) throw new ValidationError(`Filtro "${attribute}" no está permitido`);
+      const filterOperator = FILTER_OPERATORS[operator];
+      const parsedValue = await this.#parseFilterValue(attribute, filterOperator, value, definition);
+      if (filterOperator === Op.eq) {
+        where[attribute] = parsedValue;
+        continue;
       }
+      andFilters.push({ [attribute]: { [filterOperator]: parsedValue } });
     }
 
     if (andFilters.length > 0) where[Op.and] = andFilters;
@@ -312,13 +229,6 @@ export class BaseService {
 
   #assertRangeOperator(field, operator, definition) {
     if (!isComparable(this.#filterType(definition)) && RANGE_OPERATORS.has(operator)) throw new ValidationError(`Filtro "${field}" no soporta operador "${FILTER_OPERATOR_NAMES.get(operator)}"`);
-    /*if (!RANGE_OPERATORS.has(operator) || !definition) return;
-    const type = this.#filterType(definition);
-    const isComparable = ["integer", "decimal", "number", "date", "string"].includes(type);
-    if (!isComparable) {
-      const operatorName = FILTER_OPERATOR_NAMES.get(operator) || "filtro";
-      throw new ValidationError(`Filtro "${field}" no soporta operador "${operatorName}"`);
-    }*/
   }
 
   async #castFilterValue(field, value, definition) {

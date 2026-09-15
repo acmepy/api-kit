@@ -27,8 +27,12 @@ export function toIamStrategies(strategies = []) {
 }
 
 export function normalizeGlobalAuth(auth) {
+  return { ...normalizeAuth(auth), ...(auth === true && { tokenExpiresIn: "1h" }) };
+}
+
+export function normalizeAuth(auth) {
   if (!auth) return { required: false, strategies: [] };
-  if (auth === true) return { required: true, strategies: ["bearer", "basic"], tokenExpiresIn: "1h" };
+  if (auth === true) return { required: true, strategies: ["bearer", "basic"] };
   const strategies = auth.strategies || auth.strategy || ["bearer", "basic"];
   return { ...auth, required: auth.required ?? true, strategies: Array.isArray(strategies) ? strategies : [strategies] };
 }

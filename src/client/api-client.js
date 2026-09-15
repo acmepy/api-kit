@@ -370,6 +370,7 @@ export class ApiClient {
     this.#listeners.clear();
   }
 
+  /** Stops background synchronization and releases client listeners; alias of destroy(). */
   disconnect() {
     this.destroy();
   }

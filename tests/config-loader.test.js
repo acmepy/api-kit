@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { loadModuleBundle, loadModules } from "../src/server/config/config-loader.js";
+import { loadModuleBundle } from "../src/server/config/config-loader.js";
 
 describe("loadModules", () => {
   it("converts resource definitions to module configs", async () => {
@@ -77,3 +77,7 @@ describe("loadModules", () => {
     assert.equal(bundle.modules.length, 1);
   });
 });
+
+async function loadModules(input, baseDir) {
+  return (await loadModuleBundle(input, baseDir)).modules;
+}

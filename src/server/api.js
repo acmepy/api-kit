@@ -11,7 +11,7 @@ import { normalizeSchemaDocumentConfig } from "./schema/schema-builder.js";
 import { RouteRegistry } from "./schema/route-registry.js";
 import { loadModels, loadModule } from "./loaders/index.js";
 import { installFrontendInstallRoutes, normalizeInstallableApps } from "./install/install.services.js";
-import { createAuditResource, createAuditWriter, installAuditChangesRoute, installAuditHooks, installAuditSseRoute, normalizeAuditConfig } from "./install/audit.services.js";
+import { createAuditResource, installAuditChangesRoute, installAuditHooks, installAuditSseRoute, normalizeAuditConfig } from "./install/audit.services.js";
 import { createAuthorizer, installAuthRoutes } from "./install/auth.services.js";
 import { installHttpMiddleware } from "./install/http-middleware.services.js";
 import { installOpenApiRoute, installPostmanRoute, installSchemaDocumentRoute } from "./install/schema.services.js";
@@ -74,7 +74,6 @@ export async function createApi(conf = {}) {
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
   const authBackend = conf.auth ? normalizeAuthBackendConfig(config.auth) : null;
   const auditResource = config.audit ? createAuditResource() : null;
-  const auditWriter = createAuditWriter(config.audit, auditResource?.model);
   let authContext = null;
   const authorize = createAuthorizer(() => authContext);
 
@@ -99,10 +98,8 @@ export async function createApi(conf = {}) {
   const routeRegistry = new RouteRegistry();
   const modules = new Map();
   const services = new Map();
-  const models = new Map();
+  const models = new Map(modelsMap);
   const schemas = new Map();
-
-  for (const mod of modelsMap) models.set(mod[0], mod[1]);
 
   for (const moduleConfig of moduleConfigs) {
     const mod = await loadModule({moduleConfig, seq: config.seq, modelsMap, servicesMap: services, routeRegistry, paths: resolvedPaths, authorize});

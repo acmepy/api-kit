@@ -3,10 +3,6 @@ import { importModuleNamespace, fileExists } from "../utils/import-module.js";
 import { defineResource } from "./config-resource.js";
 import { camelCase } from "../utils/naming.js";
 
-export async function loadModules(input, baseDir) {
-  return (await loadModuleBundle(input, baseDir)).modules;
-}
-
 export async function loadModuleBundle(input, baseDir) {
   const bundle = { modules: [], staticModules: [] };
   if (!input) return bundle;

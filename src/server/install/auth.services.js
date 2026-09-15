@@ -41,7 +41,7 @@ export function createAuthorizer(resolveAuthContext) {
     if (!auth?.required) return (_req, _res, next) => next();
     return (req, res, next) => {
       const authContext = typeof resolveAuthContext === "function" ? resolveAuthContext() : resolveAuthContext;
-      if (!authContext) return res.status(401).json({ ok: false, message: "Auth no configurado" });
+      if (!authContext) return res.status(401).json({ ok: false, code: "UNAUTHORIZED", message: "No autorizado" });
 
       return composeMiddlewares([
         authContext.middleware,

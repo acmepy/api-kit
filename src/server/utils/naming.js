@@ -19,12 +19,4 @@ export function fileName(base, suffix, ext = "js") {
   return `${kebabCase(base)}.${suffix}.${ext}`;
 }
 
-export function applyNamingConvention(name, naming = {}) {
-  let value = String(name || "");
-  if (naming.tables === "snake_case") value = snakeCase(value);
-  if (naming.tables === "camelCase") value = camelCase(value);
-  if (naming.prefix && naming.tables) value = `${naming.prefix}_${value}`;
-  if (naming.caseStyle === "upper") value = value.toUpperCase();
-  if (naming.caseStyle === "lower") value = value.toLowerCase();
-  return value;
-}
+

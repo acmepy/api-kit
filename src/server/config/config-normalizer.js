@@ -1,4 +1,5 @@
 import { joinPaths } from "../utils/paths.js";
+import { normalizeAuth } from "../utils/normalize.js";
 
 const ENDPOINT_DEFAULTS = {
   list: { enabled: true, method: "get", path: "/", summary: "Listar" },
@@ -53,18 +54,6 @@ function normalizeEndpoint(endpoint, moduleConfig, operation) {
   const permissionOperation = operation === "schema" ? "list" : operation;
   const permission = endpoint.permission === undefined && auth.required ? `${moduleConfig.name}.${permissionOperation}` : endpoint.permission;
   return { ...endpoint, auth, permission };
-}
-
-function normalizeAuth(auth) {
-  if (!auth) return { required: false, strategies: [] };
-  if (auth === true) return { required: true, strategies: ["bearer", "basic"] };
-
-  const strategies = auth.strategies || auth.strategy || ["bearer", "basic"];
-  return {
-    ...auth,
-    required: auth.required ?? true,
-    strategies: Array.isArray(strategies) ? strategies : [strategies],
-  };
 }
 
 function isDetailEndpoint(operation) {

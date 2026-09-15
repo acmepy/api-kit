@@ -1,4 +1,5 @@
 import { Op } from "seq";
+import { verifyJwt } from "iam/express";
 import { getContext } from "../context/request-context.js";
 import { ValidationError } from "../errors/validation-error.js";
 import { ok } from "../http/response.js";
@@ -108,19 +109,6 @@ export function installAuditChangesRoute({ mainRouter, routeRegistry, modules, m
   });
 }
 
-export function createAuditWriter(auditConfig, AuditModel) {
-  if (!auditConfig) return null;
-  if (!AuditModel) return null;
-
-  return async function auditWrite(change) {
-    const moduleConfig = {
-      name: change.resource || change.module || change.tableName,
-      resource: { definition: { id: { primaryKey: true } }, options: { tableName: change.tableName } },
-    };
-    await writeAudit(AuditModel, auditConfig, moduleConfig, change.action, plainAuditModel(change), change.old || {}, change.new || {}, { emit: change.emit ?? false });
-  };
-}
-
 export function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {
   const clients = new Map();
   let nextClientId = 0;
@@ -134,12 +122,12 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
     operationId: "audit.sse",
     serviceMethod: "sse",
     summary: "Cambios en vivo",
-    handler: ({ config, modules, authContext }) => (req, res) => {
+    handler: ({ config, modules, authContext }) => async (req, res) => {
       const [ip, session, userAgent] = [req.ip || req.socket?.remoteAddress || "", req.session?.id || "no-session", req.headers["user-agent"] || ""];
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
       log("info", "audit.sse", session, ip, req.method, req.originalUrl, res.statusCode, 0, res.getHeader("content-length") || 0, userAgent);
-      const expiresAt = bearerTokenExpiresAt(req);
+      const expiresAt = await bearerTokenExpiresAt(req, authContext);
       const client = {id: ++nextClientId, req, res, sessionId: req.session?.id, connectedAt: new Date().toISOString(), expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, heartbeat: null, expirationTimer: null, closed: false};
       clients.set(client.id, client);
 
@@ -223,12 +211,17 @@ function cleanupSseClient(clients, client, config) {
   if (client.sendChange) config.audit.events.off("change", client.sendChange);
 }
 
-function bearerTokenExpiresAt(req) {
+async function bearerTokenExpiresAt(req, authContext) {
+  if (!authContext?.secret) return null;
   const token = bearerToken(req);
   if (!token) return null;
-  const payload = decodeJwtPayload(token);
-  const exp = Number(payload?.exp);
-  return Number.isFinite(exp) && exp > 0 ? exp * 1000 : null;
+  try {
+    const payload = await verifyJwt(token, authContext.secret);
+    const exp = Number(payload?.exp);
+    return Number.isFinite(exp) && exp > 0 ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
 }
 
 function bearerToken(req) {
@@ -236,21 +229,6 @@ function bearerToken(req) {
   if (!header.startsWith("Bearer ")) return null;
   const token = header.slice("Bearer ".length).trim();
   return token || null;
-}
-
-function decodeJwtPayload(token) {
-  try {
-    const [, payload] = token.split(".");
-    if (!payload) return null;
-    return JSON.parse(Buffer.from(base64UrlToBase64(payload), "base64").toString("utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function base64UrlToBase64(value) {
-  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-  return base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
 }
 
 function normalizeAuditHeartbeatTimeout(value, fallback) {
@@ -424,7 +402,7 @@ function tableNameFor(moduleConfig) {
 }
 
 function isAuditModule(moduleConfig) {
-  return isAuditTableName(moduleConfig?.name) || isAuditTableName(moduleConfig?.resource?.options?.tableName) || isAuditTableName(moduleConfig?.resource?.options?.modelName);
+  return [moduleConfig?.name, moduleConfig?.resource?.options?.tableName, moduleConfig?.resource?.options?.modelName].some(isAuditTableName);
 }
 
 function jsonSafe(value) {
@@ -432,10 +410,3 @@ function jsonSafe(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function plainAuditModel(change) {
-  return {
-    toJSON: () => ({ id: change.rowId, ...(change.new || {}) }),
-    get: (key) => (key === "id" ? change.rowId : change.new?.[key]),
-    getDataValue: (key) => (key === "id" ? change.rowId : change.new?.[key]),
-  };
-}
