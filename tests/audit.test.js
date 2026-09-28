@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
 import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
-import { createApi, defineResource } from "../src/server/index.js";
+import { createApi } from "../src/server/index.js";
 
 const modules = [
   {
@@ -684,42 +684,30 @@ function tableNameForModel(ModelClass) {
 }
 
 function detailAuditModules() {
-  const ventaResource = defineResource({
-    modelName: "Venta",
-    tableName: "ventas",
-    timestamps: true,
-    attributes: {
-      id: { type: "integer", primaryKey: true, autoIncrement: true },
-      cliente: { type: "string", allowNull: false },
-      total: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0 },
-    },
-  });
-  const itemResource = defineResource({
-    modelName: "VentaItem",
-    tableName: "venta_items",
-    timestamps: true,
-    attributes: {
-      id: { type: "integer", primaryKey: true, autoIncrement: true },
-      ventaId: { type: "integer", allowNull: false },
-      producto: { type: "string", allowNull: false },
-      cantidad: { type: "integer", allowNull: false },
-    },
-  });
-
-  ventaResource.model.hasMany(itemResource.model, { as: "items", foreignKey: "ventaId" });
-  itemResource.model.belongsTo(ventaResource.model, { as: "venta", foreignKey: "ventaId" });
-
   return [
     {
-      name: "ventas",
-      resource: ventaResource,
-      details: { items: { association: "items" } },
+      modelName: "Venta",
+      tableName: "ventas",
+      timestamps: true,
+      attributes: {
+        id: { type: "integer", primaryKey: true, autoIncrement: true },
+        cliente: { type: "string", allowNull: false },
+        total: { type: "decimal", precision: 12, scale: 2, allowNull: false, defaultValue: 0 },
+      },
+      details: [{
+        name: "items",
+        foreignKey: "ventaId",
+        modelName: "VentaItem",
+        tableName: "venta_items",
+        timestamps: true,
+        attributes: {
+          id: { type: "integer", primaryKey: true, autoIncrement: true },
+          ventaId: { type: "integer", allowNull: false },
+          producto: { type: "string", allowNull: false },
+          cantidad: { type: "integer", allowNull: false },
+        },
+      }],
     },
-    {
-      name: "venta_items",
-      resource: itemResource,
-    },
-    modules.find((module) => module.modelName === "audit"),
   ];
 }
 

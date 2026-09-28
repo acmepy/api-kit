@@ -40,53 +40,62 @@ export function installAuditHooks(moduleConfigs, auditConfig, AuditModel) {
   if (!auditConfig) return;
   if (!AuditModel) return;
 
+  const installedModels = new Set();
   for (const moduleConfig of moduleConfigs) {
     if (moduleConfig.audit === false || isAuditModule(moduleConfig)) continue;
-    const resource = moduleConfig.resource;
-    if (!resource?.model || !resource.options) continue;
-
-    const hooks = { ...(resource.options.hooks || {}) };
-    const previousData = new WeakMap();
-
-    appendHook(hooks, "beforeUpdate", function beforeAuditUpdate(payload) {
-      if (isModelInstance(payload)) previousData.set(payload, snapshot(payload));
-    });
-    appendHook(hooks, "beforeDestroy", function beforeAuditDestroy(payload) {
-      if (isModelInstance(payload)) previousData.set(payload, snapshot(payload));
-    });
-    appendHook(hooks, "beforeUpsert", async function beforeAuditUpsert(values, options = {}) {
-      const where = upsertWhereFor(this, moduleConfig, values, options);
-      if (!where) return;
-      const existing = await this.findOne({ where, ...(options.transaction && { transaction: options.transaction }) });
-      if (existing) options.auditOld = snapshot(existing);
-    });
-    appendHook(hooks, "afterCreate", async function auditCreate(payload, options = {}) {
-      await writeAudit(AuditModel, auditConfig, moduleConfig, "create", payload, {}, snapshot(payload), { transaction: options.transaction });
-    });
-    appendHook(hooks, "afterUpdate", async function auditUpdate(payload, options = {}) {
-      if (Array.isArray(payload)) {
-        for (const model of payload) await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-update", model, options.where || {}, snapshot(model), { transaction: options.transaction });
-        return;
-      }
-      await writeAudit(AuditModel, auditConfig, moduleConfig, "update", payload, options.auditOld || previousData.get(payload) || {}, snapshot(payload), { transaction: options.transaction });
-    });
-    appendHook(hooks, "afterDestroy", async function auditDestroy(payload, options = {}) {
-      if (isModelInstance(payload)) {
-        await writeAudit(AuditModel, auditConfig, moduleConfig, "delete", payload, options.auditOld || previousData.get(payload) || snapshot(payload), {}, { transaction: options.transaction });
-        return;
-      }
-      await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-delete", null, options.auditOld || options.where || {}, {}, { transaction: options.transaction });
-    });
-    appendHook(hooks, "afterUpsert", async function auditUpsert(result, options = {}) {
-      const [model, created] = Array.isArray(result) ? result : [result, false];
-      await writeAudit(AuditModel, auditConfig, moduleConfig, created ? "create" : "update", model, created ? {} : options.auditOld || {}, snapshot(model), { transaction: options.transaction });
-    });
-    appendHook(hooks, "afterBulkCreate", async function auditBulkCreate(models, options = {}) {
-      for (const model of models || []) await writeAudit(AuditModel, auditConfig, moduleConfig, "bulk-create", model, {}, snapshot(model), { transaction: options.transaction });
-    });
-
-    resource.options.hooks = hooks;
+    const resources = [moduleConfig.resource, ...(moduleConfig.detailResources || [])];
+    for (const resource of resources) {
+      if (!resource?.model || !resource.options || installedModels.has(resource.model)) continue;
+      installedModels.add(resource.model);
+      installResourceAuditHooks({ resource, moduleConfig, auditConfig, AuditModel });
+    }
   }
+}
+
+function installResourceAuditHooks({ resource, moduleConfig, auditConfig, AuditModel }) {
+  const hooks = { ...(resource.options.hooks || {}) };
+  const previousData = new WeakMap();
+
+  const auditedConfig = { ...moduleConfig, resource };
+
+  appendHook(hooks, "beforeUpdate", function beforeAuditUpdate(payload) {
+    if (isModelInstance(payload)) previousData.set(payload, snapshot(payload));
+  });
+  appendHook(hooks, "beforeDestroy", function beforeAuditDestroy(payload) {
+    if (isModelInstance(payload)) previousData.set(payload, snapshot(payload));
+  });
+  appendHook(hooks, "beforeUpsert", async function beforeAuditUpsert(values, options = {}) {
+    const where = upsertWhereFor(this, auditedConfig, values, options);
+    if (!where) return;
+    const existing = await this.findOne({ where, ...(options.transaction && { transaction: options.transaction }) });
+    if (existing) options.auditOld = snapshot(existing);
+  });
+  appendHook(hooks, "afterCreate", async function auditCreate(payload, options = {}) {
+    await writeAudit(AuditModel, auditConfig, auditedConfig, "create", payload, {}, snapshot(payload), { transaction: options.transaction });
+  });
+  appendHook(hooks, "afterUpdate", async function auditUpdate(payload, options = {}) {
+    if (Array.isArray(payload)) {
+      for (const model of payload) await writeAudit(AuditModel, auditConfig, auditedConfig, "bulk-update", model, options.where || {}, snapshot(model), { transaction: options.transaction });
+      return;
+    }
+    await writeAudit(AuditModel, auditConfig, auditedConfig, "update", payload, options.auditOld || previousData.get(payload) || {}, snapshot(payload), { transaction: options.transaction });
+  });
+  appendHook(hooks, "afterDestroy", async function auditDestroy(payload, options = {}) {
+    if (isModelInstance(payload)) {
+      await writeAudit(AuditModel, auditConfig, auditedConfig, "delete", payload, options.auditOld || previousData.get(payload) || snapshot(payload), {}, { transaction: options.transaction });
+      return;
+    }
+    await writeAudit(AuditModel, auditConfig, auditedConfig, "bulk-delete", null, options.auditOld || options.where || {}, {}, { transaction: options.transaction });
+  });
+  appendHook(hooks, "afterUpsert", async function auditUpsert(result, options = {}) {
+    const [model, created] = Array.isArray(result) ? result : [result, false];
+    await writeAudit(AuditModel, auditConfig, auditedConfig, created ? "create" : "update", model, created ? {} : options.auditOld || {}, snapshot(model), { transaction: options.transaction });
+  });
+  appendHook(hooks, "afterBulkCreate", async function auditBulkCreate(models, options = {}) {
+    for (const model of models || []) await writeAudit(AuditModel, auditConfig, auditedConfig, "bulk-create", model, {}, snapshot(model), { transaction: options.transaction });
+  });
+
+  resource.options.hooks = hooks;
 }
 
 export function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, config, authorize, authContext }) {
