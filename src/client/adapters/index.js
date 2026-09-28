@@ -9,7 +9,11 @@ export { IndexedDbAdapter } from "./indexed-db-adapter.js";
 
 export function createAdapter({ type, prefix = "api", service, ...options } = {}) {
   if (type === "localStorage") return new LocalStorageAdapter({ ...options, prefix, service });
-  if (type === "indexedDB" || type === "indexdb") return new IndexedDbAdapter(options);
+  if (type === "indexedDB" || type === "indexdb") return new IndexedDbAdapter({
+    ...options,
+    dbName: options.dbName || prefix,
+    storeName: options.storeName || service || "session",
+  });
   return new MapAdapter();
 }
 

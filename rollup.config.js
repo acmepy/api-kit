@@ -14,6 +14,7 @@ const external = (id) => (
     "iam",
     "iam/adapters",
     "iam/express",
+    "idb-keyval",
     "logger",
     "seq",
     "vue",

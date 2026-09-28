@@ -1,4 +1,5 @@
 import yep from 'yep';
+import * as idbKeyval from 'idb-keyval';
 
 function fillPath(path, params = {}) {
   return path.replace(/\{([^}]+)\}/g, (_, key) => encodeURIComponent(params[key]));
@@ -138,30 +139,27 @@ class LocalStorageAdapter extends BaseAdapter {
 }
 
 class IndexedDbAdapter extends BaseAdapter {
-  #dbName;
-  #storeName;
-  #indexedDB;
-  #dbPromise = null;
+  #keyval;
+  #store;
 
   constructor(options = {}) {
     super();
-    this.#indexedDB = options.indexedDB || globalThis.indexedDB;
-    if (!this.#indexedDB) throw new Error("IndexedDbAdapter requiere indexedDB");
-    this.#dbName = options.dbName || "api";
-    this.#storeName = options.storeName || "session";
+    this.#keyval = options.idbKeyval || idbKeyval;
+    if (!options.idbKeyval && !globalThis.indexedDB) throw new Error("IndexedDbAdapter requiere indexedDB");
+    this.#store = this.#keyval.createStore(options.dbName || "api", options.storeName || "session");
   }
 
   async get(key) {
-    return this.#transaction("readonly", (store) => store.get(key));
+    return (await this.#keyval.get(key, this.#store)) ?? null;
   }
 
   async getAll() {
-    return this.#transaction("readonly", (store) => store.getAll());
+    return this.#keyval.values(this.#store);
   }
 
   async add(value) {
     if (Array.isArray(value)) {
-      for (const item of value) await this.put(item.id, item);
+      await this.#keyval.setMany(value.map((item) => [item.id, item]), this.#store);
       return value;
     }
     await this.put(value.id, value);
@@ -169,44 +167,26 @@ class IndexedDbAdapter extends BaseAdapter {
   }
 
   async put(key, value) {
-    await this.#transaction("readwrite", (store) => store.put(value, key));
+    await this.#keyval.set(key, value, this.#store);
     return value;
   }
 
   async delete(key) {
-    await this.#transaction("readwrite", (store) => store.delete(key));
+    await this.#keyval.del(key, this.#store);
   }
 
   async clear() {
-    await this.#transaction("readwrite", (store) => store.clear());
-  }
-
-  async #transaction(mode, action) {
-    const db = await this.#db();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(this.#storeName, mode);
-      const request = action(tx.objectStore(this.#storeName));
-      request.onsuccess = () => resolve(request.result ?? null);
-      request.onerror = () => reject(request.error);
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  #db() {
-    if (this.#dbPromise) return this.#dbPromise;
-    this.#dbPromise = new Promise((resolve, reject) => {
-      const request = this.#indexedDB.open(this.#dbName, 1);
-      request.onupgradeneeded = () => request.result.createObjectStore(this.#storeName);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    return this.#dbPromise;
+    await this.#keyval.clear(this.#store);
   }
 }
 
 function createAdapter({ type, prefix = "api", service, ...options } = {}) {
   if (type === "localStorage") return new LocalStorageAdapter({ ...options, prefix, service });
-  if (type === "indexedDB" || type === "indexdb") return new IndexedDbAdapter(options);
+  if (type === "indexedDB" || type === "indexdb") return new IndexedDbAdapter({
+    ...options,
+    dbName: options.dbName || prefix,
+    storeName: options.storeName || service || "session",
+  });
   return new MapAdapter();
 }
 

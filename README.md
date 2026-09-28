@@ -469,6 +469,17 @@ const clienteForm = useApiForm("clientes", {
 });
 ```
 
+Para caches que pueden superar el limite habitual de `localStorage`, usa IndexedDB:
+
+```js
+const client = createApiClient({
+  url: "http://localhost:3000/api",
+  storage: "indexedDB",
+});
+```
+
+El adapter IndexedDB usa `idb-keyval` y conserva la misma interfaz de almacenamiento que `LocalStorageAdapter`.
+
 Las reglas `unique` se comprueban en el cliente contra su cache local. Son una validación de experiencia de usuario; el servidor y la restricción de base de datos siguen siendo la autoridad final.
 
 ## Servicios del Cliente

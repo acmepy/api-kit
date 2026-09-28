@@ -4,7 +4,7 @@ import { IndexedDbAdapter } from "../src/client/adapters/indexed-db-adapter.js";
 
 describe("IndexedDbAdapter", () => {
   it("implements the BaseAdapter storage operations", async () => {
-    const adapter = new IndexedDbAdapter({ indexedDB: memoryIndexedDb(), dbName: "test", storeName: "records" });
+    const adapter = new IndexedDbAdapter({ idbKeyval: memoryKeyval(), dbName: "test", storeName: "records" });
 
     await adapter.add({ id: 1, name: "Ana" });
     await adapter.add([{ id: 2, name: "Beto" }]);
@@ -20,49 +20,19 @@ describe("IndexedDbAdapter", () => {
   });
 });
 
-function memoryIndexedDb() {
+function memoryKeyval() {
   const stores = new Map();
   return {
-    open() {
-      const request = {};
-      queueMicrotask(() => {
-        request.result = {
-          createObjectStore(name) {
-            stores.set(name, new Map());
-          },
-          transaction(name) {
-            const records = stores.get(name);
-            return {
-              objectStore() {
-                return {
-                  get: (key) => operation(() => records.get(key)),
-                  getAll: () => operation(() => [...records.values()]),
-                  put: (value, key) => operation(() => records.set(key, value)),
-                  delete: (key) => operation(() => records.delete(key)),
-                  clear: () => operation(() => records.clear()),
-                };
-              },
-            };
-          },
-        };
-        request.onupgradeneeded?.();
-        request.onsuccess?.();
-      });
-      return request;
+    createStore(dbName, storeName) {
+      const key = `${dbName}:${storeName}`;
+      if (!stores.has(key)) stores.set(key, new Map());
+      return stores.get(key);
     },
+    async values(store) { return [...store.values()]; },
+    async get(key, store) { return store.get(key); },
+    async set(key, value, store) { store.set(key, value); },
+    async setMany(entries, store) { entries.forEach(([key, value]) => store.set(key, value)); },
+    async del(key, store) { store.delete(key); },
+    async clear(store) { store.clear(); },
   };
-}
-
-function operation(callback) {
-  const request = {};
-  queueMicrotask(() => {
-    try {
-      request.result = callback();
-      request.onsuccess?.();
-    } catch (error) {
-      request.error = error;
-      request.onerror?.();
-    }
-  });
-  return request;
 }

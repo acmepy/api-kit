@@ -39,6 +39,7 @@
     "adm-zip": "^0.6.0",
     "express": "^5.1.0",
     "iam": "github:acmepy/iam",
+    "idb-keyval": "^6.3.0",
     "seq": "github:acmepy/seq",
     "yep": "github:acmepy/yep"
   },
