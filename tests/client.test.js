@@ -482,6 +482,74 @@ describe("client public API", () => {
     client.destroy();
   });
 
+  for (const status of [200, 401]) {
+    it(`clears local data, closes SSE, cancels changes and restarts ping on logout ${status}`, async () => {
+      const adapters = adapterRegistry();
+      const events = [];
+      let pingCalls = 0;
+      let sseSignal;
+      let changesSignal;
+      let releaseChanges;
+      let cancelled = false;
+      const client = createApiClient({
+        url: "http://server/api",
+        adapter: adapters.root,
+        createAdapter: adapters.createAdapter,
+        changes: false,
+        serviceSyncDelay: false,
+        pingInterval: 60_000,
+        fetch: async (url, options) => {
+          const path = new URL(String(url)).pathname;
+          if (path === "/api/ping") pingCalls++;
+          if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "token" } });
+          if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+          if (path === "/api/logout") return jsonResponse({ ok: status === 200, message: "Logout" }, status);
+          if (path === "/api/changes") {
+            changesSignal = options.signal;
+            return new Promise((resolve) => { releaseChanges = resolve; });
+          }
+          if (path === "/api/sse") {
+            sseSignal = options.signal;
+            return new Response(new ReadableStream({ cancel() { cancelled = true; } }));
+          }
+          return jsonResponse({ ok: true, data: [] });
+        },
+      });
+      client.onChange((event) => events.push(event));
+      try {
+        await wait(5);
+        await client.login({ username: "admin" });
+        await wait(5);
+        await adapters.forService("clientes").put(1, { id: 1, pending: true, operation: "create" });
+        await adapters.root.put("cache:test", { id: "cache:test", data: "cached" });
+        const changes = client.changes();
+        const changesRejected = assert.rejects(changes, (error) => error.name === "AbortError");
+        await wait(5);
+        const pingsBeforeLogout = pingCalls;
+
+        const response = await client.logout();
+        assert.equal(response.ok, true);
+        assert.equal(sseSignal.aborted, true);
+        assert.equal(cancelled, true);
+        assert.equal(changesSignal.aborted, true);
+        assert.deepEqual(await adapters.root.getAll(), []);
+        for (const name of ["session", "schema", "clientes", "pending"]) {
+          assert.deepEqual(await adapters.forService(name).getAll(), []);
+        }
+        assert.equal(client.lastReceivedAt(), null);
+        releaseChanges(jsonResponse({ ok: true, data: [{ tableName: "clientes", action: "create", new: { id: 9 } }] }));
+        await changesRejected;
+        await wait(5);
+        assert.deepEqual(await adapters.forService("clientes").getAll(), []);
+        assert.equal(events.some((event) => event.type === "changes"), false);
+        assert.ok(pingCalls > pingsBeforeLogout);
+        assert.equal(await client.token(), null);
+      } finally {
+        client.destroy();
+      }
+    });
+  }
+
   it("expires the local session when schema document download returns unauthorized", async () => {
     const adapters = adapterRegistry();
     const events = [];

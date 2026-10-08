@@ -738,6 +738,7 @@ class ApiClient {
   #scheduledServiceSyncs = new Map();
   #cachedRequests = new Map();
   #changesPromise = null;
+  #changesAbort = null;
   #pingTimer = null;
   #pingAbort = null;
   #pingPromise = null;
@@ -808,14 +809,32 @@ class ApiClient {
   }
 
   async logout() {
-    const response = await this.request(this.#paths.logout, { method: "POST" });
-    await this.#clearServices();
+    let response;
+    try {
+      response = await this.request(this.#paths.logout, { method: "POST" });
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      await this.#expireSession(error);
+      return { ok: true, data: null };
+    }
+    await this.#resetSession("logout", response.data);
+    return response;
+  }
+
+  async #resetSession(source, data) {
     this.#stopPing();
     this.#closeSse();
     this.#clearWatchdog();
-    this.#offLine("logout", response.data);
+    this.#changesAbort?.abort();
+    this.#changesAbort = null;
+    this.#changesPromise = null;
+    await this.#clearServices();
+    await this.#adapter.clear();
+    this.#services.clear();
+    this.#services.set("pending", new PendingService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter }));
+    this.#lastReceivedAt = null;
+    this.#offLine(source, data);
     this.#startPing();
-    return response;
   }
 
   sessionService(){
@@ -829,12 +848,7 @@ class ApiClient {
   }
 
   async #expireSession(error) {
-    await this.#clearServices();
-    this.#stopPing();
-    this.#closeSse();
-    this.#clearWatchdog();
-    this.#offLine("auth-expired", error?.response || null);
-    this.#startPing();
+    await this.#resetSession("auth-expired", error?.response || null);
   }
 
   async token() {
@@ -1088,14 +1102,19 @@ class ApiClient {
   }
 
   async #requestChanges(since) {
+    const controller = new AbortController();
+    this.#changesAbort = controller;
     const requestedSince = since ? this.#normalizeDateTime(since) : this.#lastReceivedAt || this.#now();
     const query = { since: requestedSince };
     let response;
     try {
-      response = await this.request(this.#paths.changes, { query });
+      response = await this.request(this.#paths.changes, { query, signal: controller.signal });
+      controller.signal.throwIfAborted();
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 401) await this.#expireSession(error);
       throw error;
+    } finally {
+      if (this.#changesAbort === controller) this.#changesAbort = null;
     }
     const receivedAt = this.#touchLastReceivedAt();
     await this.#applyChangesData(response.data);
@@ -1226,6 +1245,7 @@ class ApiClient {
 
     this.#fetch(this.url(this.#paths.sse), { headers, signal: controller.signal })
       .then((response) => {
+        controller.signal.throwIfAborted();
         if (!response.ok) throw new Error(response.statusText);
         this.#resetWatchdog();
         return this.#readSse(response);
@@ -1249,7 +1269,7 @@ class ApiClient {
     try {
       while (this.#sseAbort) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done || !this.#sseAbort || this.#sseReader !== reader) break;
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split(/\r?\n\r?\n/);
         buffer = parts.pop() || "";
@@ -1322,7 +1342,6 @@ class ApiClient {
   async #clearServices() {
     this.#clearScheduledServiceSyncs();
     for (const [serviceName, service] of this.#services.entries()) {
-      if (serviceName === "audit") continue;
       await service.clear();
       await this.#adapter.delete(this.#serviceCacheKey(serviceName));
     }

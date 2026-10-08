@@ -372,7 +372,7 @@ const pending = client.service("pending");
 Metodos publicos principales:
 
 - `login(credentials)`: login server, guarda sesion, sincroniza servicios, trae changes y abre SSE.
-- `logout()`: llama `POST /logout`, limpia sesion/cache/pending local y vuelve a ping.
+- `logout()`: llama `POST /logout`; tanto ante una respuesta exitosa como ante `401`, limpia sesion, token, caches y pending locales, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, y reinicia el ping. Ante `401` devuelve `{ ok: true, data: null }`, porque el cierre local se completo; otros errores del servidor o de red se propagan.
 - `session()`: carga sesion local.
 - `clearSession()`: limpia solo sesion local.
 - `discover()`: descubre servicios desde `schema.json`.
@@ -394,7 +394,7 @@ Metodos publicos principales:
 - `request(path, options)`: request autenticado.
 - `url(path, query?)`: arma URL absoluta.
 
-Si `syncServices()` o `changes()` reciben `401`, el cliente hace logout local por expiracion: limpia sesion, caches y pending, cierra SSE, marca offline y vuelve a ping. No llama `POST /logout` en ese caso.
+Si `syncServices()` o `changes()` reciben `401`, el cliente hace logout local por expiracion: limpia sesion, token, caches y pending, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, reinicia `lastReceivedAt`, marca offline y vuelve a ping. Las respuestas tardias del changes cancelado se descartan. No llama `POST /logout` en ese caso y propaga el error `401`. La misma limpieza se aplica a `logout()`, pero este trata el `401` como un cierre local exitoso.
 
 ## Vue
 
