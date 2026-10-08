@@ -3,6 +3,70 @@ import assert from "node:assert/strict";
 import { BaseService } from "../src/client/services/base-service.js";
 
 describe("Client BaseService", () => {
+  it("saves an offline create successfully and sends the same pending record later", async () => {
+    const records = [];
+    const calls = [];
+    let connected = false;
+    const service = new BaseService({
+      name: "clientes",
+      client: {
+        connected: () => connected,
+        async request(path, options) {
+          calls.push({ path, options });
+          if (!connected) throw new Error("Network unavailable");
+          return { ok: true, data: { id: 10, name: "Ana" } };
+        },
+      },
+      operations: { create: { path: "/clientes", method: "POST" } },
+      createAdapter: () => memoryAdapter(records),
+    });
+
+    const saved = await service.create({ name: "Ana" });
+    assert.equal(saved.ok, true);
+    assert.equal(saved.data.pending, true);
+    assert.equal(saved.data.status, "pending");
+    assert.equal(saved.data.message, "");
+    assert.deepEqual(records, [saved.data]);
+    assert.deepEqual(calls, []);
+
+    connected = true;
+    const pushed = await service.push(saved.data.id);
+    assert.equal(pushed.ok, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].options.body.id, saved.data.id);
+    assert.deepEqual(records, []);
+    await service.push();
+    assert.equal(calls.length, 1);
+  });
+
+  for (const operation of ["update", "remove"]) {
+    it(`saves an offline ${operation} without attempting a request`, async () => {
+      const records = [{ id: 42, name: "Ana" }];
+      let requests = 0;
+      const service = new BaseService({
+        name: "clientes",
+        client: {
+          connected: () => false,
+          async request() {
+            requests++;
+            throw new Error("Network unavailable");
+          },
+        },
+        createAdapter: () => memoryAdapter(records),
+      });
+
+      const result = operation === "update"
+        ? await service.update(42, { name: "Ana editada" })
+        : await service.remove(42);
+      assert.equal(result.ok, true);
+      assert.equal(result.data.operation, operation);
+      assert.equal(result.data.pending, true);
+      assert.equal(result.data.status, "pending");
+      assert.deepEqual(records, [result.data]);
+      assert.equal(requests, 0);
+    });
+  }
+
   it("applies partial audit SSE updates and deletes using rowId", async () => {
     const records = [{ id: 1, nombre: "Ana", activo: true }];
     const service = new BaseService({
@@ -85,6 +149,7 @@ describe("Client BaseService", () => {
     const calls = [];
     const service = new BaseService({
       client: {
+        connected: () => true,
         async request(path, options) {
           calls.push({ path, options });
           return { ok: true, data: { id: 1 } };
@@ -175,6 +240,7 @@ describe("Client BaseService", () => {
     const calls = [];
     const service = new BaseService({
       client: {
+        connected: () => true,
         async request(path, options) {
           calls.push({ path, options });
           return { ok: true, data: { id: 10, name: "Ana" } };
@@ -203,6 +269,7 @@ describe("Client BaseService", () => {
     const records = [];
     const service = new BaseService({
       client: {
+        connected: () => true,
         async request() {
           const error = new Error("Validacion");
           error.errors = { ruc: "RUC no cumple con el formato esperado" };
@@ -230,6 +297,7 @@ describe("Client BaseService", () => {
     const records = [{ id: 1, name: "Ana" }];
     const service = new BaseService({
       client: {
+        connected: () => true,
         async request() {
           const error = new Error("Validacion");
           error.errors = { name: "Nombre inválido" };

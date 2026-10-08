@@ -514,7 +514,7 @@ await productos.validateAt("nombre", data);
 await productos.permissions("list");
 ```
 
-`create`, `update` y `remove` del cliente son offline-first: primero escriben cache local y pending. Si el cliente esta online, intentan enviar automaticamente ese pending al server; si falla, queda guardado para reintentar con `push()`.
+Sin conexion, `create`, `update` y `remove` guardan el registro en cache local como pendiente y devuelven `{ ok: true, data }`, sin intentar enviarlo. El envio posterior se realiza con `push()` sobre ese mismo pendiente, sin repetir `create()`. Con conexion, por defecto envian directamente al servidor y actualizan la cache local. Con `{ pending: true }`, primero guardan localmente y, si hay conexion, intentan enviar el pendiente; si el envio falla, la operacion lanza un error y conserva el pendiente para reintentar con `push()`. `{ pending: false }` fuerza el envio directo incluso si el cliente figura sin conexion.
 
 ## Pending
 

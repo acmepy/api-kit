@@ -41,7 +41,7 @@ export class BaseService {
     data = {...record, id: record.id ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
     await this.adapter.add(data);
     this.#notify();
-    this.#throwPushError(await this.pushOne(data));
+    if (this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
 
@@ -59,8 +59,7 @@ export class BaseService {
     data = {...current, ...data, pending: true, operation:'update', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id ?? id, data)
     this.#notify();
-    const ret = await this.pushOne(data);
-    this.#throwPushError(ret);
+    if (this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
 
@@ -76,7 +75,7 @@ export class BaseService {
     const data = {...current, id, pending: true, operation:'remove', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id, data);
     this.#notify();
-    this.#throwPushError(await this.pushOne(data));
+    if (this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
 
