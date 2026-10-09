@@ -728,6 +728,8 @@ class ApiClient {
   #prefix;
   #sessionKey;
   #session = null;
+  #sessionVersion = 0;
+  #expireSessionPromise = null;
   #services = new Map();
   #listeners = new Set();
   #online = false;
@@ -798,7 +800,9 @@ class ApiClient {
 
   async login(credentials = {}) {
     const response = await this.request(this.#paths.login, { method: "POST", body: credentials, auth: false });
+    if (this.#expireSessionPromise) await this.#expireSessionPromise;
     await this.sessionService().create(response.data || null);
+    this.#sessionVersion++;
     this.#onLine("login", response.data);
 
     await this.syncServices();
@@ -814,7 +818,6 @@ class ApiClient {
       response = await this.request(this.#paths.logout, { method: "POST" });
     } catch (error) {
       if (error.status !== 401) throw error;
-      await this.#expireSession(error);
       return { ok: true, data: null };
     }
     await this.#resetSession("logout", response.data);
@@ -822,6 +825,7 @@ class ApiClient {
   }
 
   async #resetSession(source, data) {
+    this.#sessionVersion++;
     this.#stopPing();
     this.#closeSse();
     this.#clearWatchdog();
@@ -847,8 +851,17 @@ class ApiClient {
     return session;
   }
 
-  async #expireSession(error) {
-    await this.#resetSession("auth-expired", error?.response || null);
+  async #expireSession(error, sessionVersion) {
+    if (this.#expireSessionPromise) return this.#expireSessionPromise;
+    if (sessionVersion !== this.#sessionVersion) return;
+
+    const expiration = this.#resetSession("auth-expired", error?.response || null);
+    this.#expireSessionPromise = expiration;
+    try {
+      await expiration;
+    } finally {
+      if (this.#expireSessionPromise === expiration) this.#expireSessionPromise = null;
+    }
   }
 
   async token() {
@@ -933,7 +946,6 @@ class ApiClient {
       this.#log("schema", "descargado", { services: document.services.length });
     } catch (error) {
       if (error.status === 401) {
-        await this.#expireSession(error);
         throw error;
       }
       schema ||= await this.#cachedDocument(schemaService);
@@ -982,7 +994,6 @@ class ApiClient {
         }
       } catch (error) {
         if (error?.status === 401) {
-          await this.#expireSession(error);
           throw error;
         }
         console.error("api-client, syncServices", error);
@@ -1110,9 +1121,6 @@ class ApiClient {
     try {
       response = await this.request(this.#paths.changes, { query, signal: controller.signal });
       controller.signal.throwIfAborted();
-    } catch (error) {
-      if (error instanceof ApiClientError && error.status === 401) await this.#expireSession(error);
-      throw error;
     } finally {
       if (this.#changesAbort === controller) this.#changesAbort = null;
     }
@@ -1128,6 +1136,7 @@ class ApiClient {
     const headers = { Accept: "application/json", ...(options.headers || {}) };
     const body = encodeBody(options.body, headers);
     const token = options.token || await this.token() || null;
+    const sessionVersion = this.#sessionVersion;
     if (options.requireToken && !token) throw new ApiClientError("Sesion local requerida", { status: 401 });
     if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`;
 
@@ -1141,7 +1150,9 @@ class ApiClient {
     const contentType = response.headers?.get?.("content-type") || "";
     const payload = contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok || payload?.ok === false){
-      throw new ApiClientError(payload?.message || response.statusText, { status: response.status, response: payload });
+      const error = new ApiClientError(payload?.message || response.statusText, { status: response.status, response: payload });
+      if (error.status === 401 && options.auth !== false) await this.#expireSession(error, sessionVersion);
+      throw error;
     }
 
     return payload;
@@ -1242,10 +1253,16 @@ class ApiClient {
     const headers = { Accept: "text/event-stream" };
     const token = await this.token();
     if (token) headers.Authorization = `Bearer ${token}`;
+    const sessionVersion = this.#sessionVersion;
 
     this.#fetch(this.url(this.#paths.sse), { headers, signal: controller.signal })
-      .then((response) => {
+      .then(async (response) => {
         controller.signal.throwIfAborted();
+        if (response.status === 401) {
+          const error = new ApiClientError(response.statusText, { status: response.status });
+          await this.#expireSession(error, sessionVersion);
+          throw error;
+        }
         if (!response.ok) throw new Error(response.statusText);
         this.#resetWatchdog();
         return this.#readSse(response);

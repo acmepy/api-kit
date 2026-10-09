@@ -394,7 +394,7 @@ Metodos publicos principales:
 - `request(path, options)`: request autenticado.
 - `url(path, query?)`: arma URL absoluta.
 
-Si `syncServices()` o `changes()` reciben `401`, el cliente hace logout local por expiracion: limpia sesion, token, caches y pending, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, reinicia `lastReceivedAt`, marca offline y vuelve a ping. Las respuestas tardias del changes cancelado se descartan. No llama `POST /logout` en ese caso y propaga el error `401`. La misma limpieza se aplica a `logout()`, pero este trata el `401` como un cierre local exitoso.
+Si cualquier peticion autenticada recibe `401`, incluidas las descargas de servicios en segundo plano y la apertura de SSE, el cliente hace logout local por expiracion: limpia sesion, token, caches y pending, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, reinicia `lastReceivedAt`, emite `auth-expired`, marca offline y vuelve a ping. Los `401` simultaneos comparten la limpieza; un `401` tardio de una sesion anterior no cierra una nueva sesion. Las respuestas tardias del changes cancelado se descartan. No llama `POST /logout` en ese caso. Las peticiones realizadas con `request()` propagan el error `401`; las actualizaciones en segundo plano y SSE lo manejan internamente. Las peticiones con `auth: false`, como login y ping, y los errores `403` no cierran la sesion. La misma limpieza se aplica a `logout()`, pero este trata el `401` como un cierre local exitoso.
 
 ## Vue
 

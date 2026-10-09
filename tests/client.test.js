@@ -550,6 +550,203 @@ describe("client public API", () => {
     });
   }
 
+  for (const operation of ["service", "session", "cached request", "request", "changes"]) {
+    it(`clears the rejected token and local data on an authenticated ${operation} 401`, async () => {
+      const adapters = adapterRegistry();
+      const events = [];
+      let rejectRequests = false;
+      let sseSignal;
+      const client = createApiClient({
+        url: "http://server/api",
+        adapter: adapters.root,
+        createAdapter: adapters.createAdapter,
+        changes: false,
+        serviceSyncDelay: false,
+        pingInterval: 60_000,
+        fetch: async (url, options) => {
+          const path = new URL(String(url)).pathname;
+          if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "rejected-token" } });
+          if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+          if (path === "/api/sse") {
+            sseSignal = options.signal;
+            return new Response(new ReadableStream());
+          }
+          if (rejectRequests && path !== "/api/ping") return jsonResponse({ ok: false, message: "Token invalido" }, 401);
+          return jsonResponse({ ok: true, data: { pong: true } });
+        },
+      });
+      client.onChange((event) => events.push(event));
+      try {
+        await wait(5);
+        await client.login({ username: "admin" });
+        await adapters.forService("clientes").put(1, { id: 1, pending: true, operation: "create" });
+        await adapters.root.put("cache:test", { id: "cache:test", data: "cached" });
+        rejectRequests = true;
+        const operations = {
+          service: () => client.service("clientes").pull(),
+          session: () => client.sessionService().pull(),
+          "cached request": () => client.cachedRequest("test", "/clientes", { force: true }),
+          request: () => client.request("/inventarios"),
+          changes: () => client.changes(),
+        };
+
+        await assert.rejects(operations[operation], (error) => error.status === 401);
+
+        assert.equal(sseSignal.aborted, true);
+        assert.equal(await client.token(), null);
+        assert.deepEqual(await adapters.root.getAll(), []);
+        for (const name of ["session", "schema", "clientes", "pending"]) {
+          assert.deepEqual(await adapters.forService(name).getAll(), []);
+        }
+        assert.equal(client.lastReceivedAt(), null);
+        assert.equal(events.filter((event) => event.source === "auth-expired").length, 1);
+      } finally {
+        client.destroy();
+      }
+    });
+  }
+
+  it("expires the session once for concurrent 401 responses and ignores old responses after a new login", async () => {
+    const adapters = adapterRegistry();
+    const events = [];
+    const pending = [];
+    let loginCount = 0;
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      serviceSyncDelay: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: `token-${++loginCount}` } });
+        if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+        if (["/api/bienes", "/api/inventarios", "/api/tardy"].includes(path)) {
+          return new Promise((resolve) => pending.push(resolve));
+        }
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+    client.onChange((event) => events.push(event));
+    try {
+      await wait(5);
+      await client.login({ username: "admin" });
+      const requests = ["/bienes", "/inventarios", "/tardy"].map((path) =>
+        assert.rejects(() => client.request(path), (error) => error.status === 401));
+      await wait(5);
+      assert.equal(pending.length, 3);
+      pending[0](jsonResponse({ ok: false }, 401));
+      pending[1](jsonResponse({ ok: false }, 401));
+      await Promise.all(requests.slice(0, 2));
+      assert.equal(await client.token(), null);
+      assert.equal(events.filter((event) => event.source === "auth-expired").length, 1);
+
+      await client.login({ username: "admin" });
+      pending[2](jsonResponse({ ok: false }, 401));
+      await requests[2];
+      assert.equal(await client.token(), "token-2");
+      assert.equal(events.filter((event) => event.source === "auth-expired").length, 1);
+    } finally {
+      client.destroy();
+    }
+  });
+
+  it("expires the session when a background service refresh returns 401", async () => {
+    const adapters = adapterRegistry();
+    const events = [];
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      serviceSyncDelay: 0,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "rejected-token" } });
+        if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+        if (path === "/api/clientes") return jsonResponse({ ok: false, message: "Token invalido" }, 401);
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+    client.onChange((event) => events.push(event));
+    try {
+      await wait(5);
+      await client.login({ username: "admin" });
+      await wait(20);
+      assert.equal(await client.token(), null);
+      assert.equal(events.filter((event) => event.source === "auth-expired").length, 1);
+    } finally {
+      client.destroy();
+    }
+  });
+
+  it("preserves the session for unauthenticated 401 requests and authenticated 403 requests", async () => {
+    const adapters = adapterRegistry();
+    const events = [];
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      serviceSyncDelay: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "valid-token" } });
+        if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+        if (path === "/api/public") return jsonResponse({ ok: false }, 401);
+        if (path === "/api/forbidden") return jsonResponse({ ok: false }, 403);
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+    client.onChange((event) => events.push(event));
+    try {
+      await wait(5);
+      await client.login({ username: "admin" });
+      await assert.rejects(() => client.request("/public", { auth: false }), (error) => error.status === 401);
+      await assert.rejects(() => client.request("/forbidden"), (error) => error.status === 403);
+      assert.equal(await client.token(), "valid-token");
+      assert.equal(events.some((event) => event.source === "auth-expired"), false);
+    } finally {
+      client.destroy();
+    }
+  });
+
+  it("expires the session when SSE rejects the bearer token", async () => {
+    const adapters = adapterRegistry();
+    const events = [];
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      serviceSyncDelay: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "rejected-token" } });
+        if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+        if (path === "/api/sse") return jsonResponse({ ok: false }, 401);
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+    client.onChange((event) => events.push(event));
+    try {
+      await wait(5);
+      await client.login({ username: "admin" });
+      await wait(5);
+      assert.equal(await client.token(), null);
+      assert.equal(events.filter((event) => event.source === "auth-expired").length, 1);
+    } finally {
+      client.destroy();
+    }
+  });
+
   it("expires the local session when schema document download returns unauthorized", async () => {
     const adapters = adapterRegistry();
     const events = [];
