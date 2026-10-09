@@ -55,7 +55,7 @@ export class BaseService {
     const context = getContext();
     const page = Math.max(1, parseInt(query?.page, 10) || 1);
     const maxSize = this.#config.maxSize || 100;
-    const limit = Math.min(maxSize, Math.max(1, parseInt(query?.limit, 10) || 20));
+    const limit = Math.min(maxSize, Math.max(1, parseInt(query?.limit, 10) || maxSize));
     const offset = (page - 1) * limit;
     const where = await this.#buildWhere(query);
     const include = this.#model.getAssociationIncludes();

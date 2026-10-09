@@ -44,6 +44,26 @@ describe("BaseService list filters", () => {
     assert.deepEqual(result.data.map((item) => item.name), ["Basic", "Plus"]);
   });
 
+  it("defaults to 100 records per page without maxSize or limit", async () => {
+    const result = await service.list();
+
+    assert.equal(result.pagination.limit, 100);
+    assert.equal(result.pagination.pages, 1);
+    assert.equal(result.data.length, 3);
+  });
+
+  it("uses configured maxSize as the default and maximum page size", async () => {
+    service.config.maxSize = 2;
+
+    for (const query of [{}, { limit: "100" }]) {
+      const result = await service.list({ query });
+
+      assert.equal(result.pagination.limit, 2);
+      assert.equal(result.pagination.pages, 2);
+      assert.equal(result.data.length, 2);
+    }
+  });
+
   it("returns limit and offset pagination metadata", async () => {
     const result = await service.list({ query: { page: "2", limit: "1" } });
 

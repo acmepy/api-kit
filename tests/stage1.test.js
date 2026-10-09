@@ -452,12 +452,12 @@ describe("Etapa 1 - Nucleo", () => {
       assert.equal(res.body.ok, true);
       assert.ok(Array.isArray(res.body.data));
       assert.equal(res.body.pagination.page, 1);
-      assert.equal(res.body.pagination.limit, 20);
+      assert.equal(res.body.pagination.limit, 100);
       assert.equal(res.body.pagination.offset, 0);
       assert.equal(res.body.pagination.total, 0);
       assert.equal(res.body.pagination.pages, 0);
       assert.deepEqual(res.body.pagination.links, {
-        self: `http://localhost:3001/api/clientes?email=${encodeURIComponent(email)}&page=1&limit=20`,
+        self: `http://localhost:3001/api/clientes?email=${encodeURIComponent(email)}&page=1&limit=100`,
         next: false,
         prev: false,
       });
