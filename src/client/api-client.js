@@ -44,6 +44,8 @@ export class ApiClient {
   #session = null;
   #sessionVersion = 0;
   #expireSessionPromise = null;
+  #authExpired = false;
+  #sessionSyncEnabled = true;
   #services = new Map();
   #listeners = new Set();
   #online = false;
@@ -112,13 +114,27 @@ export class ApiClient {
     return this.#adapter;
   }
 
-  async login(credentials = {}) {
+  async login(credentials = {}, { sync = true } = {}) {
     const response = await this.request(this.#paths.login, { method: "POST", body: credentials, auth: false });
     if (this.#expireSessionPromise) await this.#expireSessionPromise;
+    const previousSession = (await this.sessionService().adapter.getAll())[0];
+    if (previousSession?.authExpired && previousSession.user?.id != null && previousSession.user.id !== response.data?.user?.id) {
+      throw new ApiClientError("Debe reconectar con el mismo usuario para conservar los datos locales", {
+        status: 409,
+        response: { ok: false, code: "SESSION_USER_MISMATCH" },
+      });
+    }
+    this.#sessionSyncEnabled = sync;
+    this.#authExpired = false;
+    this.#stopPing();
+    this.#closeSse();
+    this.#clearWatchdog();
+    this.#clearScheduledServiceSyncs();
     await this.sessionService().create(response.data || null);
     this.#sessionVersion++;
     this.#onLine("login", response.data);
 
+    if (!sync) return response;
     await this.syncServices();
     if (this.#changesEnabled) await this.changes();
     this.#stopPing();
@@ -132,6 +148,7 @@ export class ApiClient {
       response = await this.request(this.#paths.logout, { method: "POST" });
     } catch (error) {
       if (error.status !== 401) throw error;
+      await this.#resetSession("logout", null);
       return { ok: true, data: null };
     }
     await this.#resetSession("logout", response.data);
@@ -146,11 +163,21 @@ export class ApiClient {
     this.#changesAbort?.abort();
     this.#changesAbort = null;
     this.#changesPromise = null;
-    await this.#clearServices();
-    await this.#adapter.clear();
-    this.#services.clear();
-    this.#services.set("pending", new PendingService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter }));
-    this.#lastReceivedAt = null;
+    this.#clearScheduledServiceSyncs();
+    if (source === "auth-expired") {
+      this.#authExpired = true;
+      this.#sessionSyncEnabled = false;
+      const previousSession = (await this.sessionService().adapter.getAll())[0] || { id: "session" };
+      await this.sessionService().create({ ...previousSession, token: null, authExpired: true });
+    } else {
+      await this.#clearServices();
+      await this.#adapter.clear();
+      this.#services.clear();
+      this.#services.set("pending", new PendingService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter }));
+      this.#lastReceivedAt = null;
+      this.#authExpired = false;
+      this.#sessionSyncEnabled = true;
+    }
     this.#offLine(source, data);
     this.#startPing();
   }
@@ -161,7 +188,12 @@ export class ApiClient {
   }
   async session() {
     const session = (await this.sessionService().adapter.getAll())[0] || {};
-    if (session?.token && !this.#syncServicesPromise) await this.syncServices();
+    if (session.authExpired) {
+      this.#authExpired = true;
+      this.#sessionSyncEnabled = false;
+      return {};
+    }
+    if (session?.token && this.#sessionSyncEnabled && !this.#syncServicesPromise) await this.syncServices();
     return session;
   }
 
@@ -209,6 +241,8 @@ export class ApiClient {
   }
 
   async syncServices(force = false) {
+    if (this.#authExpired) throw new ApiClientError("Sesion expirada; vuelva a iniciar sesion", { status: 401 });
+    this.#sessionSyncEnabled = true;
     if (this.#syncServicesPromise) {
       this.#log("schema", "reutilizando sincronizacion en curso");
       return this.#syncServicesPromise;
@@ -316,6 +350,7 @@ export class ApiClient {
   }
 
   #refreshServiceInBackground(service) {
+    if (!this.#sessionSyncEnabled || this.#authExpired) return;
     if (this.#backgroundServiceSyncs.has(service.name)) return;
     this.#log("service", "actualizando en segundo plano", { service: service.name });
     const refresh = service.pull()
@@ -327,6 +362,7 @@ export class ApiClient {
   }
 
   #scheduleServiceRefresh(service, { force = false, reason } = {}) {
+    if (!this.#sessionSyncEnabled) return;
     if (this.#serviceSyncDelay === false) {
       this.#log("service", "precarga desactivada", { service: service.name, reason });
       return;
@@ -449,7 +485,8 @@ export class ApiClient {
     const url = this.url(path, options.query);
     const headers = { Accept: "application/json", ...(options.headers || {}) };
     const body = encodeBody(options.body, headers);
-    const token = options.token || await this.token() || null;
+    const token = options.auth === false ? null : options.token || await this.token() || null;
+    if (options.auth !== false && this.#authExpired) throw new ApiClientError("Sesion expirada; vuelva a iniciar sesion", { status: 401 });
     const sessionVersion = this.#sessionVersion;
     if (options.requireToken && !token) throw new ApiClientError("Sesion local requerida", { status: 401 });
     if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`;
@@ -469,6 +506,7 @@ export class ApiClient {
       throw error;
     }
 
+    if (options.auth !== false && sessionVersion !== this.#sessionVersion) throw new DOMException("Sesion cambiada", "AbortError");
     return payload;
   }
 
@@ -508,6 +546,7 @@ export class ApiClient {
     }
 
     try {
+      if (!this.#sessionSyncEnabled) return;
       const localSession = await this.session() || null;
       if (!localSession?.token) throw new ApiClientError("Sesion local requerida", { status: 401 });
       await this.syncServices();
@@ -524,7 +563,12 @@ export class ApiClient {
 
   async #pingRequest(signal) {
     const response = await this.request(this.#paths.ping, { method: "GET", auth: false, signal });
-    this.#onLine("ping", response.data);
+    const localSession = (await this.sessionService().adapter.getAll())[0];
+    if (localSession?.authExpired) {
+      this.#authExpired = true;
+      this.#sessionSyncEnabled = false;
+    }
+    if (!this.#authExpired) this.#onLine("ping", response.data);
     return response;
   }
 

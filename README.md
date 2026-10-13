@@ -371,7 +371,7 @@ const pending = client.service("pending");
 
 Metodos publicos principales:
 
-- `login(credentials)`: login server, guarda sesion, sincroniza servicios, trae changes y abre SSE.
+- `login(credentials, { sync = true } = {})`: login server y guarda sesion. Por defecto sincroniza servicios, trae changes y abre SSE. Con `{ sync: false }` solo autentica y guarda la sesion: no descarga schemas ni datos, no trae changes, no abre SSE y detiene el ping y las precargas programadas. Leer `session()` o `token()` tampoco inicia una sincronizacion en ese modo.
 - `logout()`: llama `POST /logout`; tanto ante una respuesta exitosa como ante `401`, limpia sesion, token, caches y pending locales, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, y reinicia el ping. Ante `401` devuelve `{ ok: true, data: null }`, porque el cierre local se completo; otros errores del servidor o de red se propagan.
 - `session()`: carga sesion local.
 - `clearSession()`: limpia solo sesion local.
@@ -380,7 +380,7 @@ Metodos publicos principales:
 - `serviceSyncDelay`: demora la precarga de datos de los servicios para no bloquear el render inicial; por defecto es `1000` ms. Usa `0` para iniciarla enseguida o `false` para desactivarla.
 - `service(name)`: obtiene un servicio descubierto.
 - `services()`: devuelve un `Map` de servicios.
-- `syncServices(force = false)`: descubre servicios, hace pull de caches faltantes y empuja pending.
+- `syncServices(force = false)`: descubre servicios, restaura caches y programa descargas de datos segun `serviceSyncDelay`. No envia pending; para enviarlos usa `push()` del servicio. Tambien permite iniciar explicitamente el descubrimiento despues de un login con `{ sync: false }`.
 - `connected()`: estado online.
 - `getSession()`: sesion en memoria.
 - `token()`: Bearer token actual.
@@ -394,7 +394,11 @@ Metodos publicos principales:
 - `request(path, options)`: request autenticado.
 - `url(path, query?)`: arma URL absoluta.
 
-Si cualquier peticion autenticada recibe `401`, incluidas las descargas de servicios en segundo plano y la apertura de SSE, el cliente hace logout local por expiracion: limpia sesion, token, caches y pending, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, reinicia `lastReceivedAt`, emite `auth-expired`, marca offline y vuelve a ping. Los `401` simultaneos comparten la limpieza; un `401` tardio de una sesion anterior no cierra una nueva sesion. Las respuestas tardias del changes cancelado se descartan. No llama `POST /logout` en ese caso. Las peticiones realizadas con `request()` propagan el error `401`; las actualizaciones en segundo plano y SSE lo manejan internamente. Las peticiones con `auth: false`, como login y ping, y los errores `403` no cierran la sesion. La misma limpieza se aplica a `logout()`, pero este trata el `401` como un cierre local exitoso.
+Si cualquier peticion autenticada recibe `401`, incluidas las descargas de servicios en segundo plano y la apertura de SSE, el cliente invalida el token, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, emite `auth-expired` y marca offline. Conserva los servicios registrados, schemas, caches, pending y `lastReceivedAt`. Guarda la identidad de la sesion expirada sin su token para comprobar el usuario al reconectar, incluso despues de reiniciar el cliente; `session()` devuelve `{}` y `token()` devuelve `null` mientras la sesion esta expirada. El ping publico puede continuar, pero no marca online ni reanuda la sincronizacion hasta iniciar sesion. Las peticiones autenticadas quedan bloqueadas localmente con `401` mientras la sesion esta expirada.
+
+Los `401` simultaneos comparten la invalidacion; un `401` tardio de una sesion anterior no cierra una nueva sesion. Las respuestas exitosas tardias de una sesion anterior se descartan con `AbortError` para impedir que sobrescriban los datos conservados. No llama `POST /logout` al expirar. Las peticiones realizadas con `request()` propagan el error `401`; las actualizaciones en segundo plano y SSE lo manejan internamente. Las peticiones con `auth: false`, como login y ping, y los errores `403` no invalidan la sesion.
+
+Para un modal de reconexion usa `login(credentials, { sync: false })`. Si la sesion expirada contiene `user.id`, el nuevo login debe devolver el mismo `user.id`; otra cuenta se rechaza con `409` y codigo `SESSION_USER_MISMATCH`, sin sustituir la identidad anterior ni borrar datos. Las credenciales incorrectas tambien conservan el trabajo local. `logout()` explicito mantiene la limpieza completa de sesion, caches y pending, incluso si el servidor responde `401`.
 
 ## Vue
 
@@ -434,7 +438,7 @@ await api.login({ username: "admin", password: "1234" });
 // `clientes` se actualiza automáticamente ante cambios locales, changes y SSE.
 ```
 
-`useApi()` expone refs de `connected`, `session`, `event`, `error` y `ready`, además de `login()`, `logout()` y `sync()`. `useApiService(nombre)` expone `records` (también `data`), `loading`, `error`, `empty`, `refresh()` para releer cache y las operaciones `pull`, `create`, `update`, `remove` y `push`.
+`useApi()` expone refs de `connected`, `session`, `event`, `error` y `ready`, además de `login(credentials, options)`, `logout()` y `sync()`. `login` admite `{ sync: false }` para renovar la sesion desde un modal sin descargar datos ni enviar pendientes. `useApiService(nombre)` expone `records` (también `data`), `loading`, `error`, `empty`, `refresh()` para releer cache y las operaciones `pull`, `create`, `update`, `remove` y `push`.
 
 Para formularios usa `useApiForm()`. Sus `data` y `errors` son reactivos; al modificar un campo valida con debounce, incluidas las reglas `unique` disponibles en la cache local.
 

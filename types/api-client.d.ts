@@ -97,11 +97,13 @@ export interface ChangeEvent {
   [key: string]: unknown;
 }
 
+export interface LoginOptions { sync?: boolean; }
+
 export class ApiClient {
   constructor(options?: ApiClientOptions);
   readonly baseUrl: string;
   readonly adapter: StorageAdapter;
-  login(credentials?: Record<string, unknown>): Promise<unknown>;
+  login(credentials?: Record<string, unknown>, options?: LoginOptions): Promise<unknown>;
   logout(): Promise<void>;
   sessionService(): SessionService;
   session(): Promise<unknown>;

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createApiClient, BaseService, SchemaService, SessionService } from "../src/client/index.js";
+import { createApiVue } from "../src/vue/index.js";
 
 describe("client public API", () => {
   it("builds urls from the configured base url and query params", () => {
@@ -551,7 +552,7 @@ describe("client public API", () => {
   }
 
   for (const operation of ["service", "session", "cached request", "request", "changes"]) {
-    it(`clears the rejected token and local data on an authenticated ${operation} 401`, async () => {
+    it(`clears the rejected token and preserves local data on an authenticated ${operation} 401`, async () => {
       const adapters = adapterRegistry();
       const events = [];
       let rejectRequests = false;
@@ -594,10 +595,12 @@ describe("client public API", () => {
 
         assert.equal(sseSignal.aborted, true);
         assert.equal(await client.token(), null);
-        assert.deepEqual(await adapters.root.getAll(), []);
-        for (const name of ["session", "schema", "clientes", "pending"]) {
-          assert.deepEqual(await adapters.forService(name).getAll(), []);
-        }
+        assert.deepEqual(await adapters.root.get("cache:test"), { id: "cache:test", data: "cached" });
+        const expiredSession = (await adapters.forService("session").getAll())[0];
+        assert.equal(expiredSession.token, null);
+        assert.equal(expiredSession.authExpired, true);
+        assert.ok((await adapters.forService("schema").getAll()).length > 0);
+        assert.deepEqual((await client.service("clientes").pending()).data, [{ id: 1, pending: true, operation: "create" }]);
         assert.equal(client.lastReceivedAt(), null);
         assert.equal(events.filter((event) => event.source === "auth-expired").length, 1);
       } finally {
@@ -605,6 +608,182 @@ describe("client public API", () => {
       }
     });
   }
+
+  it("reconnects through Vue without synchronizing or losing offline data", async () => {
+    const adapters = adapterRegistry();
+    const calls = [];
+    let loginCount = 0;
+    let rejectRequests = false;
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      serviceSyncDelay: false,
+      pingInterval: 10,
+      fetch: async (url, options) => {
+        const path = new URL(String(url)).pathname;
+        calls.push({ path, authorization: options.headers?.Authorization });
+        if (path === "/api/login") {
+          const credentials = JSON.parse(options.body);
+          if (credentials.password === "wrong") return jsonResponse({ ok: false }, 401);
+          return jsonResponse({ ok: true, data: { id: "session", token: `token-${++loginCount}`, user: { id: credentials.username } } });
+        }
+        if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+        if (path === "/api/sse") return new Response(new ReadableStream());
+        if (rejectRequests && path !== "/api/ping") return jsonResponse({ ok: false }, 401);
+        return jsonResponse({ ok: true, data: [] });
+      },
+    });
+    const api = createApiVue(client);
+    try {
+      await api.initialized;
+      await wait(5);
+      await api.login({ username: "admin" });
+      const service = client.service("clientes");
+      const pending = { id: 101, nombre: "Trabajo offline", pending: true, operation: "create" };
+      await service.adapter.put(pending.id, pending);
+      await adapters.root.put("cache:test", { id: "cache:test", data: "cached" });
+      const receivedAt = client.lastReceivedAt();
+      rejectRequests = true;
+
+      await assert.rejects(() => client.request("/bienes"), (error) => error.status === 401);
+      await wait(25);
+      assert.equal(client.connected(), false);
+      assert.equal(api.session.value.token, undefined);
+      assert.equal(client.lastReceivedAt(), receivedAt);
+      assert.equal(client.service("clientes"), service);
+      assert.deepEqual((await service.pending()).data, [pending]);
+      const callsAfterExpiration = calls.length;
+      await assert.rejects(() => client.request("/bienes"), (error) => error.status === 401);
+      assert.equal(calls.length, callsAfterExpiration);
+
+      await assert.rejects(() => api.login({ username: "admin", password: "wrong" }, { sync: false }), (error) => error.status === 401);
+      await assert.rejects(() => api.login({ username: "other" }, { sync: false }), (error) => error.code === "SESSION_USER_MISMATCH");
+      assert.deepEqual((await service.pending()).data, [pending]);
+      assert.equal(await client.token(), null);
+
+      const beforeReconnect = calls.length;
+      await api.login({ username: "admin" }, { sync: false });
+      await client.session();
+      assert.equal(await client.token(), "token-3");
+      await wait(25);
+      assert.deepEqual(calls.slice(beforeReconnect).map((call) => call.path), ["/api/login"]);
+      assert.equal(api.session.value.user.id, "admin");
+      assert.equal(api.error.value, null);
+      assert.equal(client.service("clientes"), service);
+      assert.deepEqual((await service.pending()).data, [pending]);
+      assert.deepEqual(await adapters.root.get("cache:test"), { id: "cache:test", data: "cached" });
+
+      rejectRequests = false;
+      await client.request("/bienes");
+      assert.equal(calls.at(-1).authorization, "Bearer token-3");
+    } finally {
+      api.dispose();
+      client.destroy();
+    }
+  });
+
+  it("logs in with only a session without implicitly discovering services", async () => {
+    const calls = [];
+    const client = createApiClient({
+      url: "http://server/api",
+      pingInterval: 10,
+      fetch: async (url) => {
+        const path = new URL(String(url)).pathname;
+        calls.push(path);
+        if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+        return jsonResponse({ ok: true, data: { id: "session", token: "token", user: { id: "admin" } } });
+      },
+    });
+    const api = createApiVue(client);
+    try {
+      await api.initialized;
+      await wait(5);
+      calls.length = 0;
+      await api.login({ username: "admin" }, { sync: false });
+      await client.session();
+      assert.equal(await client.token(), "token");
+      await wait(25);
+      assert.deepEqual(calls, ["/api/login"]);
+      assert.equal(client.services().has("schema"), false);
+      await api.sync();
+      assert.ok(calls.includes("/api/schema.json"));
+      assert.equal(client.services().has("clientes"), true);
+    } finally {
+      api.dispose();
+      client.destroy();
+    }
+  });
+
+  it("preserves expired-session identity and data across client restarts", async () => {
+    const adapters = adapterRegistry();
+    await adapters.forService("session").put("session", { id: "session", token: null, authExpired: true, user: { id: "admin" } });
+    const pending = { id: 1, pending: true, operation: "create" };
+    await adapters.forService("clientes").put(1, pending);
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      pingInterval: 10,
+      fetch: async (url, options) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/login") {
+          const credentials = JSON.parse(options.body);
+          return jsonResponse({ ok: true, data: { id: "session", token: "new-token", user: { id: credentials.username } } });
+        }
+        return jsonResponse({ ok: true, data: { pong: true } });
+      },
+    });
+    try {
+      await wait(25);
+      assert.equal(client.connected(), false);
+      assert.deepEqual(await client.session(), {});
+      await assert.rejects(() => client.login({ username: "other" }, { sync: false }), (error) => error.code === "SESSION_USER_MISMATCH");
+      assert.deepEqual(await adapters.forService("clientes").getAll(), [pending]);
+      await client.login({ username: "admin" }, { sync: false });
+      assert.equal(await client.token(), "new-token");
+      assert.deepEqual(await adapters.forService("clientes").getAll(), [pending]);
+    } finally {
+      client.destroy();
+    }
+  });
+
+  it("discards successful responses from before expiration without overwriting retained data", async () => {
+    const adapters = adapterRegistry();
+    let release;
+    const client = createApiClient({
+      url: "http://server/api",
+      adapter: adapters.root,
+      createAdapter: adapters.createAdapter,
+      changes: false,
+      sse: false,
+      serviceSyncDelay: false,
+      pingInterval: 60_000,
+      fetch: async (url) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "token", user: { id: "admin" } } });
+        if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+        if (path === "/api/clientes") return new Promise((resolve) => { release = resolve; });
+        if (path === "/api/bienes") return jsonResponse({ ok: false }, 401);
+        return jsonResponse({ ok: true, data: [] });
+      },
+    });
+    try {
+      await wait(5);
+      await client.login({ username: "admin" });
+      const service = client.service("clientes");
+      const pending = { id: 1, pending: true, operation: "create", nombre: "Offline" };
+      await service.adapter.put(1, pending);
+      const pullRejected = assert.rejects(() => service.pull(), (error) => error.name === "AbortError");
+      await wait(5);
+      await assert.rejects(() => client.request("/bienes"), (error) => error.status === 401);
+      release(jsonResponse({ ok: true, data: [{ id: 1, nombre: "Server" }] }));
+      await pullRejected;
+      assert.deepEqual((await service.pending()).data, [pending]);
+    } finally {
+      client.destroy();
+    }
+  });
 
   it("expires the session once for concurrent 401 responses and ignores old responses after a new login", async () => {
     const adapters = adapterRegistry();

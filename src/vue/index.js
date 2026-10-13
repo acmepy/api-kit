@@ -49,10 +49,10 @@ export function createApiVue(client) {
     error: readonly(error),
     ready: readonly(ready),
     initialized,
-    async login(credentials) {
+    async login(credentials, options) {
       error.value = null;
       try {
-        return await client.login(credentials);
+        return await client.login(credentials, options);
       } catch (cause) {
         error.value = cause;
         throw cause;
