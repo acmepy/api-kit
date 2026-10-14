@@ -518,7 +518,7 @@ await productos.validateAt("nombre", data);
 await productos.permissions("list");
 ```
 
-Sin conexion, `create`, `update` y `remove` guardan el registro en cache local como pendiente y devuelven `{ ok: true, data }`, sin intentar enviarlo. El envio posterior se realiza con `push()` sobre ese mismo pendiente, sin repetir `create()`. Con conexion, por defecto envian directamente al servidor y actualizan la cache local. Con `{ pending: true }`, primero guardan localmente y, si hay conexion, intentan enviar el pendiente; si el envio falla, la operacion lanza un error y conserva el pendiente para reintentar con `push()`. `{ pending: false }` fuerza el envio directo incluso si el cliente figura sin conexion.
+Sin conexion, `create`, `update` y `remove` guardan el registro en cache local como pendiente y devuelven `{ ok: true, data }`, sin intentar enviarlo. El envio posterior se realiza con `push()` sobre ese mismo pendiente, sin repetir `create()`. Con conexion, por defecto envian directamente al servidor y actualizan la cache local. Si ese envio falla por un error de red como `Failed to fetch`, el cliente marca offline y la operacion guarda el registro como pendiente local, sin repetir inmediatamente el envio. Un error de red al descargar datos tambien marca offline, de modo que el siguiente guardado se realiza localmente. Los errores HTTP y las cancelaciones no activan esa conversion a pendiente. Con `{ pending: true }`, primero guardan localmente y, si hay conexion, intentan enviar el pendiente; si el envio falla, la operacion lanza un error y conserva el pendiente para reintentar con `push()`. `{ pending: false }` fuerza el envio directo incluso si el cliente figura sin conexion y propaga los errores de red sin crear pendientes.
 
 ## Pending
 

@@ -495,7 +495,14 @@ export class ApiClient {
     try {
       response = await this.#fetch(url, { method: options.method || "GET", headers, body, signal: options.signal, cache: options.cache });
     } catch (error) {
-      const payload = { ok: false, message: error.message || "Error de red", error };
+      if (options.signal?.aborted || error.name === "AbortError") throw error;
+      const payload = { ok: false, code: "NETWORK_ERROR", message: error.message || "Error de red", error };
+      if (sessionVersion === this.#sessionVersion) {
+        this.#closeSse();
+        this.#clearWatchdog();
+        this.#offLine("request", payload);
+        this.#startPing();
+      }
       throw new ApiClientError(payload.message, { response: payload });
     }
     const contentType = response.headers?.get?.("content-type") || "";

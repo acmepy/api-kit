@@ -57,6 +57,104 @@ describe("client public API", () => {
     assert.equal(requestCall.authorization, "Bearer local-token");
   });
 
+  for (const operation of ["create", "update", "remove", "pull then create"]) {
+    it(`preserves offline work after losing the connection during ${operation}`, async () => {
+      const adapters = adapterRegistry();
+      const calls = [];
+      let networkDown = false;
+      const client = createApiClient({
+        url: "http://server/api",
+        adapter: adapters.root,
+        createAdapter: adapters.createAdapter,
+        changes: false,
+        sse: false,
+        serviceSyncDelay: false,
+        pingInterval: 60_000,
+        fetch: async (url, options) => {
+          const path = new URL(String(url)).pathname;
+          calls.push({ path, method: options.method });
+          if (networkDown) throw new TypeError("Failed to fetch");
+          if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "token", user: { id: "admin" } } });
+          if (path === "/api/schema.json") {
+            const document = schemaDocument();
+            Object.assign(document.services[0].operations, {
+              update: { path: "/api/clientes/{id}", method: "PUT" },
+              remove: { path: "/api/clientes/{id}", method: "DELETE" },
+            });
+            return jsonResponse(document);
+          }
+          return jsonResponse({ ok: true, data: [] });
+        },
+      });
+      try {
+        await wait(5);
+        await client.login({ username: "admin" });
+        const service = client.service("clientes");
+        await service.adapter.put(42, { id: 42, nombre: "Original" });
+        assert.equal(client.connected(), true);
+        networkDown = true;
+        if (operation === "pull then create") {
+          await assert.rejects(() => service.pull(), (error) => error.code === "NETWORK_ERROR");
+          assert.equal(client.connected(), false);
+        }
+        const result = operation === "update" ? await service.update(42, { nombre: "Editado" })
+          : operation === "remove" ? await service.remove(42)
+          : await service.create({ nombre: "Nuevo" });
+        assert.equal(result.ok, true);
+        assert.equal(result.data.pending, true);
+        assert.equal(result.data.status, "pending");
+        assert.equal(result.data.operation, operation === "pull then create" ? "create" : operation);
+        assert.deepEqual((await service.get(result.data.id)).data, result.data);
+        assert.equal(client.connected(), false);
+        assert.equal(await client.token(), "token");
+        const writes = calls.filter((call) => call.path.startsWith("/api/clientes") && call.method !== "GET");
+        assert.equal(writes.length, operation === "pull then create" ? 0 : 1);
+        await service.create({ nombre: "Otro" });
+        assert.equal((await service.pending()).data.length, 2);
+      } finally {
+        client.destroy();
+      }
+    });
+  }
+
+  for (const failure of [400, 401, 500, "forced direct", "abort"]) {
+    it(`does not create offline pending records for ${failure}`, async () => {
+      const adapters = adapterRegistry();
+      let fail = false;
+      const client = createApiClient({
+        url: "http://server/api",
+        adapter: adapters.root,
+        createAdapter: adapters.createAdapter,
+        changes: false,
+        sse: false,
+        serviceSyncDelay: false,
+        pingInterval: 60_000,
+        fetch: async (url) => {
+          const path = new URL(String(url)).pathname;
+          if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "token" } });
+          if (path === "/api/schema.json") return jsonResponse(schemaDocument());
+          if (fail && path === "/api/clientes") {
+            if (failure === "forced direct") throw new TypeError("Failed to fetch");
+            if (failure === "abort") throw new DOMException("Cancelled", "AbortError");
+            return jsonResponse({ ok: false }, failure);
+          }
+          return jsonResponse({ ok: true, data: [] });
+        },
+      });
+      try {
+        await wait(5);
+        await client.login({ username: "admin" });
+        const service = client.service("clientes");
+        fail = true;
+        await assert.rejects(() => service.create({ nombre: "Nuevo" }, failure === "forced direct" ? { pending: false } : {}));
+        assert.deepEqual((await service.pending()).data, []);
+        if (failure === "abort") assert.equal(client.connected(), true);
+      } finally {
+        client.destroy();
+      }
+    });
+  }
+
   it("wraps network errors with an ok false response", async () => {
     const client = createApiClient({
       url: "http://server/api",

@@ -232,16 +232,22 @@ class BaseService {
   async create(data = {}, options = {}) {
     const record = await this.validate(data, "create");
     const pending = options.pending ?? !this.client.connected?.();
+    let networkFailed = false;
     if (!pending) {
-      const response = await this.#send("create", { body: record });
-      if (response.data) await this.adapter.add(response.data);
-      this.#notify();
-      return response;
+      try {
+        const response = await this.#send("create", { body: record });
+        if (response.data) await this.adapter.add(response.data);
+        this.#notify();
+        return response;
+      } catch (error) {
+        if (options.pending === false || error.code !== "NETWORK_ERROR") throw error;
+        networkFailed = true;
+      }
     }
     data = {...record, id: record.id ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
     await this.adapter.add(data);
     this.#notify();
-    if (this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
+    if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
 
@@ -249,33 +255,45 @@ class BaseService {
     const current = await this.adapter.get(id);
     const record = await this.validate({...current, ...data, id}, "update");
     const pending = options.pending ?? !this.client.connected?.();
+    let networkFailed = false;
     if(!pending) {
-      const response = await this.#send("update", { params: { id }, body: data });
-      const nextRecord = response.data || record;
-      await this.adapter.put(nextRecord.id ?? id, nextRecord);
-      this.#notify();
-      return response;
+      try {
+        const response = await this.#send("update", { params: { id }, body: data });
+        const nextRecord = response.data || record;
+        await this.adapter.put(nextRecord.id ?? id, nextRecord);
+        this.#notify();
+        return response;
+      } catch (error) {
+        if (options.pending === false || error.code !== "NETWORK_ERROR") throw error;
+        networkFailed = true;
+      }
     }
     data = {...current, ...data, pending: true, operation:'update', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id ?? id, data);
     this.#notify();
-    if (this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
+    if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
 
   async remove(id, options = {}) {
     const current = await this.adapter.get(id);
     const pending = options.pending ?? !this.client.connected?.();
+    let networkFailed = false;
     if (!pending) {
-      const response = await this.#send("remove", { params: { id } });
-      await this.adapter.delete(id);
-      this.#notify();
-      return response;
+      try {
+        const response = await this.#send("remove", { params: { id } });
+        await this.adapter.delete(id);
+        this.#notify();
+        return response;
+      } catch (error) {
+        if (options.pending === false || error.code !== "NETWORK_ERROR") throw error;
+        networkFailed = true;
+      }
     }
     const data = {...current, id, pending: true, operation:'remove', status: "pending", message: "", errors: null };
     await this.adapter.put(data.id, data);
     this.#notify();
-    if (this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
+    if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
 
@@ -1181,7 +1199,14 @@ class ApiClient {
     try {
       response = await this.#fetch(url, { method: options.method || "GET", headers, body, signal: options.signal, cache: options.cache });
     } catch (error) {
-      const payload = { ok: false, message: error.message || "Error de red", error };
+      if (options.signal?.aborted || error.name === "AbortError") throw error;
+      const payload = { ok: false, code: "NETWORK_ERROR", message: error.message || "Error de red", error };
+      if (sessionVersion === this.#sessionVersion) {
+        this.#closeSse();
+        this.#clearWatchdog();
+        this.#offLine("request", payload);
+        this.#startPing();
+      }
       throw new ApiClientError(payload.message, { response: payload });
     }
     const contentType = response.headers?.get?.("content-type") || "";
