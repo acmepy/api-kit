@@ -341,6 +341,55 @@ describe("client public API", () => {
     client.destroy();
   });
 
+  for (const scenario of ["offline before scheduled downloads", "first download loses the connection"]) {
+    it(`skips entity preloads when ${scenario}`, async () => {
+      const adapters = adapterRegistry();
+      const downloads = [];
+      let networkDown = false;
+      const client = createApiClient({
+        url: "http://server/api",
+        adapter: adapters.root,
+        createAdapter: adapters.createAdapter,
+        changes: false,
+        sse: false,
+        serviceSyncDelay: 30,
+        pingInterval: 60_000,
+        fetch: async (url) => {
+          const path = new URL(String(url)).pathname;
+          if (["/api/inventarios", "/api/bienes", "/api/sucursales", "/api/periodos"].includes(path)) downloads.push(path);
+          if (networkDown) throw new TypeError("Failed to fetch");
+          if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "token" } });
+          if (path === "/api/schema.json") return jsonResponse({
+            schema: "1.0.0",
+            services: ["inventarios", "bienes", "sucursales", "periodos"].map((name) => ({
+              name, operations: { list: { method: "GET", path: `/api/${name}` } },
+            })),
+          });
+          return jsonResponse({ ok: true, data: [] });
+        },
+      });
+      try {
+        await wait(5);
+        await client.login({ username: "admin" });
+        networkDown = true;
+        if (scenario === "offline before scheduled downloads") {
+          await assert.rejects(() => client.request("/probe"), (error) => error.code === "NETWORK_ERROR");
+        }
+        await wait(70);
+        assert.equal(client.connected(), false);
+        assert.equal(downloads.length, scenario === "offline before scheduled downloads" ? 0 : 1);
+        assert.equal(client.services().has("bienes"), true);
+
+        const countBeforeSync = downloads.length;
+        await client.syncServices(true);
+        await wait(40);
+        assert.equal(downloads.length, countBeforeSync);
+      } finally {
+        client.destroy();
+      }
+    });
+  }
+
   it("refreshes an expired service cache in the background", async () => {
     const adapters = adapterRegistry();
     const schema = schemaDocument();

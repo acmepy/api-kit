@@ -350,7 +350,7 @@ export class ApiClient {
   }
 
   #refreshServiceInBackground(service) {
-    if (!this.#sessionSyncEnabled || this.#authExpired) return;
+    if (!this.#online || !this.#sessionSyncEnabled || this.#authExpired) return;
     if (this.#backgroundServiceSyncs.has(service.name)) return;
     this.#log("service", "actualizando en segundo plano", { service: service.name });
     const refresh = service.pull()
@@ -362,7 +362,7 @@ export class ApiClient {
   }
 
   #scheduleServiceRefresh(service, { force = false, reason } = {}) {
-    if (!this.#sessionSyncEnabled) return;
+    if (!this.#online || !this.#sessionSyncEnabled || this.#authExpired) return;
     if (this.#serviceSyncDelay === false) {
       this.#log("service", "precarga desactivada", { service: service.name, reason });
       return;
