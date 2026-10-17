@@ -342,9 +342,11 @@ describe("client public API", () => {
   });
 
   for (const scenario of ["offline before scheduled downloads", "first download loses the connection"]) {
-    it(`skips entity preloads when ${scenario}`, async () => {
+    it(`skips entity preloads when ${scenario}`, async (t) => {
       const adapters = adapterRegistry();
       const downloads = [];
+      const loggedErrors = [];
+      t.mock.method(console, "error", (...args) => loggedErrors.push(args));
       let networkDown = false;
       const client = createApiClient({
         url: "http://server/api",
@@ -384,6 +386,18 @@ describe("client public API", () => {
         await client.syncServices(true);
         await wait(40);
         assert.equal(downloads.length, countBeforeSync);
+        if (scenario === "first download loses the connection") {
+          assert.equal(loggedErrors.length, 1);
+          const [message, service, error] = loggedErrors[0];
+          assert.equal(message, "api-client, service refresh");
+          assert.equal(service, "inventarios");
+          assert.equal(error.name, "ApiClientError");
+          assert.equal(error.code, "NETWORK_ERROR");
+          assert.equal(error.status, 0);
+          assert.equal(error.message, "Failed to fetch");
+        } else {
+          assert.deepEqual(loggedErrors, []);
+        }
       } finally {
         client.destroy();
       }
