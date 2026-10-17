@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.2.28",
+  "version": "1.2.29",
   "description": "api rest como middleware",
   "keywords": [
     "api",
