@@ -270,6 +270,18 @@ Las rutas de detalle admiten una PK simple o una PK compuesta por la FK del maes
 
 ## Filtros y Paginacion
 
+### Claves primarias compuestas
+
+En recursos principales con varios atributos `primaryKey: true`, las rutas `GET`, `PUT` y `DELETE` usan `:id` para el primer componente (segun el orden de declaracion) y query params para los restantes. Para una PK `{ id, codSucursal }`:
+
+```http
+GET /api/parametros/1?codSucursal=001
+PUT /api/parametros/1?codSucursal=001
+DELETE /api/parametros/1?codSucursal=001
+```
+
+`POST` recibe los componentes de la clave en el body. Las claves se validan segun sus tipos; los strings conservan ceros iniciales. Una clave incompleta se rechaza y `PUT` no permite cambiar componentes de una PK compuesta. Al llamar directamente al servicio tambien se puede pasar `params.id: { id: 1, codSucursal: "001" }`. Este contrato no cambia las rutas individuales de detalles ni el CRUD de claves simples.
+
 `GET /api/clientes` soporta paginacion y filtros por query string.
 
 ```http

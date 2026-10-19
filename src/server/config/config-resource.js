@@ -149,6 +149,13 @@ function uniqueValidator(model, primaryKey) {
     const transaction = schemaValidationTransaction();
     const existing = await model.findOne({ where: { [field]: value }, ...(transaction && { transaction }) });
     if (!existing) return null;
+    const keys = model.primaryKeyAttributes;
+    if (keys?.length > 1) {
+      const current = data.__uniqueId ?? data;
+      if (current && typeof current === "object" && keys.every(key =>
+        current[key] !== undefined && String(typeof existing.get === "function" ? existing.get(key) : existing[key]) === String(current[key]))) return null;
+      return new Error("Ya existe un registro con este valor");
+    }
     const existingId = typeof existing.get === "function" ? existing.get(primaryKey) : existing[primaryKey];
     const currentId = data.__uniqueId ?? data[primaryKey];
     if (currentId !== undefined && String(existingId) === String(currentId)) return null;

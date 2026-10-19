@@ -247,6 +247,13 @@ function uniqueValidator(model, primaryKey) {
     const transaction = schemaValidationTransaction();
     const existing = await model.findOne({ where: { [field]: value }, ...(transaction && { transaction }) });
     if (!existing) return null;
+    const keys = model.primaryKeyAttributes;
+    if (keys?.length > 1) {
+      const current = data.__uniqueId ?? data;
+      if (current && typeof current === "object" && keys.every(key =>
+        current[key] !== undefined && String(typeof existing.get === "function" ? existing.get(key) : existing[key]) === String(current[key]))) return null;
+      return new Error("Ya existe un registro con este valor");
+    }
     const existingId = typeof existing.get === "function" ? existing.get(primaryKey) : existing[primaryKey];
     const currentId = data.__uniqueId ?? data[primaryKey];
     if (currentId !== undefined && String(existingId) === String(currentId)) return null;
@@ -1527,7 +1534,8 @@ class BaseService {
   }
 
   async get({ params, query, body, transaction = null } = {}) {
-    const instance = await this.#model.findByPk(params.id, { plain: true, ...(transaction && { transaction }) });
+    const key = await this.#primaryKey(params, query);
+    const instance = await this.#model.findByPk(key, { plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName)
     return { data: instance };
   }
@@ -1550,16 +1558,27 @@ class BaseService {
   async update({ params, query, body, transaction = null } = {}) {
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     const pk = this.#model.primaryKeyAttribute;
-    const data = await validateResourceSchema(this.#schemas.update, { ...masterBody, __uniqueId: params.id }, transaction);
-    const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
-    await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
-    const instance = await this.#model.findByPk(data[pk] ?? params.id, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
+    const key = await this.#primaryKey(params, query);
+    const composite = typeof key === "object" && key !== null;
+    const where = composite ? key : { [pk]: key };
+    if (composite) {
+      for (const [field, value] of Object.entries(key)) {
+        if (masterBody?.[field] !== undefined && await this.#castFilterValue(field, masterBody[field], this.#model.rawAttributes[field]) !== value) {
+          throw new ValidationError(`No se puede modificar la clave primaria "${field}"`);
+        }
+      }
+    }
+    const data = await validateResourceSchema(this.#schemas.update, { ...masterBody, __uniqueId: key }, transaction);
+    const payload = hasDetails ? { ...(body || {}), ...data, ...where } : data;
+    await this.#model.update(payload, { where, ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
+    const instance = await this.#model.findByPk(composite ? key : data[pk] ?? key, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName);
     return { data: instance };
   }
 
   async remove({ params, query, body, transaction = null } = {}) {
-    const instance = await this.#model.findByPk(params.id, { ...(transaction && { transaction }) });
+    const key = await this.#primaryKey(params, query);
+    const instance = await this.#model.findByPk(key, { ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName)
     await instance.destroy({ ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
@@ -1595,6 +1614,22 @@ class BaseService {
     const removed = await target.destroy({ where, auditOld: data, ...(transaction && { transaction }) });
     if (!removed) throw new NotFoundError(name);
     return { data }
+  }
+
+  async #primaryKey(params = {}, query = {}) {
+    const keys = this.#model.primaryKeyAttributes || [this.#model.primaryKeyAttribute];
+    if (keys.length <= 1) return params.id;
+    const supplied = params.id && typeof params.id === "object" && !Array.isArray(params.id)
+      ? params.id : { ...query, [keys[0]]: params.id };
+    const key = {};
+    for (const field of keys) {
+      const value = supplied[field];
+      if (value === undefined || value === null || value === "" || typeof value === "object") {
+        throw new ValidationError(`Falta o no es valida la clave primaria "${field}"`);
+      }
+      key[field] = await this.#castFilterValue(field, value, this.#model.rawAttributes[field]);
+    }
+    return key;
   }
 
   async #detailWhere(target, foreignKey, params, body) {
