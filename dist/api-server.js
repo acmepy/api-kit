@@ -2160,7 +2160,7 @@ function errorLogger(err, req, { txId, status, code, errors }) {
 function createAuditResource() {
   return defineResource({
     modelName: "audit",
-    tableName: "audit",
+    //tableName: "audit",
     timestamps: true,
     indexes: [
       { name: "idx_audit_created_at", columns: ["createdAt"] },
