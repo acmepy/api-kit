@@ -1173,6 +1173,10 @@ function buildSchemaDocument({ routes, modules, session } = {}) {
 
     if (!services.has(route.module)) services.set(route.module, {
       name: route.module,
+      primaryKeyAttributes: module.model?.primaryKeyAttributes || ["id"],
+      details: Object.fromEntries((module.model?.getAssociationIncludes?.() || [])
+        .filter(({ as }) => Object.hasOwn(module.config?.details || {}, as))
+        .map(({ as, model, foreignKey }) => [as, { foreignKey, primaryKeyAttributes: model.primaryKeyAttributes }])),
       operations: {},
       schemas: {},
     });

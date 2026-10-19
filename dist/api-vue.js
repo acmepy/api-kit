@@ -176,6 +176,9 @@ function useApiService(name) {
     update: run("update"),
     remove: run("remove"),
     push: run("push"),
+    createDetail: run("createDetail"),
+    updateDetail: run("updateDetail"),
+    removeDetail: run("removeDetail"),
   };
 }
 
@@ -250,7 +253,9 @@ function useApiForm(name, options = {}) {
       const action = operation();
       if (action === "create") return await service().create(validated);
       if (action === "update") {
-        const id = options.id?.value ?? options.id ?? data.id;
+        const id = options.id?.value ?? options.id ?? (service().primaryKeyAttributes?.length > 1
+          ? Object.fromEntries(service().primaryKeyAttributes.map((key) => [key, data[key]]))
+          : data[service().primaryKeyAttributes?.[0] || "id"]);
         if (id === undefined || id === null) throw new Error("useApiForm requiere id para update");
         return await service().update(id, validated);
       }

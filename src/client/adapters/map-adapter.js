@@ -2,10 +2,12 @@ import { BaseAdapter } from "./base-adapter.js";
 
 export class MapAdapter extends BaseAdapter {
   #map;
+  #keyOf;
 
-  constructor(map = new Map()) {
+  constructor(map = new Map(), keyOf = (record) => record.id) {
     super();
     this.#map = map;
+    this.#keyOf = keyOf;
   }
 
   async getAll() {
@@ -18,10 +20,10 @@ export class MapAdapter extends BaseAdapter {
 
   async add(value) {
     if(Array.isArray(value)) {
-      value.forEach(v => this.put(v.id, v));
+      value.forEach(v => this.put(this.#keyOf(v), v));
       return value;
     }
-    this.put(value.id, value);
+    this.put(this.#keyOf(value), value);
     return value;
   }
 

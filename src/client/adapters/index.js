@@ -14,7 +14,7 @@ export function createAdapter({ type, prefix = "api", service, ...options } = {}
     dbName: options.dbName || prefix,
     storeName: options.storeName || service || "session",
   });
-  return new MapAdapter();
+  return new MapAdapter(new Map(), options.keyOf);
 }
 
 export function defaultAdapter(options = {}) {

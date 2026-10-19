@@ -5,14 +5,62 @@ import {defaultAdapter} from "../adapters/index.js";
 export class BaseService {
   #temporaryStorage = null;
 
-  constructor({ client, name, path, operations = {}, schemas = {}, prefix = "api", createAdapter }) {
+  constructor({ client, name, path, operations = {}, schemas = {}, primaryKeyAttributes = ["id"], details = {}, prefix = "api", createAdapter }) {
     this.client = client;
     this.name = name;
     this.path = path;
     this.operations = operations;
+    this.primaryKeyAttributes = primaryKeyAttributes;
+    this.details = details;
     this.schemas = Object.keys(schemas).length > 0 ? schemas : null;
     this.prefix = prefix;
-    this.adapter = createAdapter?.({ service: name, prefix: this.prefix });
+    this.adapter = createAdapter?.({ service: name, prefix: this.prefix, keyOf: (record) => this.keyOf(record) });
+  }
+
+  keyOf(record) {
+    if (!record) return undefined;
+    const values = this.primaryKeyAttributes.map((key) => record[key]);
+    if (values.some((value) => value === undefined || value === null)) return undefined;
+    return values.length === 1 ? values[0] : JSON.stringify(values);
+  }
+
+  #cacheKey(id) {
+    return id && typeof id === "object" ? this.keyOf(id) : id;
+  }
+
+  #keyValues(id) {
+    if (this.primaryKeyAttributes.length === 1) return { [this.primaryKeyAttributes[0]]: id };
+    if (!id || typeof id !== "object" || this.keyOf(id) === undefined) {
+      throw new Error("La clave compuesta requiere todos sus componentes");
+    }
+    return Object.fromEntries(this.primaryKeyAttributes.map((key) => [key, id[key]]));
+  }
+
+  async createDetail(id, detail, data = {}) {
+    return this.#writeDetail("createDetail", id, detail, undefined, data);
+  }
+
+  async updateDetail(id, detail, detailId, data = {}) {
+    return this.#writeDetail("updateDetail", id, detail, detailId, data);
+  }
+
+  async removeDetail(id, detail, detailId) {
+    return this.#writeDetail("removeDetail", id, detail, detailId);
+  }
+
+  async #writeDetail(operation, id, detail, detailId, body) {
+    const response = await this.#send(operation, { params: { id, detail, detailId }, body });
+    const current = await this.adapter.get(this.#cacheKey(id));
+    const keys = this.details[detail]?.primaryKeyAttributes;
+    if (current && Array.isArray(current[detail]) && response.data && keys?.length) {
+      const matches = (row) => keys.every((key) => row[key] === response.data[key]);
+      const rows = current[detail].filter((row) => !matches(row));
+      if (operation !== "removeDetail") rows.push(response.data);
+      const next = { ...current, [detail]: rows };
+      await this.adapter.put(this.#cacheKey(id), next);
+    }
+    this.#notify();
+    return response;
   }
 
   async list() {
@@ -25,7 +73,7 @@ export class BaseService {
   }
 
   async get(id) {
-    const data = await this.adapter.get(id);
+    const data = await this.adapter.get(this.#cacheKey(id));
     return { ok: Boolean(data), data };
   }
 
@@ -44,7 +92,7 @@ export class BaseService {
         networkFailed = true;
       }
     }
-    data = {...record, id: record.id ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
+    data = {...record, [this.primaryKeyAttributes[0]]: record[this.primaryKeyAttributes[0]] ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
     await this.adapter.add(data);
     this.#notify();
     if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
@@ -52,15 +100,15 @@ export class BaseService {
   }
 
   async update(id, data = {}, options = {}) {
-    const current = await this.adapter.get(id);
-    const record = await this.validate({...current, ...data, id}, "update");
+    const current = await this.adapter.get(this.#cacheKey(id));
+    const record = await this.validate({...current, ...data, ...this.#keyValues(id)}, "update");
     const pending = options.pending ?? !this.client.connected?.();
     let networkFailed = false;
     if(!pending) {
       try {
         const response = await this.#send("update", { params: { id }, body: data });
         const nextRecord = response.data || record;
-        await this.adapter.put(nextRecord.id ?? id, nextRecord);
+        await this.adapter.put(this.keyOf(nextRecord) ?? this.#cacheKey(id), nextRecord);
         this.#notify();
         return response;
       } catch (error) {
@@ -68,21 +116,21 @@ export class BaseService {
         networkFailed = true;
       }
     }
-    data = {...current, ...data, pending: true, operation:'update', status: "pending", message: "", errors: null };
-    await this.adapter.put(data.id ?? id, data)
+    data = {...current, ...data, ...this.#keyValues(id), pending: true, operation:'update', status: "pending", message: "", errors: null };
+    await this.adapter.put(this.keyOf(data) ?? this.#cacheKey(id), data)
     this.#notify();
     if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
   }
 
   async remove(id, options = {}) {
-    const current = await this.adapter.get(id);
+    const current = await this.adapter.get(this.#cacheKey(id));
     const pending = options.pending ?? !this.client.connected?.();
     let networkFailed = false;
     if (!pending) {
       try {
         const response = await this.#send("remove", { params: { id } });
-        await this.adapter.delete(id);
+        await this.adapter.delete(this.#cacheKey(id));
         this.#notify();
         return response;
       } catch (error) {
@@ -90,8 +138,8 @@ export class BaseService {
         networkFailed = true;
       }
     }
-    const data = {...current, id, pending: true, operation:'remove', status: "pending", message: "", errors: null };
-    await this.adapter.put(data.id, data);
+    const data = {...current, ...this.#keyValues(id), pending: true, operation:'remove', status: "pending", message: "", errors: null };
+    await this.adapter.put(this.keyOf(data), data);
     this.#notify();
     if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
     return { ok: true, data };
@@ -116,7 +164,7 @@ export class BaseService {
 
   async pullOne(id, query = {}) {
     const response = await this.#send("get", { params: { id }, query });
-    if (response.data?.id !== undefined) {
+    if (response.data && this.keyOf(response.data) !== undefined) {
       await this.adapter.add(response.data);
       this.#notify();
     }
@@ -131,19 +179,20 @@ export class BaseService {
     if (isCreate || isUpdate) {
       const changes = data.new && typeof data.new === "object" ? { ...data.new } : null;
       if (!changes) return;
-      const current = await this.#recordForChange(data, changes.id);
-      const id = current?.id ?? changes.id ?? data.rowId ?? data.id ?? data.old?.id;
+      const current = await this.#recordForChange(data, this.keyOf(changes));
+      const id = this.keyOf(current) ?? this.keyOf(changes) ?? data.rowId ?? data.id ?? this.keyOf(data.old);
       if (id === undefined || id === null) return;
-      const record = isUpdate ? { ...current, ...changes, id } : { ...changes, id };
+      const record = isUpdate ? { ...current, ...changes } : { ...changes };
+      if (this.primaryKeyAttributes.length === 1) record[this.primaryKeyAttributes[0]] ??= id;
       await this.adapter.put(id, record);
       this.#notify();
       return;
     }
     if (action === "delete" || action === "bulk-delete" || action === "remove" || action === "bulk-remove") {
       const current = await this.#recordForChange(data);
-      const id = current?.id ?? data.old?.id ?? data.rowId ?? data.id;
+      const id = this.keyOf(current) ?? this.keyOf(data.old) ?? data.rowId ?? data.id;
       if (id === undefined || id === null) return;
-      await this.adapter.delete(id);
+      await this.adapter.delete(this.#cacheKey(id));
       this.#notify();
       return;
     }
@@ -158,7 +207,7 @@ export class BaseService {
   }
 
   async push(id = null) {
-    const targets = id === null ? (await this.pending()).data : [await this.adapter.get(id)].filter(Boolean);
+    const targets = id === null ? (await this.pending()).data : [await this.adapter.get(this.#cacheKey(id))].filter(Boolean);
     const results = [];
     for (const record of targets) results.push(await this.pushOne(record));
     const errors = results.filter((result) => !result.ok);
@@ -168,22 +217,26 @@ export class BaseService {
   async pushOne(record) {
     try {
       const response = await this.#sendPendingOperation(record);
-      if (record.operation === "create") await this.adapter.delete(record.id);
+      if (record.operation === "create") await this.adapter.delete(this.keyOf(record));
       this.#notify();
-      return { ok: true, id: record.id, operation: record.operation, response };
+      return { ok: true, id: this.keyOf(record), operation: record.operation, response };
     } catch (error) {
       const errors = error.errors || error.response?.errors || null;
       const nextRecord = {...record, pending: true, status: "error", message: error.message, errors};
-      await this.adapter.put(record.id, nextRecord);
+      await this.adapter.put(this.keyOf(record), nextRecord);
       this.#notify();
-      return { ok: false, id: record.id, operation: record.operation, error: error.message, errors };
+      return { ok: false, id: this.keyOf(record), operation: record.operation, error: error.message, errors };
     }
   }
 
   async validate(data = {}, operation = "create") {
     const schema = await this.#yepSchema(operation);
     if (!schema) return data;
-    return schema.validate(data);
+    const validated = await schema.validate(data);
+    for (const name of Object.keys(this.details)) {
+      if (Object.hasOwn(data, name)) validated[name] = data[name];
+    }
+    return validated;
   }
 
   async validateAt(attribute, data = {}, operation = "create") {
@@ -194,10 +247,10 @@ export class BaseService {
 
   async unique(field, value, data = {}) {
     if (value === undefined || value === null) return null;
-    const currentId = data?.id;
+    const currentId = this.keyOf(data);
     const records = (await this.list()).data;
     const duplicate = records.find((record) => (
-      record?.[field] === value && (currentId === undefined || String(record.id) !== String(currentId))
+      record?.[field] === value && (currentId === undefined || String(this.keyOf(record)) !== String(currentId))
     ));
     return duplicate ? new Error("Ya existe un registro con este valor") : null;
   }
@@ -213,6 +266,11 @@ export class BaseService {
   async #send(operationName, { params = {}, query = {}, body } = {}) {
     const operation = this.operations[operationName];
     if (!operation) throw new Error(`Operacion "${operationName}" no disponible en "${this.name}"`);
+    if (params.id && typeof params.id === "object") {
+      const key = this.#keyValues(params.id);
+      query = { ...query, ...key };
+      params = { ...params, id: key[this.primaryKeyAttributes[0]] };
+    }
     return this.client.request(fillPath(operation.path, params), { method: operation.method, query, body });
   }
 
@@ -226,17 +284,17 @@ export class BaseService {
   }
 
   async #recordForChange(data, preferredId) {
-    const id = preferredId ?? data.rowId ?? data.id ?? data.old?.id;
+    const id = preferredId ?? data.rowId ?? data.id ?? this.keyOf(data.old);
     if (id === undefined || id === null) return null;
-    const direct = await this.adapter.get(id);
+    const direct = await this.adapter.get(this.#cacheKey(id));
     if (direct) return direct;
-    return (await this.adapter.getAll()).find((record) => String(record?.id) === String(id)) || null;
+    return (await this.adapter.getAll()).find((record) => String(this.keyOf(record)) === String(id)) || null;
   }
 
   async #sendPendingOperation(record) {
     if (record.operation === "create") return this.#send("create", { body: this.#pendingBody(record) });
-    if (record.operation === "update") return this.#send("update", { params: { id: record.id }, body: this.#pendingBody(record) });
-    if (record.operation === "remove") return this.#send("remove", { params: { id: record.id } });
+    if (record.operation === "update") return this.#send("update", { params: { id: this.primaryKeyAttributes.length === 1 ? this.keyOf(record) : record }, body: this.#pendingBody(record) });
+    if (record.operation === "remove") return this.#send("remove", { params: { id: this.primaryKeyAttributes.length === 1 ? this.keyOf(record) : record } });
     throw new Error(`Operacion pendiente "${record.operation}" no soportada`);
   }
   #pendingBody(record) {

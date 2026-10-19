@@ -17,7 +17,7 @@ export class BaseAdapter<T = unknown> implements StorageAdapter<T> {
 }
 
 export class MapAdapter<T = unknown> extends BaseAdapter<T> {
-  constructor(map?: Map<string | number, T>);
+  constructor(map?: Map<string | number, T>, keyOf?: (record: T) => string | number);
 }
 
 export interface LocalStorageLike {
@@ -27,7 +27,7 @@ export interface LocalStorageLike {
 }
 
 export class LocalStorageAdapter<T = unknown> extends BaseAdapter<T> {
-  constructor(storage?: LocalStorageLike, prefix?: string);
+  constructor(options?: { storage?: LocalStorageLike; prefix?: string; service?: string; keyOf?: (record: T) => string | number });
 }
 
 export interface IndexedDbKeyval {
@@ -44,6 +44,7 @@ export interface IndexedDbAdapterOptions {
   dbName?: string;
   storeName?: string;
   idbKeyval?: IndexedDbKeyval;
+  keyOf?: (record: any) => string | number;
 }
 
 export class IndexedDbAdapter<T = unknown> extends BaseAdapter<T> {
@@ -71,6 +72,7 @@ export class ApiClientError extends Error {
 }
 
 export interface ApiClientOptions {
+  url?: string;
   baseUrl?: string;
   token?: string;
   headers?: Record<string, string>;
@@ -109,7 +111,7 @@ export class ApiClient {
   session(): Promise<unknown>;
   token(): string | null;
   service(name: string): BaseService | undefined;
-  services(): Record<string, BaseService>;
+  services(): Map<string, BaseService>;
   cachedRequest<T = unknown>(key: string, path: string, options?: RequestOptions & { force?: boolean }): Promise<T>;
   markServiceCacheUpdated(name: string): void;
   syncServices(force?: boolean): Promise<void>;
@@ -132,9 +134,12 @@ export interface ServiceOptions {
   path?: string;
   operations?: Record<string, unknown>;
   schemas?: Record<string, unknown>;
+  primaryKeyAttributes?: string[];
+  details?: Record<string, { foreignKey: string; primaryKeyAttributes: string[] }>;
   prefix?: string;
   createAdapter?: (options?: CreateAdapterOptions) => StorageAdapter;
 }
+export type ServiceId = string | number | Record<string, string | number>;
 export interface ServiceRecord { id?: string | number; [key: string]: unknown; }
 export class BaseService<T extends ServiceRecord = ServiceRecord> {
   constructor(options: ServiceOptions);
@@ -142,26 +147,32 @@ export class BaseService<T extends ServiceRecord = ServiceRecord> {
   readonly name: string;
   readonly path: string;
   readonly operations: Record<string, unknown>;
-  readonly schemas: Record<string, unknown>;
+  readonly schemas: Record<string, unknown> | null;
+  readonly primaryKeyAttributes: string[];
+  readonly details: NonNullable<ServiceOptions["details"]>;
   readonly prefix: string;
   readonly adapter: StorageAdapter<T>;
-  list(params?: Record<string, unknown>): Promise<T[]>;
-  pending(params?: Record<string, unknown>): Promise<T[]>;
-  get(id: string | number, options?: RequestOptions): Promise<T | null>;
-  create(data: Partial<T>, options?: RequestOptions): Promise<T>;
-  update(id: string | number, data: Partial<T>, options?: RequestOptions): Promise<T>;
-  remove(id: string | number, options?: RequestOptions): Promise<void>;
-  pull(options?: { force?: boolean }): Promise<T[]>;
-  pullOne(id: string | number, options?: RequestOptions): Promise<T | null>;
-  applyData(data: T | T[]): Promise<T | T[]>;
-  nextTemporaryId(): string;
-  push(options?: RequestOptions): Promise<void>;
-  pushOne(id: string | number, options?: RequestOptions): Promise<T>;
-  validate(data: Partial<T>, operation?: string): Promise<Record<string, string>>;
-  validateAt(field: string, value: unknown, data?: Partial<T>, operation?: string): Promise<string | undefined>;
-  unique(field: string, value: unknown, id?: string | number): Promise<boolean>;
-  permissions(): Record<string, boolean>;
-  request<R = unknown>(path: string, options?: RequestOptions): Promise<R>;
+  keyOf(record?: Partial<T>): string | number | undefined;
+  list(): Promise<ApiResponse<T[]>>;
+  pending(): Promise<ApiResponse<T[]>>;
+  get(id: ServiceId): Promise<ApiResponse<T | null>>;
+  create(data: Partial<T>, options?: { pending?: boolean }): Promise<ApiResponse<T>>;
+  update(id: ServiceId, data: Partial<T>, options?: { pending?: boolean }): Promise<ApiResponse<T>>;
+  remove(id: ServiceId, options?: { pending?: boolean }): Promise<ApiResponse<T>>;
+  createDetail(id: ServiceId, detail: string, data?: Record<string, unknown>): Promise<ApiResponse>;
+  updateDetail(id: ServiceId, detail: string, detailId: string | number, data?: Record<string, unknown>): Promise<ApiResponse>;
+  removeDetail(id: ServiceId, detail: string, detailId: string | number): Promise<ApiResponse>;
+  pull(query?: Record<string, unknown>): Promise<ApiResponse<T[]>>;
+  pullOne(id: ServiceId, query?: Record<string, unknown>): Promise<ApiResponse<T>>;
+  applyData(data: ChangeEvent): Promise<void>;
+  nextTemporaryId(): Promise<number>;
+  push(id?: ServiceId | null): Promise<ApiResponse>;
+  pushOne(record: T): Promise<ApiResponse>;
+  validate(data: Partial<T>, operation?: string): Promise<Partial<T>>;
+  validateAt(field: string, data?: Partial<T>, operation?: string): Promise<unknown>;
+  unique(field: string, value: unknown, data?: Partial<T>): Promise<Error | null>;
+  permissions(operation: string): string[];
+  request<R = unknown>(operation: string, options?: { params?: Record<string, unknown>; query?: Record<string, unknown>; body?: unknown }): Promise<ApiResponse<R>>;
   clear(): Promise<void>;
 }
 export class PendingService<T extends ServiceRecord = ServiceRecord> extends BaseService<T> {}

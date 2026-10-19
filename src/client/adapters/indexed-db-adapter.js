@@ -4,9 +4,11 @@ import { BaseAdapter } from "./base-adapter.js";
 export class IndexedDbAdapter extends BaseAdapter {
   #keyval;
   #store;
+  #keyOf;
 
   constructor(options = {}) {
     super();
+    this.#keyOf = options.keyOf || ((record) => record.id);
     this.#keyval = options.idbKeyval || idbKeyval;
     if (!options.idbKeyval && !globalThis.indexedDB) throw new Error("IndexedDbAdapter requiere indexedDB");
     this.#store = this.#keyval.createStore(options.dbName || "api", options.storeName || "session");
@@ -22,10 +24,10 @@ export class IndexedDbAdapter extends BaseAdapter {
 
   async add(value) {
     if (Array.isArray(value)) {
-      await this.#keyval.setMany(value.map((item) => [item.id, item]), this.#store);
+      await this.#keyval.setMany(value.map((item) => [this.#keyOf(item), item]), this.#store);
       return value;
     }
-    await this.put(value.id, value);
+    await this.put(this.#keyOf(value), value);
     return value;
   }
 

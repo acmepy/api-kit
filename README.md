@@ -475,7 +475,7 @@ await clienteForm.submit();
 <small v-if="clienteForm.errors.ruc">{{ clienteForm.errors.ruc }}</small>
 ```
 
-`useApiService(nombre)` maneja una colección reactiva: expone `records`/`data`, `loading`, `error`, `empty`, `refresh()`/`list()` para cache local, `pull()`/`pullOne()` para el servidor y CRUD (`create`, `update`, `remove`, `push`). Vuelve a leer la cache cuando el cliente recibe cambios locales, `changes` o SSE.
+`useApiService(nombre)` maneja una colección reactiva: expone `records`/`data`, `loading`, `error`, `empty`, `refresh()`/`list()` para cache local, `pull()`/`pullOne()` para el servidor y CRUD (`create`, `update`, `remove`, `push`) y operaciones de detalle (`createDetail`, `updateDetail`, `removeDetail`). Vuelve a leer la cache cuando el cliente recibe cambios locales, `changes` o SSE.
 
 `useApiForm(nombre, opciones)` expone `data`, `errors`, `validating`, `submitting`, `valid`, `validateField()`, `validate()`, `submit()`, `reset()` y `clearErrors()`. Los errores devueltos durante `submit()` quedan disponibles en `errors` por campo.
 
@@ -499,6 +499,12 @@ const client = createApiClient({
 ```
 
 El adapter IndexedDB usa `idb-keyval` y conserva la misma interfaz de almacenamiento que `LocalStorageAdapter`.
+
+El cliente descubre las claves primarias y los nombres de detalle desde `schema.json`. La cache conserva los campos originales, sin agregar un `id` a recursos que usan otra clave. Para una clave compuesta, `get`, `pullOne`, `update`, `remove` y `push` reciben un objeto con todos sus componentes. `useApiForm` puede obtener esa clave de los datos iniciales al editar.
+
+La validacion de la cabecera conserva los detalles anidados al crear o actualizar, incluidos los pendientes locales. Las reglas de los detalles se ejecutan en el servidor al enviar; los errores de envio quedan disponibles en `useApiForm.errors` con los nombres de campo que devuelve el servidor.
+
+Las operaciones individuales de detalle envian directamente al servidor y requieren conexion. Por ejemplo: `await listas.createDetail("001", "items", { articulo: "A2", cantidad: 4 })`, `await listas.updateDetail("001", "items", "A2", { cantidad: 5 })` y `await listas.removeDetail("001", "items", "A2")`. Actualizan los detalles de una cabecera ya cargada en cache. En Vue se usan los mismos metodos sobre `useApiService("listas")`.
 
 Las reglas `unique` se comprueban en el cliente contra su cache local. Son una validación de experiencia de usuario; el servidor y la restricción de base de datos siguen siendo la autoridad final.
 
