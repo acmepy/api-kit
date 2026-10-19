@@ -144,7 +144,7 @@ function registerSeqModels(seq, modelClasses) {
 
   for (const modelClass of new Set(modelClasses)) {
     if (!modelClass) continue;
-    if (!modelClass.modelName && typeof modelClass.define === "function") modelClass.define(seq);
+    if (!modelClass.seq && typeof modelClass.define === "function") modelClass.define(seq);
     const modelName = modelClass.modelName || modelClass.name;
     if (modelName && typeof seq.hasModel === "function" && seq.hasModel(modelName)) continue;
     if (modelClass.modelName) seq.registerModel(modelClass);

@@ -92,6 +92,7 @@ function defineResource(definition = {}) {
   const ResourceModel = CustomModel || class extends Model {
     static define(seq) {return this.init(modelAttributes, { ...modelOptions, seq })}
   };
+  if (!CustomModel) ResourceModel.init(modelAttributes, modelOptions);
   const generatedSchemas = buildSchemas(normalizedAttributes, schemas, definition, ResourceModel);
 
   ResourceModel.attributes = modelAttributes;
@@ -1530,8 +1531,9 @@ class BaseService {
 
   async createDetail({ params, query, body, transaction = null } = {}) {
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
-    const parentId = Number.isNaN(Number(params.id)) ? params.id : Number(params.id);
-    const data = await target.resourceSchemas.create.validate(body);
+    if (typeof foreignKey !== "string") throw new ValidationError("La ruta de detalle requiere una clave foranea simple");
+    const parentId = await this.#castFilterValue(foreignKey, params.id, target.rawAttributes[foreignKey]);
+    const data = await target.resourceSchemas.create.validate({ ...body, [foreignKey]: parentId });
     const instance = await target.create({ ...data, [foreignKey]: parentId }, { ...(transaction && { transaction }) });
     return { data: instance.toJSON() }
   }
@@ -1539,8 +1541,8 @@ class BaseService {
   async updateDetail({ params, query, body, transaction = null } = {}) {
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     const data = await target.resourceSchemas.update.validate(body);
-    const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
-    const where = { [primaryKey]: params.detailId || body[primaryKey], [foreignKey]: params.id };
+    const name = params.detail;
+    const where = await this.#detailWhere(target, foreignKey, params, body);
     await target.update(data, { where, ...(transaction && { transaction }) });
     const instance = await target.findOne({ where, plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(name);
@@ -1549,14 +1551,27 @@ class BaseService {
 
   async removeDetail({ params, query, body, transaction = null } = {}) {
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
-    const [name, primaryKey] = [params.detail, target?.primaryKeyAttribute || "id"];
-    const where = { [primaryKey]: params.detailId || body?.[primaryKey], [foreignKey]: params.id };
+    const name = params.detail;
+    const where = await this.#detailWhere(target, foreignKey, params, body);
     const instance = await target.findOne({ where, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(name);
     const data = instance.toJSON();
     const removed = await target.destroy({ where, auditOld: data, ...(transaction && { transaction }) });
     if (!removed) throw new NotFoundError(name);
     return { data }
+  }
+
+  async #detailWhere(target, foreignKey, params, body) {
+    if (typeof foreignKey !== "string") throw new ValidationError("La ruta de detalle requiere una clave foranea simple");
+    const keys = target.primaryKeyAttributes.filter((key) => key !== foreignKey);
+    if (keys.length !== 1) throw new ValidationError("La ruta de detalle requiere un unico componente de clave ademas de la clave del maestro");
+    const primaryKey = keys[0];
+    const id = params.detailId ?? body?.[primaryKey];
+    if (id === undefined || id === null) throw new ValidationError(`Falta la clave del detalle "${primaryKey}"`);
+    return {
+      [primaryKey]: await this.#castFilterValue(primaryKey, id, target.rawAttributes[primaryKey]),
+      [foreignKey]: await this.#castFilterValue(foreignKey, params.id, target.rawAttributes[foreignKey]),
+    };
   }
 
   #masterDetailsContext(body = {}) {
@@ -2832,7 +2847,7 @@ function registerSeqModels(seq, modelClasses) {
 
   for (const modelClass of new Set(modelClasses)) {
     if (!modelClass) continue;
-    if (!modelClass.modelName && typeof modelClass.define === "function") modelClass.define(seq);
+    if (!modelClass.seq && typeof modelClass.define === "function") modelClass.define(seq);
     const modelName = modelClass.modelName || modelClass.name;
     if (modelName && typeof seq.hasModel === "function" && seq.hasModel(modelName)) continue;
     if (modelClass.modelName) seq.registerModel(modelClass);

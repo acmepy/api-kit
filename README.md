@@ -264,6 +264,8 @@ PUT /api/ventas/1/items/1
 DELETE /api/ventas/1/items/1
 ```
 
+Las rutas de detalle admiten una PK simple o una PK compuesta por la FK del maestro y un atributo adicional. En el segundo caso, `:detailId` identifica ese atributo adicional: para `{ codListaPrecio, codArticulo }`, la ruta `/api/listasPrecios/001/detalles/A1` usa ambos campos para actualizar o eliminar. La FK se toma de la ruta al crear y se valida segun el tipo declarado; un codigo de texto como `"001"` conserva sus ceros iniciales y no necesita repetirse en el body. Las rutas de escritura actuales requieren una FK simple y un unico componente identificador del detalle fuera de esa FK.
+
 ## Filtros y Paginacion
 
 `GET /api/clientes` soporta paginacion y filtros por query string.

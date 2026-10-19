@@ -28,6 +28,7 @@ export function defineResource(definition = {}) {
   const ResourceModel = CustomModel || class extends Model {
     static define(seq) {return this.init(modelAttributes, { ...modelOptions, seq })}
   };
+  if (!CustomModel) ResourceModel.init(modelAttributes, modelOptions);
   const generatedSchemas = buildSchemas(normalizedAttributes, schemas, definition, ResourceModel);
 
   ResourceModel.attributes = modelAttributes;
