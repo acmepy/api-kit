@@ -258,6 +258,8 @@ Content-Type: application/json
 
 Tambien se generan endpoints de detalle:
 
+La creacion maestro/detalle valida cada registro anidado con el schema `create` del detalle, incluidas reglas como `min`, `regexp`, `unique` y validaciones personalizadas. Tambien se validan los detalles nuevos que reemplazan a los anteriores en una actualizacion anidada. La validacion ocurre despues de asignar la FK del maestro y dentro de la misma transaccion; sus valores normalizados se usan al insertar. Si un detalle es invalido, la respuesta es `400` y se revierte toda la operacion, sin conservar una cabecera ni detalles parciales. Las comprobaciones `unique` utilizan esa misma transaccion.
+
 ```http
 POST /api/ventas/1/items
 PUT /api/ventas/1/items/1

@@ -1,5 +1,6 @@
 import yep from "yep";
 import { Model, DataTypes } from "seq";
+import { schemaValidationTransaction } from "../base/nested-schema-validation.js";
 
 const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes"]);
 const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
@@ -145,7 +146,8 @@ function primaryKeyName(attributes) {
 
 function uniqueValidator(model, primaryKey) {
   return async (value, field, data = {}) => {
-    const existing = await model.findOne({ where: { [field]: value } });
+    const transaction = schemaValidationTransaction();
+    const existing = await model.findOne({ where: { [field]: value }, ...(transaction && { transaction }) });
     if (!existing) return null;
     const existingId = typeof existing.get === "function" ? existing.get(primaryKey) : existing[primaryKey];
     const currentId = data.__uniqueId ?? data[primaryKey];

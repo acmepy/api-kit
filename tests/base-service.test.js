@@ -1,5 +1,6 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import yep from "yep";
 import { createTestSeq } from "./helpers/seq.js";
 import { BaseService, defineResource, NotFoundError, ValidationError, getContext, runWithContext } from "../src/server/index.js";
 
@@ -376,6 +377,9 @@ describe("BaseService details", () => {
   let service;
 
   beforeEach(async () => {
+    if (typeof yep.string().detallePermitidoTest !== "function") {
+      yep.addTest("detallePermitidoTest", (value) => value !== "Prohibido");
+    }
     ventaResource = defineResource({
       modelName: "Venta",
       tableName: "ventas",
@@ -394,8 +398,8 @@ describe("BaseService details", () => {
       attributes: {
         id: { type: "integer", primaryKey: true, autoIncrement: true },
         ventaId: { type: "integer", allowNull: false },
-        producto: { type: "string", allowNull: false },
-        cantidad: { type: "integer", allowNull: false },
+        producto: { type: "string", allowNull: false, regexp: "^[A-Za-z ]+$", detallePermitidoTest: true },
+        cantidad: { type: "integer", allowNull: false, min: 1 },
       },
     });
 
@@ -406,7 +410,7 @@ describe("BaseService details", () => {
       attributes: {
         id: { type: "integer", primaryKey: true, autoIncrement: true },
         ventaId: { type: "integer", allowNull: false },
-        medio: { type: "string", allowNull: false },
+        medio: { type: "string", allowNull: false, unique: true },
         monto: { type: "decimal", precision: 12, scale: 2, allowNull: false },
       },
     });
@@ -471,7 +475,64 @@ describe("BaseService details", () => {
     assert.equal(result.data.items[0].ventaId, result.data.id);
   });
 
-  it("rolls back the master when seq rejects an invalid detail", async () => {
+  for (const [field, value] of [["cantidad", 0], ["producto", "Mouse!"], ["producto", "Prohibido"]]) {
+    for (const operation of ["create", "update"]) {
+      it(`validates nested ${field}=${value} during ${operation} and preserves database atomicity`, async () => {
+        const existing = operation === "update" ? await service.create({
+          body: { cliente: "Original", items: [{ producto: "Mouse", cantidad: 1 }] },
+        }) : null;
+        await assert.rejects(() => service[operation]({
+          ...(existing && { params: { id: existing.data.id } }),
+          body: {
+            cliente: "Cambio",
+            items: [{ producto: "Teclado", cantidad: 2 }, { producto: "Mouse", cantidad: 1, [field]: value }],
+            cobros: [{ medio: "efectivo", monto: 100 }],
+          },
+        }), (error) => error.code === "VALIDATION_ERROR" && typeof error.errors?.[field] === "string");
+        assert.equal(await ventaResource.model.count(), existing ? 1 : 0);
+        assert.equal(await itemResource.model.count(), existing ? 1 : 0);
+        assert.equal(await cobroResource.model.count(), 0);
+        if (existing) {
+          const unchanged = await ventaResource.model.findByPk(existing.data.id, { plain: true });
+          assert.equal(unchanged.cliente, "Original");
+          const item = await itemResource.model.findOne({ plain: true });
+          assert.equal(item.producto, "Mouse");
+          assert.equal(item.cantidad, 1);
+        }
+      });
+    }
+  }
+
+  it("uses normalized values from nested schemas and validates the assigned foreign key", async () => {
+    const result = await service.create({ body: {
+      cliente: "Ana", items: [{ producto: "Mouse", cantidad: "2" }],
+    } });
+    assert.equal(result.data.items[0].cantidad, 2);
+    assert.equal(result.data.items[0].ventaId, result.data.id);
+  });
+
+  it("validates nested uniqueness using the active transaction", async () => {
+    await assert.rejects(() => service.create({ body: {
+      cliente: "Ana", cobros: [{ medio: "efectivo", monto: 1 }, { medio: "efectivo", monto: 2 }],
+    } }), (error) => error.code === "VALIDATION_ERROR" && typeof error.errors?.medio === "string");
+    assert.equal(await ventaResource.model.count(), 0);
+    assert.equal(await cobroResource.model.count(), 0);
+  });
+
+  it("runs the actual detail schema once per child across repeated operations", async () => {
+    const schema = itemResource.schemas.create;
+    const validate = schema.validate.bind(schema);
+    const validated = [];
+    schema.validate = async (data) => {
+      validated.push(data.producto);
+      return validate(data);
+    };
+    await service.create({ body: { cliente: "Ana", items: [{ producto: "Mouse", cantidad: 1 }] } });
+    await service.create({ body: { cliente: "Beto", items: [{ producto: "Teclado", cantidad: 1 }] } });
+    assert.deepEqual(validated, ["Mouse", "Teclado"]);
+  });
+
+  it("rolls back the master when a detail fails its schema", async () => {
     await assert.rejects(
       () =>
         service.create({
@@ -483,7 +544,7 @@ describe("BaseService details", () => {
         }),
       (error) =>
         error.name === "ValidationError" &&
-        error.message === 'Field "cantidad" does not allow null values in model "VentaItem"',
+        typeof error.errors?.cantidad === "string",
     );
 
     assert.equal(await ventaResource.model.count(), 0);

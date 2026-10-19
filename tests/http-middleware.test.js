@@ -328,7 +328,7 @@ describe("http middleware", () => {
                 id: { type: "integer", primaryKey: true, autoIncrement: true },
                 ventaId: { type: "integer", allowNull: false, create: false, update: false },
                 producto: { type: "string", allowNull: false },
-                cantidad: { type: "integer", allowNull: false },
+                cantidad: { type: "integer", allowNull: false, min: 1 },
               },
             },
           ],
@@ -365,6 +365,19 @@ describe("http middleware", () => {
       assert.equal(detail.status, 200);
       assert.equal(detail.body.data.producto, "Teclado");
       assert.equal(detail.body.data.ventaId, created.body.data.id);
+
+      const invalid = await request(server, "POST", "/api/ventas", {
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cliente: "Invalido", items: [
+          { producto: "Valido", cantidad: 1 },
+          { producto: "Invalido", cantidad: 0 },
+        ] }),
+      });
+      assert.equal(invalid.status, 400);
+      assert.equal(invalid.body.code, "VALIDATION_ERROR");
+      assert.equal(typeof invalid.body.errors.cantidad, "string");
+      const list = await request(server, "GET", "/api/ventas");
+      assert.equal(list.body.data.length, 1);
     } finally {
       await api.close();
       await close(server);

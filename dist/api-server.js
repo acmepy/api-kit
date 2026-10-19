@@ -65,6 +65,41 @@ async function fileExists(filePath) {
   }
 }
 
+const validationContext = Symbol("api-kit nested schema validation");
+const configuredModels = new WeakSet();
+const validationTransactions = new AsyncLocalStorage();
+
+function validateResourceSchema(schema, values, transaction) {
+  return validationTransactions.run(transaction, () => schema.validate(values));
+}
+
+function schemaValidationTransaction() {
+  return validationTransactions.getStore();
+}
+
+async function validateNestedCreate(values, options) {
+  const context = options[validationContext];
+  if (!context) return;
+  if (this === context.root && !context.rootVisited) {
+    context.rootVisited = true;
+    return;
+  }
+  const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction);
+  Object.assign(values, validated);
+}
+
+function nestedSchemaValidationOptions(root, includes) {
+  for (const include of includes) {
+    const target = include.model;
+    if (target.resourceSchemas?.create && !configuredModels.has(target)) {
+      target.addHook("beforeCreate", validateNestedCreate);
+      configuredModels.add(target);
+    }
+    if (include.include) nestedSchemaValidationOptions(root, include.include);
+  }
+  return { [validationContext]: { root, rootVisited: false } };
+}
+
 const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes"]);
 const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
 const DECLARATIVE_RULE_KEYS = new Set(["title", "required", "nullable", "default", "defaultValue", "oneOf", "notOneOf", "in", "pattern", "regexp", "matches", "email", "positive", "min", "max", "maxLength", "between"]);
@@ -209,7 +244,8 @@ function primaryKeyName(attributes) {
 
 function uniqueValidator(model, primaryKey) {
   return async (value, field, data = {}) => {
-    const existing = await model.findOne({ where: { [field]: value } });
+    const transaction = schemaValidationTransaction();
+    const existing = await model.findOne({ where: { [field]: value }, ...(transaction && { transaction }) });
     if (!existing) return null;
     const existingId = typeof existing.get === "function" ? existing.get(primaryKey) : existing[primaryKey];
     const currentId = data.__uniqueId ?? data[primaryKey];
@@ -1505,18 +1541,18 @@ class BaseService {
 
   async create({ params, query, body, transaction = null } = {}) {
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
-    const data = await this.#schemas.create.validate(masterBody);
+    const data = await validateResourceSchema(this.#schemas.create, masterBody, transaction);
     const payload = hasDetails ? { ...body, ...data } : data;
-    const instance = await this.#model.create(payload, { ...(hasDetails && { include }), ...(transaction && { transaction }) });
+    const instance = await this.#model.create(payload, { ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
   async update({ params, query, body, transaction = null } = {}) {
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     const pk = this.#model.primaryKeyAttribute;
-    const data = await this.#schemas.update.validate({ ...masterBody, __uniqueId: params.id });
+    const data = await validateResourceSchema(this.#schemas.update, { ...masterBody, __uniqueId: params.id }, transaction);
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
-    await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
+    await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     const instance = await this.#model.findByPk(data[pk] ?? params.id, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName);
     return { data: instance };
@@ -1533,14 +1569,14 @@ class BaseService {
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     if (typeof foreignKey !== "string") throw new ValidationError("La ruta de detalle requiere una clave foranea simple");
     const parentId = await this.#castFilterValue(foreignKey, params.id, target.rawAttributes[foreignKey]);
-    const data = await target.resourceSchemas.create.validate({ ...body, [foreignKey]: parentId });
+    const data = await validateResourceSchema(target.resourceSchemas.create, { ...body, [foreignKey]: parentId }, transaction);
     const instance = await target.create({ ...data, [foreignKey]: parentId }, { ...(transaction && { transaction }) });
     return { data: instance.toJSON() }
   }
 
   async updateDetail({ params, query, body, transaction = null } = {}) {
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
-    const data = await target.resourceSchemas.update.validate(body);
+    const data = await validateResourceSchema(target.resourceSchemas.update, body, transaction);
     const name = params.detail;
     const where = await this.#detailWhere(target, foreignKey, params, body);
     await target.update(data, { where, ...(transaction && { transaction }) });

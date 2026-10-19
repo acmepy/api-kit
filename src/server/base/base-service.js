@@ -3,6 +3,7 @@ import { ValidationError } from "../errors/validation-error.js";
 import { Op } from "seq";
 import yep from 'yep'
 import { getContext } from "../context/request-context.js";
+import { nestedSchemaValidationOptions, validateResourceSchema } from "./nested-schema-validation.js";
 
 const FILTER_OPERATORS = { eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between };
 const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
@@ -79,18 +80,18 @@ export class BaseService {
 
   async create({ params, query, body, transaction = null } = {}) {
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
-    const data = await this.#schemas.create.validate(masterBody);
+    const data = await validateResourceSchema(this.#schemas.create, masterBody, transaction);
     const payload = hasDetails ? { ...body, ...data } : data;
-    const instance = await this.#model.create(payload, { ...(hasDetails && { include }), ...(transaction && { transaction }) });
+    const instance = await this.#model.create(payload, { ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
   async update({ params, query, body, transaction = null } = {}) {
     const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
     const pk = this.#model.primaryKeyAttribute;
-    const data = await this.#schemas.update.validate({ ...masterBody, __uniqueId: params.id });
+    const data = await validateResourceSchema(this.#schemas.update, { ...masterBody, __uniqueId: params.id }, transaction);
     const payload = hasDetails ? { ...(body || {}), ...data, [pk]: params.id } : data;
-    await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include }), ...(transaction && { transaction }) });
+    await this.#model.update(payload, { where: { [pk]: params.id }, ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     const instance = await this.#model.findByPk(data[pk] ?? params.id, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName);
     return { data: instance };
@@ -107,14 +108,14 @@ export class BaseService {
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
     if (typeof foreignKey !== "string") throw new ValidationError("La ruta de detalle requiere una clave foranea simple");
     const parentId = await this.#castFilterValue(foreignKey, params.id, target.rawAttributes[foreignKey]);
-    const data = await target.resourceSchemas.create.validate({ ...body, [foreignKey]: parentId })
+    const data = await validateResourceSchema(target.resourceSchemas.create, { ...body, [foreignKey]: parentId }, transaction)
     const instance = await target.create({ ...data, [foreignKey]: parentId }, { ...(transaction && { transaction }) })
     return { data: instance.toJSON() }
   }
 
   async updateDetail({ params, query, body, transaction = null } = {}) {
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail)
-    const data = await target.resourceSchemas.update.validate(body)
+    const data = await validateResourceSchema(target.resourceSchemas.update, body, transaction)
     const name = params.detail;
     const where = await this.#detailWhere(target, foreignKey, params, body);
     await target.update(data, { where, ...(transaction && { transaction }) })
