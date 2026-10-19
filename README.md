@@ -4,6 +4,22 @@
 
 ## Instalacion
 
+Para usar solamente `api/client`:
+
+```bash
+npm install api
+```
+
+Las dependencias directas son `yep` e `idb-keyval`. Las dependencias del servidor son peers opcionales y se instalan explicitamente al usar `api/server`:
+
+```bash
+npm install api express adm-zip github:acmepy/seq github:acmepy/iam
+```
+
+`vue`, `logger`, `compression`, `cors`, `express-rate-limit` y `helmet` tambien son peers opcionales: instala los que utilice tu aplicacion. Si falta una dependencia importada por una entrada, Node informa `ERR_MODULE_NOT_FOUND`.
+
+Para desarrollar este repositorio (incluye las dependencias de desarrollo):
+
 ```bash
 npm install
 ```

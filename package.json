@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -48,26 +48,32 @@
     "lint": "eslint src tests example rollup.config.js eslint.config.js"
   },
   "dependencies": {
-    "adm-zip": "^0.6.0",
-    "express": "^5.1.0",
-    "iam": "github:acmepy/iam",
     "idb-keyval": "^6.3.0",
-    "seq": "github:acmepy/seq",
     "yep": "github:acmepy/yep"
   },
   "peerDependencies": {
+    "adm-zip": "^0.6.0",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
+    "express": "^5.1.0",
     "express-rate-limit": "^8.6.0",
     "helmet": "^8.3.0",
+    "iam": "github:acmepy/iam",
     "logger": "github:acmepy/logger-js",
+    "seq": "github:acmepy/seq",
     "vue": "^3.5.0"
   },
   "peerDependenciesMeta": {
+    "adm-zip": {
+      "optional": true
+    },
     "compression": {
       "optional": true
     },
     "cors": {
+      "optional": true
+    },
+    "express": {
       "optional": true
     },
     "express-rate-limit": {
@@ -76,20 +82,34 @@
     "helmet": {
       "optional": true
     },
+    "iam": {
+      "optional": true
+    },
+    "logger": {
+      "optional": true
+    },
+    "seq": {
+      "optional": true
+    },
     "vue": {
       "optional": true
     }
   },
   "devDependencies": {
     "@rollup/plugin-terser": "^1.0.0",
+    "adm-zip": "^0.6.0",
     "better-sqlite3": "^12.11.1",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "eslint": "^10.7.0",
+    "express": "^5.1.0",
     "express-rate-limit": "^8.6.0",
     "helmet": "^8.3.0",
+    "iam": "github:acmepy/iam",
+    "logger": "github:acmepy/logger-js",
     "mysql2": "^3.23.3",
     "rollup": "^4.0.0",
+    "seq": "github:acmepy/seq",
     "vue": "^3.5.41"
   },
   "allowScripts": {
