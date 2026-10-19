@@ -139,6 +139,20 @@ export interface ServiceOptions {
   prefix?: string;
   createAdapter?: (options?: CreateAdapterOptions) => StorageAdapter;
 }
+export interface PushResult {
+  ok: boolean;
+  id?: string | number;
+  operation?: string;
+  service?: string;
+  response?: ApiResponse;
+  error?: string;
+  errors?: Record<string, string> | null;
+}
+export interface PushResponse extends ApiResponse {
+  ok: boolean;
+  results: PushResult[];
+  errors: PushResult[];
+}
 export type ServiceId = string | number | Record<string, string | number>;
 export interface ServiceRecord { id?: string | number; [key: string]: unknown; }
 export class BaseService<T extends ServiceRecord = ServiceRecord> {
@@ -166,8 +180,8 @@ export class BaseService<T extends ServiceRecord = ServiceRecord> {
   pullOne(id: ServiceId, query?: Record<string, unknown>): Promise<ApiResponse<T>>;
   applyData(data: ChangeEvent): Promise<void>;
   nextTemporaryId(): Promise<number>;
-  push(id?: ServiceId | null): Promise<ApiResponse>;
-  pushOne(record: T): Promise<ApiResponse>;
+  push(id?: ServiceId | null): Promise<PushResponse>;
+  pushOne(record: T): Promise<PushResult>;
   validate(data: Partial<T>, operation?: string): Promise<Partial<T>>;
   validateAt(field: string, data?: Partial<T>, operation?: string): Promise<unknown>;
   unique(field: string, value: unknown, data?: Partial<T>): Promise<Error | null>;
@@ -175,6 +189,8 @@ export class BaseService<T extends ServiceRecord = ServiceRecord> {
   request<R = unknown>(operation: string, options?: { params?: Record<string, unknown>; query?: Record<string, unknown>; body?: unknown }): Promise<ApiResponse<R>>;
   clear(): Promise<void>;
 }
-export class PendingService<T extends ServiceRecord = ServiceRecord> extends BaseService<T> {}
+export class PendingService<T extends ServiceRecord = ServiceRecord> extends BaseService<T> {
+  push(): Promise<PushResponse>;
+}
 export class SchemaService<T extends ServiceRecord = ServiceRecord> extends BaseService<T> {}
 export class SessionService<T extends ServiceRecord = ServiceRecord> extends BaseService<T> {}

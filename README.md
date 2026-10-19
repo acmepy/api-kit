@@ -566,11 +566,11 @@ Sin conexion, `create`, `update` y `remove` guardan el registro en cache local c
 const pending = client.service("pending");
 
 await pending.list();
-await pending.get(id);
-await pending.update(id, { status: "pending" });
-await pending.remove(id);
-await pending.push();
+const result = await pending.push();
+// { ok, results, errors }
 ```
+
+`pending.push()` envia secuencialmente los pendientes de todos los servicios de recursos. Cada resultado incluye `service`, la clave `id`, la `operation` y su respuesta o error; si un servicio falla antes de procesar registros, su error incluye `service` sin clave ni operacion. Los registros rechazados conservan su estado pendiente para reintentar. Las actualizaciones exitosas quedan sin marcas de pendiente y los borrados exitosos salen de la cache. Las llamadas simultaneas a `pending.push()` comparten el mismo envio. `pending.get()`, `pending.update()` y `pending.remove()` no estan implementados.
 
 Tambien puedes empujar pendientes desde el servicio real:
 

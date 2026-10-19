@@ -171,7 +171,9 @@ describe("Client BaseService", () => {
         options: { method: "DELETE", query: {}, body: undefined },
       },
     ]);
-    assert.deepEqual(records, [{ id: 1, name: "Ana", pending: true, operation: "remove", status: "pending", message: "", errors: null }]);
+    assert.deepEqual(records, []);
+    await service.push();
+    assert.equal(calls.length, 1);
   });
 
   it("sends delete requests when removing while connected", async () => {

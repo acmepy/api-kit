@@ -217,7 +217,12 @@ export class BaseService {
   async pushOne(record) {
     try {
       const response = await this.#sendPendingOperation(record);
-      if (record.operation === "create") await this.adapter.delete(this.keyOf(record));
+      if (record.operation === "create" || record.operation === "remove") {
+        await this.adapter.delete(this.keyOf(record));
+      } else if (record.operation === "update") {
+        const nextRecord = { ...this.#pendingBody(record), ...response.data };
+        await this.adapter.put(this.keyOf(nextRecord), nextRecord);
+      }
       this.#notify();
       return { ok: true, id: this.keyOf(record), operation: record.operation, response };
     } catch (error) {

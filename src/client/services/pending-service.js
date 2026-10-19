@@ -1,6 +1,8 @@
 import { BaseService } from "./base-service.js";
 
 export class PendingService extends BaseService {
+  #pushPromise = null;
+
   constructor({ client, prefix }) {
     super({ client, name: "pending", path: "", operations: {}, schemas: {}, prefix });
   }
@@ -39,8 +41,28 @@ export class PendingService extends BaseService {
     throw new Error("PendingService.pullOne no implementado");
   }
 
-  async push() {
-    throw new Error("PendingService.push no implementado");
+  push() {
+    if (this.#pushPromise) return this.#pushPromise;
+    const task = this.#pushAll().finally(() => {
+      if (this.#pushPromise === task) this.#pushPromise = null;
+    });
+    this.#pushPromise = task;
+    return task;
+  }
+
+  async #pushAll() {
+    const results = [];
+    for (const service of this.client.services().values()) {
+      if (service === this || ["session", "schema"].includes(service.name) || typeof service.push !== "function") continue;
+      try {
+        const response = await service.push();
+        results.push(...response.results.map((result) => ({ ...result, service: service.name })));
+      } catch (error) {
+        results.push({ ok: false, service: service.name, error: error.message, errors: error.errors || null });
+      }
+    }
+    const errors = results.filter((result) => !result.ok);
+    return { ok: errors.length === 0, results, errors };
   }
 
   async nextTemporaryId() {

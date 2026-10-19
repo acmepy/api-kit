@@ -423,7 +423,12 @@ class BaseService {
   async pushOne(record) {
     try {
       const response = await this.#sendPendingOperation(record);
-      if (record.operation === "create") await this.adapter.delete(this.keyOf(record));
+      if (record.operation === "create" || record.operation === "remove") {
+        await this.adapter.delete(this.keyOf(record));
+      } else if (record.operation === "update") {
+        const nextRecord = { ...this.#pendingBody(record), ...response.data };
+        await this.adapter.put(this.keyOf(nextRecord), nextRecord);
+      }
       this.#notify();
       return { ok: true, id: this.keyOf(record), operation: record.operation, response };
     } catch (error) {
@@ -596,6 +601,8 @@ function stripPathPrefix(path, prefix) {
 }
 
 class PendingService extends BaseService {
+  #pushPromise = null;
+
   constructor({ client, prefix }) {
     super({ client, name: "pending", path: "", operations: {}, schemas: {}, prefix });
   }
@@ -634,8 +641,28 @@ class PendingService extends BaseService {
     throw new Error("PendingService.pullOne no implementado");
   }
 
-  async push() {
-    throw new Error("PendingService.push no implementado");
+  push() {
+    if (this.#pushPromise) return this.#pushPromise;
+    const task = this.#pushAll().finally(() => {
+      if (this.#pushPromise === task) this.#pushPromise = null;
+    });
+    this.#pushPromise = task;
+    return task;
+  }
+
+  async #pushAll() {
+    const results = [];
+    for (const service of this.client.services().values()) {
+      if (service === this || ["session", "schema"].includes(service.name) || typeof service.push !== "function") continue;
+      try {
+        const response = await service.push();
+        results.push(...response.results.map((result) => ({ ...result, service: service.name })));
+      } catch (error) {
+        results.push({ ok: false, service: service.name, error: error.message, errors: error.errors || null });
+      }
+    }
+    const errors = results.filter((result) => !result.ok);
+    return { ok: errors.length === 0, results, errors };
   }
 
   async nextTemporaryId() {
