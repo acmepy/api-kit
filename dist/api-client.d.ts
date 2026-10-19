@@ -41,6 +41,7 @@ export interface IndexedDbKeyval {
 }
 
 export interface IndexedDbAdapterOptions {
+  indexedDB?: IDBFactory;
   dbName?: string;
   storeName?: string;
   idbKeyval?: IndexedDbKeyval;

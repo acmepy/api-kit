@@ -1,5 +1,6 @@
 import * as idbKeyval from "idb-keyval";
 import { BaseAdapter } from "./base-adapter.js";
+import { sharedDatabaseStore } from "./indexed-db-store.js";
 
 export class IndexedDbAdapter extends BaseAdapter {
   #keyval;
@@ -10,8 +11,13 @@ export class IndexedDbAdapter extends BaseAdapter {
     super();
     this.#keyOf = options.keyOf || ((record) => record.id);
     this.#keyval = options.idbKeyval || idbKeyval;
-    if (!options.idbKeyval && !globalThis.indexedDB) throw new Error("IndexedDbAdapter requiere indexedDB");
-    this.#store = this.#keyval.createStore(options.dbName || "api", options.storeName || "session");
+    const factory = options.indexedDB || globalThis.indexedDB;
+    if (!options.idbKeyval && !factory) throw new Error("IndexedDbAdapter requiere indexedDB");
+    const dbName = options.dbName || "api";
+    const storeName = options.storeName || "session";
+    this.#store = options.idbKeyval
+      ? this.#keyval.createStore(dbName, storeName)
+      : sharedDatabaseStore(factory, dbName, storeName);
   }
 
   async get(key) {

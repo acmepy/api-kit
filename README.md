@@ -516,6 +516,8 @@ const client = createApiClient({
 
 El adapter IndexedDB usa `idb-keyval` y conserva la misma interfaz de almacenamiento que `LocalStorageAdapter`.
 
+Usa una sola base de datos por `prefix` (`api` por defecto), con un almacen por servicio (`session`, `schema`, `clientes`, etc.). Con `prefix: "vue"`, todos esos almacenes aparecen dentro de la base `vue`. Puedes indicar `dbName` para elegir otro nombre de base. Al descubrir nuevos servicios, el adaptador actualiza la version de IndexedDB y agrega sus almacenes sin borrar los existentes. Las conexiones del adaptador se cierran cuando otra pestana cambia la version y se reabren en el siguiente acceso. Si una conexion externa impide la actualizacion, la operacion informa el bloqueo para poder reintentar. No se trasladan automaticamente datos desde bases separadas por servicio creadas por una configuracion anterior.
+
 El cliente descubre las claves primarias y los nombres de detalle desde `schema.json`. La cache conserva los campos originales, sin agregar un `id` a recursos que usan otra clave. Para una clave compuesta, `get`, `pullOne`, `update`, `remove` y `push` reciben un objeto con todos sus componentes. `useApiForm` puede obtener esa clave de los datos iniciales al editar.
 
 La validacion de la cabecera conserva los detalles anidados al crear o actualizar, incluidos los pendientes locales. Las reglas de los detalles se ejecutan en el servidor al enviar; los errores de envio quedan disponibles en `useApiForm.errors` con los nombres de campo que devuelve el servidor.

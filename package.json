@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.2.61",
+  "version": "1.2.7",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -104,6 +104,7 @@
     "eslint": "^10.7.0",
     "express": "^5.1.0",
     "express-rate-limit": "^8.6.0",
+    "fake-indexeddb": "^6.2.5",
     "helmet": "^8.3.0",
     "iam": "github:acmepy/iam",
     "logger": "github:acmepy/logger-js",
