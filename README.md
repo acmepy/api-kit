@@ -59,6 +59,39 @@ import { runApiKitCli } from "api/cli";
 
 El import raiz `api` no exporta API publica.
 
+## Visor de logs
+
+El visor es un middleware independiente de IAM, seq y de la configuracion de `createApi`. Se puede importar desde `api/log-viewer` o `api/server`:
+
+```js
+import express from "express";
+import { createLogViewer } from "api/log-viewer";
+
+const app = express();
+app.use("/logs", createLogViewer({
+  directory: "./log",
+  pageSize: 200,
+}));
+```
+
+`/logs/` lista los archivos `.log` del directorio; al abrir uno se muestra el visor con filtros combinables por nivel, origen y `txId`. El filtro de transaccion compara el identificador completo, sin distinguir mayusculas. Hacer clic en un `txId` aplica ese filtro; se puede copiar el identificador, expandir el texto original y exportar las entradas de la pagina actual. Los filtros permanecen en la URL para compartir la consulta.
+
+El resumen muestra la cantidad de entradas de cada nivel en todo el archivo, incluidos ERROR, INFO y TRACE; hacer clic en un contador aplica o quita ese filtro. Los totales no cambian con los filtros ni con la paginacion. La barra lateral lista los txId por su ultima aparicion, con cantidad de entradas e indicador de errores (ERROR o FATAL). Permite buscar por parte del identificador, mostrar solo transacciones con errores y seleccionar una para aplicar el filtro exacto. La lista muestra inicialmente 100 transacciones y permite cargar mas. Las entradas sin txId se contabilizan aparte. En movil, la barra lateral se presenta como un panel desplegable.
+
+El parser usa regex para entradas como `[2026-10-20 11:38:52] [ERROR] [api] [http.error] ...`. Reconoce UUID suelto o entre corchetes y el campo `"txId"` dentro de JSON. El origen es el primer bloque, por ejemplo `api` o `IAM`; el segundo, como `request`, se muestra como detalle. Agrupa stack traces y continuaciones con su entrada anterior, y conserva el texto sin formato. Las entradas sin txId no se atribuyen a otra transaccion por proximidad.
+
+La lectura se hace en streaming, con paginas de hasta 500 entradas y orden desde las mas recientes. `pageSize` vale 200 por defecto. `directory` es obligatorio y se resuelve desde el directorio de trabajo. Para otro formato se puede proporcionar `parseLine(line)`, que devuelve `{ timestamp, level, source, scope, txId, message }` o `null` si la linea continua la entrada anterior. Tambien se exporta `parseLogLine` para reutilizar el parser predeterminado.
+
+El host aplica su autenticacion y permisos antes de montar este router; eso protege tanto las paginas como los endpoints y assets del visor. El middleware solo permite leer archivos dentro del directorio configurado y muestra el contenido como texto.
+
+Para probarlo con el archivo de `log/` de este repositorio:
+
+```bash
+npm run dev:logs
+```
+
+Abre `http://127.0.0.1:3001/logs/`. El ejemplo escucha solo en localhost; el puerto se puede elegir con `LOG_VIEWER_PORT`.
+
 ## Server Basico
 
 ```js

@@ -1,0 +1,859 @@
+[2026-10-20 08:48:31] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 08:48:32] [INFO] [api] [request] 5a9bcc78-5bbf-4471-a433-cc13179029b3 ::ffff:192.168.200.8 GET /api/ping 304 3.1 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:48:32] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/api/changes","userId":"R11"}
+[2026-10-20 08:48:32] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"audit.changes"}
+[2026-10-20 08:48:32] [INFO] [api] [request] bab6d299-98d0-4a83-98a7-76537bb76d70 ::ffff:192.168.200.8 GET /api/changes?since=2026-10-20T11%3A46%3A26.126Z 200 64.16 21 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:48:32] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/api/sse","userId":"R11"}
+[2026-10-20 08:48:32] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"audit.sse"}
+[2026-10-20 08:48:32] [INFO] [api] [audit.sse] 00MVGKY51VJU30YX7ND9H00000 ::ffff:192.168.200.8 GET /api/sse 200 0 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:48:41] [INFO] [api] [request] b0199bd9-1bf9-40eb-9935-46143fe8e253 ::ffff:192.168.200.8 GET /api/ping 304 0.4 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:48:46] [INFO] [api] [request] 0a9725b8-2a94-4c85-b35c-2a433b385483 ::ffff:192.168.200.8 GET /api/ping 304 1.47 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:48:51] [INFO] [api] [request] aa20def1-ce7a-4fff-9970-f988e08b756f ::ffff:192.168.200.8 GET /api/ping 304 0.36 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:48:56] [INFO] [api] [request] d9f3b585-e034-4f0b-8acf-a72f672eaa1d ::ffff:192.168.200.8 GET /api/ping 304 1.19 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:01] [INFO] [api] [request] 5efd02db-5d96-4211-b415-305bf408d784 ::ffff:192.168.200.8 GET /api/ping 304 0.54 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:06] [INFO] [api] [request] b2057f6b-74f5-46ae-8b34-778abb315d46 ::ffff:192.168.200.8 GET /api/ping 304 1.4 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:11] [INFO] [api] [request] d29d4a6b-1083-4e3a-8c0f-b5877e812b51 ::ffff:192.168.200.8 GET /api/ping 304 0.33 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:16] [INFO] [api] [request] c1f94251-375a-4672-aa76-d7633d8baaef ::ffff:192.168.200.8 GET /api/ping 304 1.37 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:21] [INFO] [api] [request] 40ec6ebb-ae8f-4d7b-b198-c59e0a617fc8 ::ffff:192.168.200.8 GET /api/ping 304 0.29 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:26] [INFO] [api] [request] cfa20c03-4f3e-46a6-b7e6-f4a0272d45a0 ::ffff:192.168.200.8 GET /api/ping 304 1.13 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:31] [INFO] [api] [request] 35b16712-f6b3-43ce-a141-8686e3e2096d ::ffff:192.168.200.8 GET /api/ping 304 0.33 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:36] [INFO] [api] [request] 253ca67b-2e56-46be-9068-e549c690b614 ::ffff:192.168.200.8 GET /api/ping 304 1.04 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:41] [INFO] [api] [request] b8134a84-e7cf-4304-8826-e8307ded8251 ::ffff:192.168.200.8 GET /api/ping 304 1.1 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:46] [INFO] [api] [request] 3701f6ab-c60b-4034-8ae8-3c15256fb0cc ::ffff:192.168.200.8 GET /api/ping 304 0.45 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:51] [INFO] [api] [request] 73918968-d451-40d7-a82a-8d928ec891f2 ::ffff:192.168.200.8 GET /api/ping 304 1.01 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:49:56] [INFO] [api] [request] e889892f-5ab8-4507-a01e-902047e1df90 ::ffff:192.168.200.8 GET /api/ping 304 0.26 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:01] [INFO] [api] [request] 721a04a3-ce28-4111-b852-a540a3b82163 ::ffff:192.168.200.8 GET /api/ping 304 1.09 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:06] [INFO] [api] [request] 8f9e116f-93cb-4363-a854-05c691c367fa ::ffff:192.168.200.8 GET /api/ping 304 0.68 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:11] [INFO] [api] [request] f2895a2d-a14e-45f5-a77e-b460ac66a74b ::ffff:192.168.200.8 GET /api/ping 304 1.03 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:16] [INFO] [api] [request] 392b5f7f-1862-451e-bdd9-fc467dfd1454 ::ffff:192.168.200.8 GET /api/ping 304 0.52 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:21] [INFO] [api] [request] 42809ad0-1fc0-4124-9787-237f1ab3c7e8 ::ffff:192.168.200.8 GET /api/ping 304 1.15 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:26] [INFO] [api] [request] f81ca5f1-a540-4930-a012-6bd5fb6052d4 ::ffff:192.168.200.8 GET /api/ping 304 1.32 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:31] [INFO] [api] [request] ebfcb56b-9414-4c21-b093-7aec34d71289 ::ffff:192.168.200.8 GET /api/ping 304 1.1 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:36] [INFO] [api] [request] cf444587-e8c4-4f49-a786-d8e859d2569a ::ffff:192.168.200.8 GET /api/ping 304 0.57 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:41] [INFO] [api] [request] 760a6956-6676-4c8b-9b13-4e267700fe3f ::ffff:192.168.200.8 GET /api/ping 304 0.92 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:46] [INFO] [api] [request] 4363336b-1829-4db1-80b2-aa5f2cd935d2 ::ffff:192.168.200.8 GET /api/ping 304 0.25 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:51] [INFO] [api] [request] e9bf042f-e79e-4e40-b0e8-8933b4feed20 ::ffff:192.168.200.8 GET /api/ping 304 0.96 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:50:56] [INFO] [api] [request] 59b84ecb-1460-4453-91ba-1bf8dfe982a9 ::ffff:192.168.200.8 GET /api/ping 304 0.67 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:01] [INFO] [api] [request] da0da54d-0eaf-44fa-a7c1-b1e6759069c8 ::ffff:192.168.200.8 GET /api/ping 304 1.07 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:06] [INFO] [api] [request] cf2d054e-0f32-416c-a9ad-7507fd7c58fa ::ffff:192.168.200.8 GET /api/ping 304 0.97 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:11] [INFO] [api] [request] 31a4859c-629c-48f4-9faf-415eab7a31a5 ::ffff:192.168.200.8 GET /api/ping 304 0.91 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:16] [INFO] [api] [request] e8d074b4-f24a-46dc-ad0d-c3708c9a684c ::ffff:192.168.200.8 GET /api/ping 304 1.05 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:21] [INFO] [api] [request] 1408fa3d-6bf6-4419-b68f-1e8b374156bc ::ffff:192.168.200.8 GET /api/ping 304 1.05 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:26] [INFO] [api] [request] e251e472-9181-4f5c-bd50-4715b414c31d ::ffff:192.168.200.8 GET /api/ping 304 1.17 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:31] [INFO] [api] [request] 8c1f6313-deed-45a5-8160-889d1c69c998 ::ffff:192.168.200.8 GET /api/ping 304 0.33 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:36] [INFO] [api] [request] 5bd1312f-87f9-403c-a49c-4ccf1a8cf02c ::ffff:192.168.200.8 GET /api/ping 304 1.09 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:41] [INFO] [api] [request] 49284630-16ed-4f68-b395-c03c9d1db9f4 ::ffff:192.168.200.8 GET /api/ping 304 0.25 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:46] [INFO] [api] [request] d8c840d6-a0d2-4414-87b6-d6a311017839 ::ffff:192.168.200.8 GET /api/ping 304 0.98 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:51] [INFO] [api] [request] 7f545248-6c4b-4d66-abcf-d4010610d3ee ::ffff:192.168.200.8 GET /api/ping 304 0.27 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:51:56] [INFO] [api] [request] 53686698-d6c3-4dad-9ef3-e10ca7573756 ::ffff:192.168.200.8 GET /api/ping 304 0.95 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:01] [INFO] [api] [request] 810fcb15-4970-4bcc-bc01-0d14c865d236 ::ffff:192.168.200.8 GET /api/ping 304 0.28 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:06] [INFO] [api] [request] 8ba35af9-3847-45a2-ae19-2920eb60ddfd ::ffff:192.168.200.8 GET /api/ping 304 1.14 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:11] [INFO] [api] [request] 3dafaefc-8f22-47ec-86db-bb83d4cc2101 ::ffff:192.168.200.8 GET /api/ping 304 0.53 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:12] [INFO] [IAM] Sesión iniciada {"sessionId":"00MVGMIFFF2EZZL8SVQ1K00000","userId":"R11"}
+[2026-10-20 08:52:12] [INFO] [api] [request] bd10f8d7-e26c-49ff-a581-49f2512feef7 ::ffff:192.168.200.8 POST /api/login 200 66.54 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:12] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/api/schema.json","userId":"R11"}
+[2026-10-20 08:52:12] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"schema.list"}
+[2026-10-20 08:52:12] [INFO] [api] [request] 62ac1587-58f0-44ed-b252-11defcda404e ::ffff:192.168.200.8 GET /api/schema.json 200 18.07 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:12] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:12] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:12] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:12] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"bancos.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 397d391a-b872-4584-a5bc-602e002f9096 ::ffff:192.168.200.8 GET /api/bancos 304 185.42 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"cobradores.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"departamentos.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"empleados.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] b0d55514-2ddb-451c-a0ae-864c58c6402c ::ffff:192.168.200.8 GET /api/cobradores 304 198.59 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 131fbd33-8356-4f6a-b618-dd79c11bfcd4 ::ffff:192.168.200.8 GET /api/departamentos 304 196.04 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"departamentos-rh.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 471b11f4-ca9c-4e1b-b30e-5d70e3fca6cb ::ffff:192.168.200.8 GET /api/ciudades 304 212.98 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 40ed740c-be62-4e02-a86f-8df00c6d9437 ::ffff:192.168.200.8 GET /api/empleados 304 206.44 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 187de8fb-5bb4-4314-9148-cb3646919b7e ::ffff:192.168.200.8 GET /api/departamentos-rh 304 221.44 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"frecuencias.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"monedas.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"rubros.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 0dc634ad-bdff-48d9-b3f4-497797a6e80a ::ffff:192.168.200.8 GET /api/frecuencias 304 72.64 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"paises.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] e330255b-e1f1-4486-a872-f589e370a469 ::ffff:192.168.200.8 GET /api/monedas 304 74.68 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 5e526e6d-2a30-49c5-b2f5-71f34fd054d3 ::ffff:192.168.200.8 GET /api/rubros 304 74.53 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"series-comprobantes.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"saldos.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 58b69e68-5f67-4da0-85bc-e9df8dbc624d ::ffff:192.168.200.8 GET /api/paises 304 90.35 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 556340cf-e476-4af6-9011-f5164148e996 ::ffff:192.168.200.8 GET /api/series-comprobantes 304 86.16 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] dcf9d7c6-4113-452a-b4d2-93469200932c ::ffff:192.168.200.8 GET /api/saldos 304 84.57 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"snc-motivos.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"sucursales.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"tipos-cobros.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"tipos-comprobantes.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"vendedores.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 68d72d8f-7b51-4e8b-ab94-be05ebd0128c ::ffff:192.168.200.8 GET /api/snc-motivos 304 78.41 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] b5958a52-ff24-40e7-9246-3852fd06457d ::ffff:192.168.200.8 GET /api/sucursales 304 77.92 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 5e6a6c28-14b1-4b41-ac72-c863a0b553cb ::ffff:192.168.200.8 GET /api/tipos-cobros 304 70.66 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] ea345335-b4ee-4402-b7bb-71a5c46392fa ::ffff:192.168.200.8 GET /api/tipos-comprobantes 304 79.93 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 337c261e-d043-4e65-8481-416fa3accd6d ::ffff:192.168.200.8 GET /api/vendedores 304 66.93 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"zonas.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 9f60fd97-4e00-4b7c-abc7-c7d3bc874c93 ::ffff:192.168.200.8 GET /api/zonas 304 72.97 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"clientes.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"articulos.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"condiciones.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 7e1ba790-73b9-49bb-96e3-a9e184787c86 ::ffff:192.168.200.8 GET /api/clientes 304 89.16 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"parametros.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 9af85ec4-8a32-48bc-acf4-c67791f6d623 ::ffff:192.168.200.8 GET /api/articulos 304 97.46 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 6df42411-999d-4f92-9276-c1b823f0796b ::ffff:192.168.200.8 GET /api/condiciones 304 95.59 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"facturas.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 4964826f-67f7-4a7c-83d7-800753d216d8 ::ffff:192.168.200.8 GET /api/parametros 304 175.58 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] fd87ec0a-26a0-4710-96c8-8cbc11039bb6 ::ffff:192.168.200.8 GET /api/facturas 304 175.12 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"recibos.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"snc.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [INFO] [api] [request] 55e92e9f-ea70-43f7-96bb-3f754d8d4673 ::ffff:192.168.200.8 GET /api/recibos 304 188.12 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 3bc211c1-2b16-4ec4-a600-b8490c6a7714 ::ffff:192.168.200.8 GET /api/existencias 304 266.59 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] f014ffa1-d140-402d-90c5-5057a9a16fdd ::ffff:192.168.200.8 GET /api/snc 304 184.61 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"registro-cliente.list"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] dfd2ad78-c3bd-41b7-b9af-856a1d3be01f ::ffff:192.168.200.8 GET /api/registro-cliente 304 102.86 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] 37877c29-8807-46a6-a784-4f0fa96a54d2 ::ffff:192.168.200.8 GET /api/sifen 304 189.98 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [INFO] [api] [request] a686da7c-0a73-4d62-8fd9-f70163d7e9bc ::ffff:192.168.200.8 GET /api/ciudades?page=2 304 97.11 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:52:13] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:52:13] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 08:52:13] [INFO] [api] [request] d4d9bb62-f7da-4e7a-9b4c-d1ba4d7d0df8 ::ffff:192.168.200.8 GET /api/existencias?page=2 304 197.92 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:43] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 08:56:49] [INFO] [api] [request] ff8bf1b1-fb8a-46be-8ed3-093f02557b99 ::ffff:192.168.200.8 GET /api/ping 304 3.23 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:54] [INFO] [api] [request] 9d868a7a-6272-48e6-82dc-56770dd4e2c6 ::ffff:192.168.200.8 GET /api/ping 304 0.58 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:58] [INFO] [IAM] Sesión iniciada {"sessionId":"00MVGMOK5EVYTCFGTZFFL00000","userId":"R11"}
+[2026-10-20 08:56:58] [INFO] [api] [request] 421d744a-5157-49ed-adf8-7a9f0eeddae8 ::ffff:192.168.200.8 POST /api/login 200 57.98 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:58] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/api/schema.json","userId":"R11"}
+[2026-10-20 08:56:58] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"schema.list"}
+[2026-10-20 08:56:58] [INFO] [api] [request] abc07f7b-1f42-4815-9a7b-bf8ee67cd874 ::ffff:192.168.200.8 GET /api/schema.json 200 28.18 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:58] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"bancos.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"cobradores.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 0ff51f32-57c3-4ee8-a3a2-c00ab415c8d6 ::ffff:192.168.200.8 GET /api/bancos 304 132.21 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] e788831a-7b74-4f2c-b612-9d1254144daf ::ffff:192.168.200.8 GET /api/cobradores 304 133.51 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"departamentos.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"empleados.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"departamentos-rh.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 20b771e1-dcb2-44e0-bf3e-9910246348ac ::ffff:192.168.200.8 GET /api/departamentos 304 140.9 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] b210a97b-0f8c-43b9-8188-ad2441cf7cf2 ::ffff:192.168.200.8 GET /api/empleados 304 147.72 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 423fa1bf-26f1-42ea-a3e5-d560a89f370c ::ffff:192.168.200.8 GET /api/ciudades 304 165.89 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] d775ae84-635c-4dee-95b7-23450dbd60e2 ::ffff:192.168.200.8 GET /api/departamentos-rh 304 165.13 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"monedas.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"paises.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"frecuencias.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"rubros.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 2eaae246-6185-41f9-9f0b-116b0e21085a ::ffff:192.168.200.8 GET /api/monedas 304 52.78 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"series-comprobantes.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 8bd9acc6-f67e-46a1-8c6c-761a2c8166ad ::ffff:192.168.200.8 GET /api/paises 304 56.27 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 321eac6b-1a6d-4d8d-8928-2e7b55980c05 ::ffff:192.168.200.8 GET /api/frecuencias 304 62.66 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"saldos.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 455cd8cf-68c5-4ab2-a7e8-58e83c18f623 ::ffff:192.168.200.8 GET /api/rubros 304 67.71 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 522640cc-80a1-4a87-be6a-e633bd166ebb ::ffff:192.168.200.8 GET /api/series-comprobantes 304 68.72 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 826a550e-4f06-4ff8-89bd-aed251852d35 ::ffff:192.168.200.8 GET /api/saldos 304 75.21 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"snc-motivos.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"sucursales.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"tipos-comprobantes.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"tipos-cobros.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 3b3425f8-b305-470b-90ba-9ef8ddae2d6d ::ffff:192.168.200.8 GET /api/snc-motivos 304 67.92 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"vendedores.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] cf9992eb-853c-46a7-a8c8-197159de0f21 ::ffff:192.168.200.8 GET /api/tipos-comprobantes 304 65.27 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 067ce47d-5d7b-4e29-95f5-88790cdba094 ::ffff:192.168.200.8 GET /api/sucursales 304 75.42 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 7a907173-2a32-484d-9280-d90a93edb7e6 ::ffff:192.168.200.8 GET /api/vendedores 304 63.16 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] d24822fc-1f7e-4cae-b805-b7845bec28c4 ::ffff:192.168.200.8 GET /api/tipos-cobros 304 69.62 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"zonas.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] d24bc9e1-69ab-41c6-bca5-b07c0b54d887 ::ffff:192.168.200.8 GET /api/zonas 304 70.28 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"clientes.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"condiciones.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"articulos.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"facturas.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"recibos.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 6c036f58-bf18-46e8-a540-819e3483640c ::ffff:192.168.200.8 GET /api/clientes 304 125.29 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] a0b2fcae-fa46-4a54-b531-7247b6f3028b ::ffff:192.168.200.8 GET /api/condiciones 304 117.58 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 3221b582-9de1-4608-9c99-bc002d2dd74b ::ffff:192.168.200.8 GET /api/articulos 304 126.89 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"parametros.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 766bdd9e-9ddd-4cdd-90bf-aa2a0118c423 ::ffff:192.168.200.8 GET /api/recibos 200 133.36 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] ce87ce20-a6b1-4a1d-83e9-929c3a8503cb ::ffff:192.168.200.8 GET /api/facturas 304 142.91 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 77eb729d-938d-4d36-b9c0-4ec64359ddd7 ::ffff:192.168.200.8 GET /api/parametros 304 140.05 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"snc.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"registro-cliente.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 16fea652-ecf4-4b20-b691-5e1a661f7f64 ::ffff:192.168.200.8 GET /api/snc 304 115.54 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 5769e701-db9d-4297-950a-d77be383e0fc ::ffff:192.168.200.8 GET /api/registro-cliente 304 98.57 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 08:56:59] [INFO] [api] [request] 000b2c74-b863-4c26-935d-0c6f817c6f40 ::ffff:192.168.200.8 GET /api/ciudades?page=2 304 98.94 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] ac4df05b-9e76-4fff-8e5d-b5e8fcc91b83 ::ffff:192.168.200.8 GET /api/sifen 304 126.88 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [INFO] [api] [request] 75cc3c10-e1df-41f5-92a4-49f48af433f6 ::ffff:192.168.200.8 GET /api/existencias 304 421.69 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:56:59] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 08:56:59] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 08:57:00] [INFO] [api] [request] 4894b79f-570f-4412-8d63-7763bcbffc60 ::ffff:192.168.200.8 GET /api/existencias?page=2 304 175 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 08:59:30] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 09:25:32] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 09:25:39] [INFO] [api] [request] c481d0d6-c482-42de-b6e8-04f6d6b0b061 ::ffff:192.168.200.8 GET /api/ping 304 3.11 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:44] [INFO] [api] [request] 3990a9c0-d2e0-49ef-a2a1-583e1d6fa031 ::ffff:192.168.200.8 GET /api/ping 304 0.4 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [INFO] [IAM] Sesión iniciada {"sessionId":"00MVGNPM46AI237YZTRYN00000","userId":"R11"}
+[2026-10-20 09:25:47] [INFO] [api] [request] 7a4afe42-dbe7-4181-9443-498fdaa632e4 ::ffff:192.168.200.8 POST /api/login 200 55.42 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/api/schema.json","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"schema.list"}
+[2026-10-20 09:25:47] [INFO] [api] [request] b8271bb9-8375-47b2-850d-65e36deb0662 ::ffff:192.168.200.8 GET /api/schema.json 200 23.67 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"bancos.list"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"cobradores.list"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [INFO] [api] [request] ff67135d-53c7-49f0-b2be-7f5b16b558ca ::ffff:192.168.200.8 GET /api/bancos 304 130.28 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [INFO] [api] [request] 95e77e2a-1a43-43e1-be51-8065486eab18 ::ffff:192.168.200.8 GET /api/cobradores 304 140.07 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"departamentos-rh.list"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"departamentos.list"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"empleados.list"}
+[2026-10-20 09:25:47] [INFO] [api] [request] bba0accc-74b4-4ce1-b628-8a07f23a2b61 ::ffff:192.168.200.8 GET /api/departamentos-rh 304 165 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [INFO] [api] [request] 4f2ba2df-6eee-43b8-a2fe-24011c3c5bdf ::ffff:192.168.200.8 GET /api/departamentos 304 172.4 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [INFO] [api] [request] e707b0a6-b7a6-46aa-8457-87d501f56ae8 ::ffff:192.168.200.8 GET /api/empleados 304 172.31 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [INFO] [api] [request] c3087762-441c-499e-a84e-6683a7de279a ::ffff:192.168.200.8 GET /api/ciudades 304 189.4 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"monedas.list"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"frecuencias.list"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"paises.list"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"series-comprobantes.list"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"rubros.list"}
+[2026-10-20 09:25:47] [INFO] [api] [request] 66e58755-81ea-4eb0-ab44-0dd91ddab55f ::ffff:192.168.200.8 GET /api/monedas 304 72.91 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"saldos.list"}
+[2026-10-20 09:25:47] [INFO] [api] [request] ea72940c-d9ea-41d6-b74e-2643d3540add ::ffff:192.168.200.8 GET /api/frecuencias 304 79.78 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [INFO] [api] [request] b17aa3b0-e53f-45e0-862d-c7792148248a ::ffff:192.168.200.8 GET /api/paises 304 77.87 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [INFO] [api] [request] 232f1b0e-b80e-40b2-8d70-fe1499f5305c ::ffff:192.168.200.8 GET /api/series-comprobantes 304 64.32 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [INFO] [api] [request] 9eb0bb6c-7c79-4e20-b0ba-673493a6ef4f ::ffff:192.168.200.8 GET /api/rubros 304 76.51 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [INFO] [api] [request] a0dd5a78-e9a0-4566-834a-f2af22b7d352 ::ffff:192.168.200.8 GET /api/saldos 304 73.86 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:47] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"snc-motivos.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"sucursales.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"tipos-comprobantes.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"vendedores.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"tipos-cobros.list"}
+[2026-10-20 09:25:48] [INFO] [api] [request] ecab3dbb-2641-4aa7-8c3f-f06a989023f6 ::ffff:192.168.200.8 GET /api/snc-motivos 304 97.48 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [INFO] [api] [request] bae27a05-8866-4e2c-ae8f-f8947efc65a7 ::ffff:192.168.200.8 GET /api/sucursales 304 91.36 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [INFO] [api] [request] fb3416a2-564f-4d8d-be81-9ce7d414d3ad ::ffff:192.168.200.8 GET /api/tipos-comprobantes 304 92.03 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [INFO] [api] [request] fe858847-2dd4-4eb8-bec1-3598bfd30845 ::ffff:192.168.200.8 GET /api/vendedores 304 88.52 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [INFO] [api] [request] f8a3afdd-5521-4c3b-bd1a-7b44cf59dd11 ::ffff:192.168.200.8 GET /api/tipos-cobros 304 97.32 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"zonas.list"}
+[2026-10-20 09:25:48] [INFO] [api] [request] a453710b-c452-4ff2-932a-8e257fda0c48 ::ffff:192.168.200.8 GET /api/zonas 304 93.34 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"articulos.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"clientes.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"parametros.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"condiciones.list"}
+[2026-10-20 09:25:48] [INFO] [api] [request] ade522c9-ba8d-4196-bea5-786b4301c24a ::ffff:192.168.200.8 GET /api/articulos 304 68.31 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [INFO] [api] [request] acee6b4b-363b-4ef9-a9b3-3b51fcef7cae ::ffff:192.168.200.8 GET /api/clientes 304 80.64 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 09:25:48] [INFO] [api] [request] cce50e30-8153-46ff-9253-acb1d8aa9daa ::ffff:192.168.200.8 GET /api/condiciones 304 77.34 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"facturas.list"}
+[2026-10-20 09:25:48] [INFO] [api] [request] 485fa4a0-d679-46c1-b846-09d023926beb ::ffff:192.168.200.8 GET /api/parametros 304 121.98 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [INFO] [api] [request] 33d181a1-9bab-4248-baa9-c7bc2d278932 ::ffff:192.168.200.8 GET /api/facturas 304 189.63 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [INFO] [api] [request] cd59e04f-cd4f-463e-8736-e03e1953da7b ::ffff:192.168.200.8 GET /api/existencias 304 235.97 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"recibos.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"snc.list"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [INFO] [api] [request] 87548df5-1a15-474b-b41d-956747abe4f9 ::ffff:192.168.200.8 GET /api/recibos 304 193.92 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [INFO] [api] [request] 89ea6b87-3b30-47d6-8dc9-1cb60f1ae22f ::ffff:192.168.200.8 GET /api/snc 304 187.41 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"registro-cliente.list"}
+[2026-10-20 09:25:48] [INFO] [api] [request] 0a59f092-b34b-409b-ae66-1c3d3e83142c ::ffff:192.168.200.8 GET /api/sifen 304 187.37 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [INFO] [api] [request] 933e0867-b082-482c-a856-2e6873de8418 ::ffff:192.168.200.8 GET /api/registro-cliente 304 132.34 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 09:25:48] [INFO] [api] [request] af942584-1ba6-40fd-a6f6-e93c76525f53 ::ffff:192.168.200.8 GET /api/ciudades?page=2 304 68.53 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 09:25:48] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 09:25:48] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 09:25:48] [INFO] [api] [request] 38aab61f-f0ae-4593-a5c6-e638398972f2 ::ffff:192.168.200.8 GET /api/existencias?page=2 304 198.13 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:00:37] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 10:00:49] [INFO] [api] [request] f6465af7-c47d-42e7-86e6-d6318d2b95ef ::ffff:192.168.200.8 GET /api/ping 304 3.1 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:00:54] [INFO] [api] [request] a189a54b-fb6b-4216-82fb-6050043efe69 ::ffff:192.168.200.8 GET /api/ping 304 0.38 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:00:59] [INFO] [api] [request] 611286e1-e816-4ad6-80b2-b00039d57ccf ::ffff:192.168.200.8 GET /api/ping 304 1.53 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:04] [INFO] [api] [request] 943ec242-6aed-45cb-8266-c0757b8bb41d ::ffff:192.168.200.8 GET /api/ping 304 0.9 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [INFO] [IAM] Sesión iniciada {"sessionId":"00MVGOZ0BMGF5O5WHCAR700000","userId":"R11","txId":"6bf6e01b-7b64-43a7-a9c5-4c97cd843ec6"}
+[2026-10-20 10:01:05] [INFO] [api] [request] 6bf6e01b-7b64-43a7-a9c5-4c97cd843ec6 ::ffff:192.168.200.8 POST /api/login 200 134.47 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/api/schema.json","userId":"R11","txId":"fa679d14-140a-48c8-90ee-b40e6bd611a3"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"schema.list","txId":"fa679d14-140a-48c8-90ee-b40e6bd611a3"}
+[2026-10-20 10:01:05] [INFO] [api] [request] fa679d14-140a-48c8-90ee-b40e6bd611a3 ::ffff:192.168.200.8 GET /api/schema.json 200 22.57 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"9525122d-c687-4ede-9f35-80b28405d41f"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"cdaa107c-fece-4eac-9b27-f5e2b7a35306"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"7c5a0956-05e9-41f5-8fe0-8ba9c60b16b7"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"be6624ea-6b44-42c0-a4bc-a461be36cd29"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"9d8c934d-4d25-4e64-871d-6ed9ed32a41e"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"b0035f66-d128-4c4d-8bf8-92991815c9cc"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"bancos.list","txId":"9525122d-c687-4ede-9f35-80b28405d41f"}
+[2026-10-20 10:01:05] [INFO] [api] [request] 9525122d-c687-4ede-9f35-80b28405d41f ::ffff:192.168.200.8 GET /api/bancos 304 127.71 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"cobradores.list","txId":"cdaa107c-fece-4eac-9b27-f5e2b7a35306"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"departamentos-rh.list","txId":"be6624ea-6b44-42c0-a4bc-a461be36cd29"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"ciudades.list","txId":"7c5a0956-05e9-41f5-8fe0-8ba9c60b16b7"}
+[2026-10-20 10:01:05] [INFO] [api] [request] cdaa107c-fece-4eac-9b27-f5e2b7a35306 ::ffff:192.168.200.8 GET /api/cobradores 304 149.02 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"departamentos.list","txId":"9d8c934d-4d25-4e64-871d-6ed9ed32a41e"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"empleados.list","txId":"b0035f66-d128-4c4d-8bf8-92991815c9cc"}
+[2026-10-20 10:01:05] [INFO] [api] [request] be6624ea-6b44-42c0-a4bc-a461be36cd29 ::ffff:192.168.200.8 GET /api/departamentos-rh 304 150.81 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [INFO] [api] [request] 7c5a0956-05e9-41f5-8fe0-8ba9c60b16b7 ::ffff:192.168.200.8 GET /api/ciudades 304 165.44 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [INFO] [api] [request] 9d8c934d-4d25-4e64-871d-6ed9ed32a41e ::ffff:192.168.200.8 GET /api/departamentos 304 158.91 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [INFO] [api] [request] b0035f66-d128-4c4d-8bf8-92991815c9cc ::ffff:192.168.200.8 GET /api/empleados 304 164.92 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"478159d5-1fea-4a61-9f3c-722aaf15f04d"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"17db0d72-0a0f-4a7a-9442-d57aefb43fa1"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"da289c82-59b5-44d1-84de-f621f89a7b74"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"a130f07a-795e-4f1e-b0e9-0418ae45854f"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"275185eb-77b2-4a6e-a1d8-cb5ff1a913c9"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"42557eea-a2a5-46e1-8d50-0c345c558299"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"frecuencias.list","txId":"478159d5-1fea-4a61-9f3c-722aaf15f04d"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"paises.list","txId":"17db0d72-0a0f-4a7a-9442-d57aefb43fa1"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"monedas.list","txId":"da289c82-59b5-44d1-84de-f621f89a7b74"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"series-comprobantes.list","txId":"a130f07a-795e-4f1e-b0e9-0418ae45854f"}
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"rubros.list","txId":"275185eb-77b2-4a6e-a1d8-cb5ff1a913c9"}
+[2026-10-20 10:01:05] [INFO] [api] [request] 478159d5-1fea-4a61-9f3c-722aaf15f04d ::ffff:192.168.200.8 GET /api/frecuencias 304 114.88 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [INFO] [api] [request] 17db0d72-0a0f-4a7a-9442-d57aefb43fa1 ::ffff:192.168.200.8 GET /api/paises 304 115.08 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [INFO] [api] [request] da289c82-59b5-44d1-84de-f621f89a7b74 ::ffff:192.168.200.8 GET /api/monedas 304 120.07 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:05] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"saldos.list","txId":"42557eea-a2a5-46e1-8d50-0c345c558299"}
+[2026-10-20 10:01:06] [INFO] [api] [request] a130f07a-795e-4f1e-b0e9-0418ae45854f ::ffff:192.168.200.8 GET /api/series-comprobantes 304 118.83 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] 275185eb-77b2-4a6e-a1d8-cb5ff1a913c9 ::ffff:192.168.200.8 GET /api/rubros 304 123.78 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] 42557eea-a2a5-46e1-8d50-0c345c558299 ::ffff:192.168.200.8 GET /api/saldos 304 118.9 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"d9da7c1d-755e-4728-a495-f0415837bcca"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"a9a4faed-84fc-4659-8565-e59a4f1fe358"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"d9b60e3a-495d-4a9e-a30d-0a63aee4a47d"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"20dd07c1-66a9-4efe-888b-68cc0c548373"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"e4b604e0-9d83-4f68-aa29-b9a501016bcb"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"44dec654-a340-45a7-9a2d-4028c8561d6b"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"sucursales.list","txId":"a9a4faed-84fc-4659-8565-e59a4f1fe358"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"snc-motivos.list","txId":"d9da7c1d-755e-4728-a495-f0415837bcca"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"tipos-comprobantes.list","txId":"d9b60e3a-495d-4a9e-a30d-0a63aee4a47d"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"tipos-cobros.list","txId":"20dd07c1-66a9-4efe-888b-68cc0c548373"}
+[2026-10-20 10:01:06] [INFO] [api] [request] a9a4faed-84fc-4659-8565-e59a4f1fe358 ::ffff:192.168.200.8 GET /api/sucursales 304 88.51 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"vendedores.list","txId":"e4b604e0-9d83-4f68-aa29-b9a501016bcb"}
+[2026-10-20 10:01:06] [INFO] [api] [request] d9da7c1d-755e-4728-a495-f0415837bcca ::ffff:192.168.200.8 GET /api/snc-motivos 304 97.84 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] d9b60e3a-495d-4a9e-a30d-0a63aee4a47d ::ffff:192.168.200.8 GET /api/tipos-comprobantes 304 90.99 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"zonas.list","txId":"44dec654-a340-45a7-9a2d-4028c8561d6b"}
+[2026-10-20 10:01:06] [INFO] [api] [request] 20dd07c1-66a9-4efe-888b-68cc0c548373 ::ffff:192.168.200.8 GET /api/tipos-cobros 304 90.02 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] e4b604e0-9d83-4f68-aa29-b9a501016bcb ::ffff:192.168.200.8 GET /api/vendedores 304 91.52 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] 44dec654-a340-45a7-9a2d-4028c8561d6b ::ffff:192.168.200.8 GET /api/zonas 304 92.07 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"bd046990-df91-4dca-8439-50597b286952"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"38cad3f4-6930-4733-ae7e-4cd3571d2c99"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"5c92027e-baba-406e-bcdc-2c0c1ba83572"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"b86b6128-3c1e-4678-be55-b8bfa92779f3"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"60b063dc-9a32-4c48-943f-eb37f76c1191"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"9c0877fe-7b4e-430e-bf6f-3302adde2283"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"clientes.list","txId":"bd046990-df91-4dca-8439-50597b286952"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"condiciones.list","txId":"38cad3f4-6930-4733-ae7e-4cd3571d2c99"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"parametros.list","txId":"5c92027e-baba-406e-bcdc-2c0c1ba83572"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"articulos.list","txId":"b86b6128-3c1e-4678-be55-b8bfa92779f3"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"existencias.list","txId":"60b063dc-9a32-4c48-943f-eb37f76c1191"}
+[2026-10-20 10:01:06] [INFO] [api] [request] bd046990-df91-4dca-8439-50597b286952 ::ffff:192.168.200.8 GET /api/clientes 304 72.26 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] 38cad3f4-6930-4733-ae7e-4cd3571d2c99 ::ffff:192.168.200.8 GET /api/condiciones 304 68.62 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] b86b6128-3c1e-4678-be55-b8bfa92779f3 ::ffff:192.168.200.8 GET /api/articulos 304 83.56 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"facturas.list","txId":"9c0877fe-7b4e-430e-bf6f-3302adde2283"}
+[2026-10-20 10:01:06] [INFO] [api] [request] 5c92027e-baba-406e-bcdc-2c0c1ba83572 ::ffff:192.168.200.8 GET /api/parametros 304 158.14 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] 9c0877fe-7b4e-430e-bf6f-3302adde2283 ::ffff:192.168.200.8 GET /api/facturas 304 175.27 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"bb6a23d3-290f-41fe-b962-4e4ce6f0f790"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"075c1a0d-afa7-4274-8273-ee19cb78a980"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"48295c85-1476-4ce1-9e60-78acf3ae409b"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"recibos.list","txId":"bb6a23d3-290f-41fe-b962-4e4ce6f0f790"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"snc.list","txId":"075c1a0d-afa7-4274-8273-ee19cb78a980"}
+[2026-10-20 10:01:06] [INFO] [api] [request] 60b063dc-9a32-4c48-943f-eb37f76c1191 ::ffff:192.168.200.8 GET /api/existencias 304 220.16 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"edcaa500-26bb-450c-bc98-80774cefc7a0"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"sifen.list","txId":"48295c85-1476-4ce1-9e60-78acf3ae409b"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"61f5bcb5-523c-4c8f-af46-735ac99a8869"}
+[2026-10-20 10:01:06] [INFO] [api] [request] 075c1a0d-afa7-4274-8273-ee19cb78a980 ::ffff:192.168.200.8 GET /api/snc 304 191.81 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] bb6a23d3-290f-41fe-b962-4e4ce6f0f790 ::ffff:192.168.200.8 GET /api/recibos 200 197.01 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"registro-cliente.list","txId":"edcaa500-26bb-450c-bc98-80774cefc7a0"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"ciudades.list","txId":"61f5bcb5-523c-4c8f-af46-735ac99a8869"}
+[2026-10-20 10:01:06] [INFO] [api] [request] edcaa500-26bb-450c-bc98-80774cefc7a0 ::ffff:192.168.200.8 GET /api/registro-cliente 304 110.83 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] 48295c85-1476-4ce1-9e60-78acf3ae409b ::ffff:192.168.200.8 GET /api/sifen 304 195.26 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [INFO] [api] [request] 61f5bcb5-523c-4c8f-af46-735ac99a8869 ::ffff:192.168.200.8 GET /api/ciudades?page=2 304 86.67 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:01:06] [TRACE] [IAM] Acceso autenticado {"method":"GET","path":"/","userId":"R11","txId":"1d808b87-151f-45cb-967b-26fb1360c93a"}
+[2026-10-20 10:01:06] [TRACE] [IAM] Permiso concedido {"userId":"R11","permission":"existencias.list","txId":"1d808b87-151f-45cb-967b-26fb1360c93a"}
+[2026-10-20 10:01:06] [INFO] [api] [request] 1d808b87-151f-45cb-967b-26fb1360c93a ::ffff:192.168.200.8 GET /api/existencias?page=2 304 202.74 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:36] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 10:14:40] [INFO] [api] [request] 2b97c274-c3d7-423c-b721-8b882e54fb4c ::ffff:192.168.200.8 GET /api/ping 304 3.08 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:45] [INFO] [api] [request] 541bd377-bd1d-48ea-ace0-ae1f437d1d40 ::ffff:192.168.200.8 GET /api/ping 304 0.39 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [IAM] auth 7c9dbdbf-546a-4739-a473-85252d22e5fc Sesión iniciada {"sessionId":"00MVGPGLD0TF55JW7EMXK00000","userId":"R11"}
+[2026-10-20 10:14:46] [INFO] [api] [request] 7c9dbdbf-546a-4739-a473-85252d22e5fc ::ffff:192.168.200.8 POST /api/login 200 240.35 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 10a02874-6246-4b1e-b4c1-a8bff4fd6d5a Acceso autenticado {"method":"GET","path":"/api/schema.json","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 10a02874-6246-4b1e-b4c1-a8bff4fd6d5a Permiso concedido {"userId":"R11","permission":"schema.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] 10a02874-6246-4b1e-b4c1-a8bff4fd6d5a ::ffff:192.168.200.8 GET /api/schema.json 200 25.53 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 7a4e7449-e244-46c2-aa6d-f21952cf7623 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth a8133ebd-75b6-44c9-a417-b86c9298d9a8 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth f5a75c0a-f7bf-4e7d-a1ca-c65c7ea12d1c Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth a1947d51-fdfe-4ece-8968-91a00b5fee18 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 2cc11f02-5e28-4ff6-a6a1-a425235cc2f6 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 31432fa2-fbd3-43a0-882f-081fe07c30fc Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 7a4e7449-e244-46c2-aa6d-f21952cf7623 Permiso concedido {"userId":"R11","permission":"bancos.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can a8133ebd-75b6-44c9-a417-b86c9298d9a8 Permiso concedido {"userId":"R11","permission":"cobradores.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] 7a4e7449-e244-46c2-aa6d-f21952cf7623 ::ffff:192.168.200.8 GET /api/bancos 304 195.4 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] can f5a75c0a-f7bf-4e7d-a1ca-c65c7ea12d1c Permiso concedido {"userId":"R11","permission":"departamentos-rh.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] a8133ebd-75b6-44c9-a417-b86c9298d9a8 ::ffff:192.168.200.8 GET /api/cobradores 304 208.93 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] can 2cc11f02-5e28-4ff6-a6a1-a425235cc2f6 Permiso concedido {"userId":"R11","permission":"departamentos.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can a1947d51-fdfe-4ece-8968-91a00b5fee18 Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] f5a75c0a-f7bf-4e7d-a1ca-c65c7ea12d1c ::ffff:192.168.200.8 GET /api/departamentos-rh 304 206.97 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] can 31432fa2-fbd3-43a0-882f-081fe07c30fc Permiso concedido {"userId":"R11","permission":"empleados.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] 2cc11f02-5e28-4ff6-a6a1-a425235cc2f6 ::ffff:192.168.200.8 GET /api/departamentos 304 213.07 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] a1947d51-fdfe-4ece-8968-91a00b5fee18 ::ffff:192.168.200.8 GET /api/ciudades 304 238.96 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] 31432fa2-fbd3-43a0-882f-081fe07c30fc ::ffff:192.168.200.8 GET /api/empleados 304 226.32 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 91cee13d-c7ff-4743-8507-4d0ea265e6f8 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 5f7dde89-c481-4a43-ad4c-d7d02acdf4dd Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth b01c02de-6bc5-471d-982c-30489bd7c499 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 97eb2017-7c86-4532-bf53-0e256836044b Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 3863a398-8709-4a84-a5ec-e811dd7dc895 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth bfbae730-512b-4605-8e53-f1559a3d0a5d Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 5f7dde89-c481-4a43-ad4c-d7d02acdf4dd Permiso concedido {"userId":"R11","permission":"monedas.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 91cee13d-c7ff-4743-8507-4d0ea265e6f8 Permiso concedido {"userId":"R11","permission":"paises.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can b01c02de-6bc5-471d-982c-30489bd7c499 Permiso concedido {"userId":"R11","permission":"frecuencias.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 97eb2017-7c86-4532-bf53-0e256836044b Permiso concedido {"userId":"R11","permission":"rubros.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] 91cee13d-c7ff-4743-8507-4d0ea265e6f8 ::ffff:192.168.200.8 GET /api/paises 304 84.96 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] 5f7dde89-c481-4a43-ad4c-d7d02acdf4dd ::ffff:192.168.200.8 GET /api/monedas 304 95.19 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] 97eb2017-7c86-4532-bf53-0e256836044b ::ffff:192.168.200.8 GET /api/rubros 304 86.76 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] b01c02de-6bc5-471d-982c-30489bd7c499 ::ffff:192.168.200.8 GET /api/frecuencias 304 105.2 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] can bfbae730-512b-4605-8e53-f1559a3d0a5d Permiso concedido {"userId":"R11","permission":"saldos.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 3863a398-8709-4a84-a5ec-e811dd7dc895 Permiso concedido {"userId":"R11","permission":"series-comprobantes.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] bfbae730-512b-4605-8e53-f1559a3d0a5d ::ffff:192.168.200.8 GET /api/saldos 304 87.72 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] 3863a398-8709-4a84-a5ec-e811dd7dc895 ::ffff:192.168.200.8 GET /api/series-comprobantes 304 102.68 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 0e9f68f5-49ae-438b-a6c3-debc107d5e01 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 30b1bdaa-f3b4-4b5c-a832-06590af1099f Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 8086eefd-f419-4961-996e-7b2399c5a0b6 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth cd3aa139-8a3b-49f2-a4d4-81da6303b046 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth af496978-8b2a-48d9-b7f3-7cb323914726 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth f5a50645-7d0d-4f2d-9e2b-05901bc654b4 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 0e9f68f5-49ae-438b-a6c3-debc107d5e01 Permiso concedido {"userId":"R11","permission":"snc-motivos.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 30b1bdaa-f3b4-4b5c-a832-06590af1099f Permiso concedido {"userId":"R11","permission":"sucursales.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 8086eefd-f419-4961-996e-7b2399c5a0b6 Permiso concedido {"userId":"R11","permission":"tipos-comprobantes.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can cd3aa139-8a3b-49f2-a4d4-81da6303b046 Permiso concedido {"userId":"R11","permission":"tipos-cobros.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] 0e9f68f5-49ae-438b-a6c3-debc107d5e01 ::ffff:192.168.200.8 GET /api/snc-motivos 304 77.83 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] 30b1bdaa-f3b4-4b5c-a832-06590af1099f ::ffff:192.168.200.8 GET /api/sucursales 304 82.43 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] 8086eefd-f419-4961-996e-7b2399c5a0b6 ::ffff:192.168.200.8 GET /api/tipos-comprobantes 304 76.38 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] can af496978-8b2a-48d9-b7f3-7cb323914726 Permiso concedido {"userId":"R11","permission":"vendedores.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can f5a50645-7d0d-4f2d-9e2b-05901bc654b4 Permiso concedido {"userId":"R11","permission":"zonas.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] cd3aa139-8a3b-49f2-a4d4-81da6303b046 ::ffff:192.168.200.8 GET /api/tipos-cobros 304 79 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] af496978-8b2a-48d9-b7f3-7cb323914726 ::ffff:192.168.200.8 GET /api/vendedores 304 68.61 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] f5a50645-7d0d-4f2d-9e2b-05901bc654b4 ::ffff:192.168.200.8 GET /api/zonas 304 69.93 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] auth e6b0f3f1-5129-4401-a82f-854ce58d2426 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth a4e27052-c134-495e-96b4-747e49380974 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 68751fb2-7fc7-4f59-8751-50e2922de299 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 1afa18ff-a868-4d83-82f0-b037a763f690 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth f6ad4bfc-06f8-4637-bc34-3484a630068a Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 46df51f9-89bf-4920-8600-d8ac232b96d5 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can e6b0f3f1-5129-4401-a82f-854ce58d2426 Permiso concedido {"userId":"R11","permission":"clientes.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can a4e27052-c134-495e-96b4-747e49380974 Permiso concedido {"userId":"R11","permission":"articulos.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 68751fb2-7fc7-4f59-8751-50e2922de299 Permiso concedido {"userId":"R11","permission":"condiciones.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] a4e27052-c134-495e-96b4-747e49380974 ::ffff:192.168.200.8 GET /api/articulos 304 65.2 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] e6b0f3f1-5129-4401-a82f-854ce58d2426 ::ffff:192.168.200.8 GET /api/clientes 304 74.97 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] can 1afa18ff-a868-4d83-82f0-b037a763f690 Permiso concedido {"userId":"R11","permission":"parametros.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] 68751fb2-7fc7-4f59-8751-50e2922de299 ::ffff:192.168.200.8 GET /api/condiciones 304 77.67 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] can f6ad4bfc-06f8-4637-bc34-3484a630068a Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 46df51f9-89bf-4920-8600-d8ac232b96d5 Permiso concedido {"userId":"R11","permission":"facturas.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] 46df51f9-89bf-4920-8600-d8ac232b96d5 ::ffff:192.168.200.8 GET /api/facturas 304 103.4 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] 1afa18ff-a868-4d83-82f0-b037a763f690 ::ffff:192.168.200.8 GET /api/parametros 304 132.67 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 604d906f-3205-411a-af5e-e75393cd4663 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth b1a573f0-5280-45ea-b180-3ea52e0684d0 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth cf08c408-663a-4736-8578-660d1efa5fe5 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can 604d906f-3205-411a-af5e-e75393cd4663 Permiso concedido {"userId":"R11","permission":"snc.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can b1a573f0-5280-45ea-b180-3ea52e0684d0 Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can cf08c408-663a-4736-8578-660d1efa5fe5 Permiso concedido {"userId":"R11","permission":"recibos.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth f6aed78b-5843-4ca2-8c20-8c0f3adb8214 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [TRACE] [IAM] auth 399bfbf2-6606-42d6-8495-01b90e4e7abb Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:46] [INFO] [api] [request] 604d906f-3205-411a-af5e-e75393cd4663 ::ffff:192.168.200.8 GET /api/snc 304 149.56 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] cf08c408-663a-4736-8578-660d1efa5fe5 ::ffff:192.168.200.8 GET /api/recibos 304 170.02 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [TRACE] [IAM] can 399bfbf2-6606-42d6-8495-01b90e4e7abb Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 10:14:46] [TRACE] [IAM] can f6aed78b-5843-4ca2-8c20-8c0f3adb8214 Permiso concedido {"userId":"R11","permission":"registro-cliente.list"}
+[2026-10-20 10:14:46] [INFO] [api] [request] b1a573f0-5280-45ea-b180-3ea52e0684d0 ::ffff:192.168.200.8 GET /api/sifen 304 201.7 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] 399bfbf2-6606-42d6-8495-01b90e4e7abb ::ffff:192.168.200.8 GET /api/ciudades?page=2 304 154.41 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] f6aed78b-5843-4ca2-8c20-8c0f3adb8214 ::ffff:192.168.200.8 GET /api/registro-cliente 304 179.69 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:46] [INFO] [api] [request] f6ad4bfc-06f8-4637-bc34-3484a630068a ::ffff:192.168.200.8 GET /api/existencias 304 292.78 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:14:47] [TRACE] [IAM] auth dbad6583-66c4-438a-a479-5d158fafbe1b Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:14:47] [TRACE] [IAM] can dbad6583-66c4-438a-a479-5d158fafbe1b Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 10:14:47] [INFO] [api] [request] dbad6583-66c4-438a-a479-5d158fafbe1b ::ffff:192.168.200.8 GET /api/existencias?page=2 304 175.55 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:20:21] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 10:20:56] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 10:21:00] [INFO] [api] [request] 74eb8b32-c4ec-4a9d-af50-e9cfb8724004 ::ffff:192.168.200.8 GET /api/ping 304 3.06 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:05] [INFO] [api] [request] 6459c467-c09f-4e7f-8bca-a6103bd81ec8 ::ffff:192.168.200.8 GET /api/ping 304 0.4 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [IAM] [auth] c3ff3944-922b-4ab0-ab04-e9d2fd474f7f Sesión iniciada {"sessionId":"00MVGPORGKQZPDQNLO6N000000","userId":"R11"}
+[2026-10-20 10:21:07] [INFO] [api] [request] c3ff3944-922b-4ab0-ab04-e9d2fd474f7f ::ffff:192.168.200.8 POST /api/login 200 102.75 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 6d8b438f-a9da-46d1-ad99-410034c32dee Acceso autenticado {"method":"GET","path":"/api/schema.json","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 6d8b438f-a9da-46d1-ad99-410034c32dee Permiso concedido {"userId":"R11","permission":"schema.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] 6d8b438f-a9da-46d1-ad99-410034c32dee ::ffff:192.168.200.8 GET /api/schema.json 200 23.21 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 9f241899-80a2-49bd-9d6f-3905c6a4907a Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] ad599ad4-9d2b-4c5f-a2a6-aa47ca6014fb Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 4f1b03d9-96f1-48ec-802d-49763e927198 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] e80a9ed6-c003-42e3-b1b3-c24bf731080c Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 2505f34e-c665-4135-a160-3a317a604b89 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] c60a5850-7e0d-4296-903a-039633723183 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 9f241899-80a2-49bd-9d6f-3905c6a4907a Permiso concedido {"userId":"R11","permission":"bancos.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] ad599ad4-9d2b-4c5f-a2a6-aa47ca6014fb Permiso concedido {"userId":"R11","permission":"cobradores.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] 9f241899-80a2-49bd-9d6f-3905c6a4907a ::ffff:192.168.200.8 GET /api/bancos 304 161.63 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 4f1b03d9-96f1-48ec-802d-49763e927198 Permiso concedido {"userId":"R11","permission":"departamentos.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] e80a9ed6-c003-42e3-b1b3-c24bf731080c Permiso concedido {"userId":"R11","permission":"empleados.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 2505f34e-c665-4135-a160-3a317a604b89 Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] ad599ad4-9d2b-4c5f-a2a6-aa47ca6014fb ::ffff:192.168.200.8 GET /api/cobradores 304 181.03 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] c60a5850-7e0d-4296-903a-039633723183 Permiso concedido {"userId":"R11","permission":"departamentos-rh.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] 4f1b03d9-96f1-48ec-802d-49763e927198 ::ffff:192.168.200.8 GET /api/departamentos 304 155.25 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] e80a9ed6-c003-42e3-b1b3-c24bf731080c ::ffff:192.168.200.8 GET /api/empleados 304 153.89 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] c60a5850-7e0d-4296-903a-039633723183 ::ffff:192.168.200.8 GET /api/departamentos-rh 304 169.33 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 2505f34e-c665-4135-a160-3a317a604b89 ::ffff:192.168.200.8 GET /api/ciudades 304 174.58 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] a12ed18c-5f2e-4039-a6f9-bba15b17921d Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 3061c30e-d4b2-4b50-8e4d-9323187af388 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 56323569-b369-4d76-ab2b-1bef56d59d07 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 8773bd2a-120a-4cca-aa55-9b36756ffec2 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] ab2dc2d1-2eba-420e-bf45-ba17e063db48 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] f2cb94c4-f9f0-4d94-97a3-825895c386bd Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] a12ed18c-5f2e-4039-a6f9-bba15b17921d Permiso concedido {"userId":"R11","permission":"frecuencias.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 3061c30e-d4b2-4b50-8e4d-9323187af388 Permiso concedido {"userId":"R11","permission":"paises.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 8773bd2a-120a-4cca-aa55-9b36756ffec2 Permiso concedido {"userId":"R11","permission":"monedas.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 56323569-b369-4d76-ab2b-1bef56d59d07 Permiso concedido {"userId":"R11","permission":"saldos.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] ab2dc2d1-2eba-420e-bf45-ba17e063db48 Permiso concedido {"userId":"R11","permission":"rubros.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] f2cb94c4-f9f0-4d94-97a3-825895c386bd Permiso concedido {"userId":"R11","permission":"series-comprobantes.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] a12ed18c-5f2e-4039-a6f9-bba15b17921d ::ffff:192.168.200.8 GET /api/frecuencias 304 68.89 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 3061c30e-d4b2-4b50-8e4d-9323187af388 ::ffff:192.168.200.8 GET /api/paises 304 68.76 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 8773bd2a-120a-4cca-aa55-9b36756ffec2 ::ffff:192.168.200.8 GET /api/monedas 304 72.91 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] ab2dc2d1-2eba-420e-bf45-ba17e063db48 ::ffff:192.168.200.8 GET /api/rubros 304 77.33 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 56323569-b369-4d76-ab2b-1bef56d59d07 ::ffff:192.168.200.8 GET /api/saldos 304 99.81 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] f2cb94c4-f9f0-4d94-97a3-825895c386bd ::ffff:192.168.200.8 GET /api/series-comprobantes 304 106.56 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 55fbc277-1720-45b7-91a1-93f1a36babf0 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 37140316-a27b-4be5-860a-24b3179d161b Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 8c070884-f17c-48dd-ba82-f435aaec3393 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 0bebe4ba-75ce-4e86-9de0-01c2099f0d42 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 21dd5924-d2b7-4e29-874a-9bb7f1721ca3 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 0e1be7df-d9ca-4ae4-a9ef-eb09420837b0 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 55fbc277-1720-45b7-91a1-93f1a36babf0 Permiso concedido {"userId":"R11","permission":"snc-motivos.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 37140316-a27b-4be5-860a-24b3179d161b Permiso concedido {"userId":"R11","permission":"sucursales.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 8c070884-f17c-48dd-ba82-f435aaec3393 Permiso concedido {"userId":"R11","permission":"tipos-comprobantes.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 21dd5924-d2b7-4e29-874a-9bb7f1721ca3 Permiso concedido {"userId":"R11","permission":"vendedores.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] 55fbc277-1720-45b7-91a1-93f1a36babf0 ::ffff:192.168.200.8 GET /api/snc-motivos 304 97.05 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 0bebe4ba-75ce-4e86-9de0-01c2099f0d42 Permiso concedido {"userId":"R11","permission":"tipos-cobros.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 0e1be7df-d9ca-4ae4-a9ef-eb09420837b0 Permiso concedido {"userId":"R11","permission":"zonas.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] 37140316-a27b-4be5-860a-24b3179d161b ::ffff:192.168.200.8 GET /api/sucursales 304 98.43 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 8c070884-f17c-48dd-ba82-f435aaec3393 ::ffff:192.168.200.8 GET /api/tipos-comprobantes 304 98.57 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 21dd5924-d2b7-4e29-874a-9bb7f1721ca3 ::ffff:192.168.200.8 GET /api/vendedores 304 60.95 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 0bebe4ba-75ce-4e86-9de0-01c2099f0d42 ::ffff:192.168.200.8 GET /api/tipos-cobros 304 68.47 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 0e1be7df-d9ca-4ae4-a9ef-eb09420837b0 ::ffff:192.168.200.8 GET /api/zonas 304 68.25 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] dd0dea45-55c4-447c-a3e4-fa10244e9acc Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 8f01718a-e723-4a2d-ab0f-9c414f403c00 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] ed41ed82-4f75-4cd8-a005-50bf123803b4 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 5c0ad89a-335b-45c2-b67c-5137cd81fe9b Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 0ab9d5b2-1e18-410b-817e-bff7fe1f517d Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] b2f9c672-9825-49f7-898d-023e4d11fc6b Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] ed41ed82-4f75-4cd8-a005-50bf123803b4 Permiso concedido {"userId":"R11","permission":"articulos.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] dd0dea45-55c4-447c-a3e4-fa10244e9acc Permiso concedido {"userId":"R11","permission":"condiciones.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 8f01718a-e723-4a2d-ab0f-9c414f403c00 Permiso concedido {"userId":"R11","permission":"clientes.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 5c0ad89a-335b-45c2-b67c-5137cd81fe9b Permiso concedido {"userId":"R11","permission":"parametros.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] ed41ed82-4f75-4cd8-a005-50bf123803b4 ::ffff:192.168.200.8 GET /api/articulos 304 84.41 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] dd0dea45-55c4-447c-a3e4-fa10244e9acc ::ffff:192.168.200.8 GET /api/condiciones 304 82.56 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 8f01718a-e723-4a2d-ab0f-9c414f403c00 ::ffff:192.168.200.8 GET /api/clientes 304 102.57 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 0ab9d5b2-1e18-410b-817e-bff7fe1f517d Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] b2f9c672-9825-49f7-898d-023e4d11fc6b Permiso concedido {"userId":"R11","permission":"facturas.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] 5c0ad89a-335b-45c2-b67c-5137cd81fe9b ::ffff:192.168.200.8 GET /api/parametros 304 113.51 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] b2f9c672-9825-49f7-898d-023e4d11fc6b ::ffff:192.168.200.8 GET /api/facturas 200 123.05 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 960535aa-4b6d-4df3-976a-c6e982cc1fa6 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] a1fb4672-0458-4d5f-ac5c-5d39b72c86d6 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 83ac285f-5077-48d2-924a-c80f74f623e0 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 960535aa-4b6d-4df3-976a-c6e982cc1fa6 Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] a1fb4672-0458-4d5f-ac5c-5d39b72c86d6 Permiso concedido {"userId":"R11","permission":"recibos.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 83ac285f-5077-48d2-924a-c80f74f623e0 Permiso concedido {"userId":"R11","permission":"snc.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] 90b89b97-4d41-4670-9bc7-03a0df269a65 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [INFO] [api] [request] 960535aa-4b6d-4df3-976a-c6e982cc1fa6 ::ffff:192.168.200.8 GET /api/ciudades?page=2 304 117.39 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 83ac285f-5077-48d2-924a-c80f74f623e0 ::ffff:192.168.200.8 GET /api/snc 304 117.3 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] a1fb4672-0458-4d5f-ac5c-5d39b72c86d6 ::ffff:192.168.200.8 GET /api/recibos 304 133.72 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [TRACE] [IAM] [auth] bb1cca60-1525-4f18-85d8-4965fe8a3f45 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] 90b89b97-4d41-4670-9bc7-03a0df269a65 Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 10:21:07] [TRACE] [IAM] [can] bb1cca60-1525-4f18-85d8-4965fe8a3f45 Permiso concedido {"userId":"R11","permission":"registro-cliente.list"}
+[2026-10-20 10:21:07] [INFO] [api] [request] bb1cca60-1525-4f18-85d8-4965fe8a3f45 ::ffff:192.168.200.8 GET /api/registro-cliente 304 94.44 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 90b89b97-4d41-4670-9bc7-03a0df269a65 ::ffff:192.168.200.8 GET /api/sifen 304 126.68 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:07] [INFO] [api] [request] 0ab9d5b2-1e18-410b-817e-bff7fe1f517d ::ffff:192.168.200.8 GET /api/existencias 304 274.19 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:21:08] [TRACE] [IAM] [auth] ba96d6c6-035f-4882-b1a7-987495b29c06 Acceso autenticado {"method":"GET","path":"/","userId":"R11"}
+[2026-10-20 10:21:08] [TRACE] [IAM] [can] ba96d6c6-035f-4882-b1a7-987495b29c06 Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 10:21:08] [INFO] [api] [request] ba96d6c6-035f-4882-b1a7-987495b29c06 ::ffff:192.168.200.8 GET /api/existencias?page=2 304 147.33 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:36:49] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 10:36:56] [INFO] [api] [request] 88ed2b00-8860-4f1b-b0d4-91d142e1f663 ::ffff:192.168.200.8 GET /api/ping 304 3.01 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:01] [INFO] [api] [request] 70dac1cd-ff21-4c6e-8abe-c96322f1821c ::ffff:192.168.200.8 GET /api/ping 304 0.41 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [IAM] [auth] ba083cc1-5c41-4031-b3f3-6c5c7b3fd86e Sesión iniciada {"sessionId":"00MVGQ9913Z27T7RFBGCO00000","userId":"R11"}
+[2026-10-20 10:37:03] [INFO] [api] [request] ba083cc1-5c41-4031-b3f3-6c5c7b3fd86e ::ffff:192.168.200.8 POST /api/login 200 90.7 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] b55c430a-fa41-4551-b6ea-1faaacf42714 Acceso autenticado {"method":"GET","path":"","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] b55c430a-fa41-4551-b6ea-1faaacf42714 Permiso concedido {"userId":"R11","permission":"schema.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] b55c430a-fa41-4551-b6ea-1faaacf42714 ::ffff:192.168.200.8 GET /api/schema.json 200 27.39 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] bb7ca500-fcdc-4937-9d2d-931641c62115 Acceso autenticado {"method":"GET","path":"/api/bancos","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] e9220e14-60c8-4e8d-a522-0ef4ba4c834e Acceso autenticado {"method":"GET","path":"/api/cobradores","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 6500104e-07e1-4c43-97e2-16dad5b4e6fe Acceso autenticado {"method":"GET","path":"/api/departamentos-rh","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 6b7bbf3b-a6ee-46a0-8aed-30ff3a745c5b Acceso autenticado {"method":"GET","path":"/api/ciudades","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] b529d02c-496b-429b-bf40-3e5d61b29831 Acceso autenticado {"method":"GET","path":"/api/empleados","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] bb7ca500-fcdc-4937-9d2d-931641c62115 Permiso concedido {"userId":"R11","permission":"bancos.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 861247f7-8a27-4c03-8592-e4914abee214 Acceso autenticado {"method":"GET","path":"/api/departamentos","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] e9220e14-60c8-4e8d-a522-0ef4ba4c834e Permiso concedido {"userId":"R11","permission":"cobradores.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] bb7ca500-fcdc-4937-9d2d-931641c62115 ::ffff:192.168.200.8 GET /api/bancos 304 221.27 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] e9220e14-60c8-4e8d-a522-0ef4ba4c834e ::ffff:192.168.200.8 GET /api/cobradores 304 234.79 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 6500104e-07e1-4c43-97e2-16dad5b4e6fe Permiso concedido {"userId":"R11","permission":"departamentos-rh.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 6b7bbf3b-a6ee-46a0-8aed-30ff3a745c5b Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] b529d02c-496b-429b-bf40-3e5d61b29831 Permiso concedido {"userId":"R11","permission":"empleados.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 6500104e-07e1-4c43-97e2-16dad5b4e6fe ::ffff:192.168.200.8 GET /api/departamentos-rh 304 261.67 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 861247f7-8a27-4c03-8592-e4914abee214 Permiso concedido {"userId":"R11","permission":"departamentos.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 6b7bbf3b-a6ee-46a0-8aed-30ff3a745c5b ::ffff:192.168.200.8 GET /api/ciudades 304 278.52 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] b529d02c-496b-429b-bf40-3e5d61b29831 ::ffff:192.168.200.8 GET /api/empleados 304 278.23 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] 861247f7-8a27-4c03-8592-e4914abee214 ::ffff:192.168.200.8 GET /api/departamentos 304 290.98 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 69f3bf5b-a202-4ea4-a892-a493618a1798 Acceso autenticado {"method":"GET","path":"/api/frecuencias","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] b25fe20f-406f-4bfd-8dcd-55a1882f41a5 Acceso autenticado {"method":"GET","path":"/api/series-comprobantes","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 63929656-b1a9-467c-87f3-44e375caaace Acceso autenticado {"method":"GET","path":"/api/rubros","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] fc527169-8b9e-407d-a51e-8edc8fe04bfe Acceso autenticado {"method":"GET","path":"/api/monedas","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 63f4e79f-b148-4fd1-8d93-aa296eb7d01d Acceso autenticado {"method":"GET","path":"/api/paises","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 443f113a-188d-4c94-88c1-d516825d11e8 Acceso autenticado {"method":"GET","path":"/api/saldos","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] b25fe20f-406f-4bfd-8dcd-55a1882f41a5 Permiso concedido {"userId":"R11","permission":"series-comprobantes.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] fc527169-8b9e-407d-a51e-8edc8fe04bfe Permiso concedido {"userId":"R11","permission":"monedas.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 63929656-b1a9-467c-87f3-44e375caaace Permiso concedido {"userId":"R11","permission":"rubros.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 69f3bf5b-a202-4ea4-a892-a493618a1798 Permiso concedido {"userId":"R11","permission":"frecuencias.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 63f4e79f-b148-4fd1-8d93-aa296eb7d01d Permiso concedido {"userId":"R11","permission":"paises.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] b25fe20f-406f-4bfd-8dcd-55a1882f41a5 ::ffff:192.168.200.8 GET /api/series-comprobantes 304 117.42 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] fc527169-8b9e-407d-a51e-8edc8fe04bfe ::ffff:192.168.200.8 GET /api/monedas 304 151.46 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] 63929656-b1a9-467c-87f3-44e375caaace ::ffff:192.168.200.8 GET /api/rubros 304 143.61 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] 69f3bf5b-a202-4ea4-a892-a493618a1798 ::ffff:192.168.200.8 GET /api/frecuencias 304 160.68 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 443f113a-188d-4c94-88c1-d516825d11e8 Permiso concedido {"userId":"R11","permission":"saldos.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 63f4e79f-b148-4fd1-8d93-aa296eb7d01d ::ffff:192.168.200.8 GET /api/paises 304 156.95 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] 443f113a-188d-4c94-88c1-d516825d11e8 ::ffff:192.168.200.8 GET /api/saldos 304 149.75 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] f890c7c4-b941-41ed-889b-53959af230a3 Acceso autenticado {"method":"GET","path":"/api/snc-motivos","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 6908e7a0-def4-4cea-9336-4d102dedbd80 Acceso autenticado {"method":"GET","path":"/api/tipos-comprobantes","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 7d965805-d4e9-41ce-ae2d-fbbf42d5ac84 Acceso autenticado {"method":"GET","path":"/api/sucursales","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] a5ea7d0d-6dce-4b56-991d-10eface6e603 Acceso autenticado {"method":"GET","path":"/api/tipos-cobros","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] e81174b8-cf55-4f69-a488-28c53f8b59f8 Acceso autenticado {"method":"GET","path":"/api/vendedores","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 7304c90f-1bab-471c-8b25-e202fdae226a Acceso autenticado {"method":"GET","path":"/api/zonas","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 6908e7a0-def4-4cea-9336-4d102dedbd80 Permiso concedido {"userId":"R11","permission":"tipos-comprobantes.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] f890c7c4-b941-41ed-889b-53959af230a3 Permiso concedido {"userId":"R11","permission":"snc-motivos.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 7d965805-d4e9-41ce-ae2d-fbbf42d5ac84 Permiso concedido {"userId":"R11","permission":"sucursales.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] a5ea7d0d-6dce-4b56-991d-10eface6e603 Permiso concedido {"userId":"R11","permission":"tipos-cobros.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 6908e7a0-def4-4cea-9336-4d102dedbd80 ::ffff:192.168.200.8 GET /api/tipos-comprobantes 304 64.65 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] f890c7c4-b941-41ed-889b-53959af230a3 ::ffff:192.168.200.8 GET /api/snc-motivos 304 75.19 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] e81174b8-cf55-4f69-a488-28c53f8b59f8 Permiso concedido {"userId":"R11","permission":"vendedores.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 7d965805-d4e9-41ce-ae2d-fbbf42d5ac84 ::ffff:192.168.200.8 GET /api/sucursales 304 74.97 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] a5ea7d0d-6dce-4b56-991d-10eface6e603 ::ffff:192.168.200.8 GET /api/tipos-cobros 304 71.91 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] e81174b8-cf55-4f69-a488-28c53f8b59f8 ::ffff:192.168.200.8 GET /api/vendedores 304 69.44 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 7304c90f-1bab-471c-8b25-e202fdae226a Permiso concedido {"userId":"R11","permission":"zonas.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 7304c90f-1bab-471c-8b25-e202fdae226a ::ffff:192.168.200.8 GET /api/zonas 304 66.91 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 7d9a1cae-2788-465b-b92c-789c32cbe8e0 Acceso autenticado {"method":"GET","path":"/api/clientes","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] e0404c6b-2c71-492e-89d1-ea512a88f6e7 Acceso autenticado {"method":"GET","path":"/api/articulos","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 16c038c8-86f5-4d92-858c-affde917325e Acceso autenticado {"method":"GET","path":"/api/condiciones","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 70e3a1ab-86b7-4c18-b7c3-40005ebdf19b Acceso autenticado {"method":"GET","path":"/api/parametros","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 8eed9b53-5a70-4a46-8f86-57dd00798d7d Acceso autenticado {"method":"GET","path":"/api/existencias","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 7d9a1cae-2788-465b-b92c-789c32cbe8e0 Permiso concedido {"userId":"R11","permission":"clientes.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] d946c80c-561f-4bd1-9306-5184c22bceb4 Acceso autenticado {"method":"GET","path":"/api/facturas","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] e0404c6b-2c71-492e-89d1-ea512a88f6e7 Permiso concedido {"userId":"R11","permission":"articulos.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 16c038c8-86f5-4d92-858c-affde917325e Permiso concedido {"userId":"R11","permission":"condiciones.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 7d9a1cae-2788-465b-b92c-789c32cbe8e0 ::ffff:192.168.200.8 GET /api/clientes 304 81.06 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 70e3a1ab-86b7-4c18-b7c3-40005ebdf19b Permiso concedido {"userId":"R11","permission":"parametros.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] e0404c6b-2c71-492e-89d1-ea512a88f6e7 ::ffff:192.168.200.8 GET /api/articulos 304 85.17 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 8eed9b53-5a70-4a46-8f86-57dd00798d7d Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 16c038c8-86f5-4d92-858c-affde917325e ::ffff:192.168.200.8 GET /api/condiciones 304 89.28 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] d946c80c-561f-4bd1-9306-5184c22bceb4 Permiso concedido {"userId":"R11","permission":"facturas.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 70e3a1ab-86b7-4c18-b7c3-40005ebdf19b ::ffff:192.168.200.8 GET /api/parametros 304 111.1 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 4bd8d747-1e6e-42c3-bf0c-fb3de6e8a718 Acceso autenticado {"method":"GET","path":"/api/recibos","userId":"R11"}
+[2026-10-20 10:37:03] [INFO] [api] [request] d946c80c-561f-4bd1-9306-5184c22bceb4 ::ffff:192.168.200.8 GET /api/facturas 200 133.35 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 124d839e-7a14-4007-971d-d67e2f5d8a1d Acceso autenticado {"method":"GET","path":"/api/snc","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] b862a7f6-c774-41d4-8b61-3f30cb982892 Acceso autenticado {"method":"GET","path":"/api/sifen","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] e9e2f512-bcfd-4d1a-9c6e-0931036a8a19 Acceso autenticado {"method":"GET","path":"/api/registro-cliente","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 124d839e-7a14-4007-971d-d67e2f5d8a1d Permiso concedido {"userId":"R11","permission":"snc.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 4bd8d747-1e6e-42c3-bf0c-fb3de6e8a718 Permiso concedido {"userId":"R11","permission":"recibos.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] b862a7f6-c774-41d4-8b61-3f30cb982892 Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 4bd8d747-1e6e-42c3-bf0c-fb3de6e8a718 ::ffff:192.168.200.8 GET /api/recibos 304 132.01 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] 124d839e-7a14-4007-971d-d67e2f5d8a1d ::ffff:192.168.200.8 GET /api/snc 304 125 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] e9e2f512-bcfd-4d1a-9c6e-0931036a8a19 Permiso concedido {"userId":"R11","permission":"registro-cliente.list"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 0dbdd37e-9417-40c1-bb7a-2d7e2798df7a Acceso autenticado {"method":"GET","path":"/api/ciudades","userId":"R11"}
+[2026-10-20 10:37:03] [INFO] [api] [request] e9e2f512-bcfd-4d1a-9c6e-0931036a8a19 ::ffff:192.168.200.8 GET /api/registro-cliente 304 100.55 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] b862a7f6-c774-41d4-8b61-3f30cb982892 ::ffff:192.168.200.8 GET /api/sifen 304 164.66 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 0dbdd37e-9417-40c1-bb7a-2d7e2798df7a Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 10:37:03] [INFO] [api] [request] 8eed9b53-5a70-4a46-8f86-57dd00798d7d ::ffff:192.168.200.8 GET /api/existencias 304 258.54 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [INFO] [api] [request] 0dbdd37e-9417-40c1-bb7a-2d7e2798df7a ::ffff:192.168.200.8 GET /api/ciudades?page=2 304 118.05 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 10:37:03] [TRACE] [IAM] [auth] 07d71f55-0d6d-4710-86b1-80f8d840d583 Acceso autenticado {"method":"GET","path":"/api/existencias","userId":"R11"}
+[2026-10-20 10:37:03] [TRACE] [IAM] [can] 07d71f55-0d6d-4710-86b1-80f8d840d583 Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 10:37:04] [INFO] [api] [request] 07d71f55-0d6d-4710-86b1-80f8d840d583 ::ffff:192.168.200.8 GET /api/existencias?page=2 304 192.75 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:39] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 11:37:50] [INFO] [api] [request] f9d8994f-1ffe-40c4-bd8a-99d8ea7d151e ::ffff:192.168.200.8 GET /api/ping 304 3.31 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:55] [INFO] [api] [request] a87b5982-88da-435e-b8d2-a76caf390ba4 ::ffff:192.168.200.8 GET /api/ping 304 0.39 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [IAM] [auth] 46059be9-cd70-4745-b0a0-4452cda76dfd Sesión iniciada {"sessionId":"00MVGSFJYQBEL3GRJBHUP00000","userId":"R11"}
+[2026-10-20 11:37:56] [INFO] [api] [request] 46059be9-cd70-4745-b0a0-4452cda76dfd ::ffff:192.168.200.8 POST /api/login 200 95.63 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 2261ea61-c4eb-417a-abd9-dba4fc9d81ed Acceso autenticado {"method":"GET","path":"","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 2261ea61-c4eb-417a-abd9-dba4fc9d81ed Permiso concedido {"userId":"R11","permission":"schema.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] 2261ea61-c4eb-417a-abd9-dba4fc9d81ed ::ffff:192.168.200.8 GET /api/schema.json 200 25.32 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 6049cc25-a840-43d5-b228-e245f7b64170 Acceso autenticado {"method":"GET","path":"/api/bancos","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] a17f8b92-e11d-45db-821c-0206840d2fcf Acceso autenticado {"method":"GET","path":"/api/departamentos-rh","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] ddbaee96-3bf5-4b40-9075-3db103809fbb Acceso autenticado {"method":"GET","path":"/api/cobradores","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 404a3b85-5962-4608-b5ac-6eb4264269a2 Acceso autenticado {"method":"GET","path":"/api/departamentos","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] ae4efdf4-6f89-49b0-8238-15d2efc240c8 Acceso autenticado {"method":"GET","path":"/api/ciudades","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] febf09c1-ee79-4ecf-b56e-86a8461e3afd Acceso autenticado {"method":"GET","path":"/api/empleados","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 6049cc25-a840-43d5-b228-e245f7b64170 Permiso concedido {"userId":"R11","permission":"bancos.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] 6049cc25-a840-43d5-b228-e245f7b64170 ::ffff:192.168.200.8 GET /api/bancos 304 142.17 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] a17f8b92-e11d-45db-821c-0206840d2fcf Permiso concedido {"userId":"R11","permission":"departamentos-rh.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] ddbaee96-3bf5-4b40-9075-3db103809fbb Permiso concedido {"userId":"R11","permission":"cobradores.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 404a3b85-5962-4608-b5ac-6eb4264269a2 Permiso concedido {"userId":"R11","permission":"departamentos.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] febf09c1-ee79-4ecf-b56e-86a8461e3afd Permiso concedido {"userId":"R11","permission":"empleados.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] a17f8b92-e11d-45db-821c-0206840d2fcf ::ffff:192.168.200.8 GET /api/departamentos-rh 304 142.29 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] ae4efdf4-6f89-49b0-8238-15d2efc240c8 Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] ddbaee96-3bf5-4b40-9075-3db103809fbb ::ffff:192.168.200.8 GET /api/cobradores 304 172.58 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] 404a3b85-5962-4608-b5ac-6eb4264269a2 ::ffff:192.168.200.8 GET /api/departamentos 304 157.98 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] febf09c1-ee79-4ecf-b56e-86a8461e3afd ::ffff:192.168.200.8 GET /api/empleados 304 161.93 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] ae4efdf4-6f89-49b0-8238-15d2efc240c8 ::ffff:192.168.200.8 GET /api/ciudades 304 184.96 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 7ffc0408-4e63-4199-993b-3b79750c0b95 Acceso autenticado {"method":"GET","path":"/api/frecuencias","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] b363bd84-2a9e-49c0-83e1-8281cead9bfb Acceso autenticado {"method":"GET","path":"/api/paises","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 4b9de4ee-c6e6-47c6-af1a-4b450144d4f2 Acceso autenticado {"method":"GET","path":"/api/rubros","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 5b45a1ae-b2b5-4600-bb9a-d7f5a9390af9 Acceso autenticado {"method":"GET","path":"/api/monedas","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 99c0192a-6a61-4e4d-9c9a-520a9bd60420 Acceso autenticado {"method":"GET","path":"/api/series-comprobantes","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 0d279bd0-6648-42e3-8ec6-700686b72107 Acceso autenticado {"method":"GET","path":"/api/saldos","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 7ffc0408-4e63-4199-993b-3b79750c0b95 Permiso concedido {"userId":"R11","permission":"frecuencias.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] b363bd84-2a9e-49c0-83e1-8281cead9bfb Permiso concedido {"userId":"R11","permission":"paises.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 4b9de4ee-c6e6-47c6-af1a-4b450144d4f2 Permiso concedido {"userId":"R11","permission":"rubros.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] 7ffc0408-4e63-4199-993b-3b79750c0b95 ::ffff:192.168.200.8 GET /api/frecuencias 304 61.68 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 99c0192a-6a61-4e4d-9c9a-520a9bd60420 Permiso concedido {"userId":"R11","permission":"series-comprobantes.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 5b45a1ae-b2b5-4600-bb9a-d7f5a9390af9 Permiso concedido {"userId":"R11","permission":"monedas.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 0d279bd0-6648-42e3-8ec6-700686b72107 Permiso concedido {"userId":"R11","permission":"saldos.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] b363bd84-2a9e-49c0-83e1-8281cead9bfb ::ffff:192.168.200.8 GET /api/paises 304 71.08 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] 4b9de4ee-c6e6-47c6-af1a-4b450144d4f2 ::ffff:192.168.200.8 GET /api/rubros 304 75.09 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] 99c0192a-6a61-4e4d-9c9a-520a9bd60420 ::ffff:192.168.200.8 GET /api/series-comprobantes 304 74.01 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] 5b45a1ae-b2b5-4600-bb9a-d7f5a9390af9 ::ffff:192.168.200.8 GET /api/monedas 304 82.31 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] 0d279bd0-6648-42e3-8ec6-700686b72107 ::ffff:192.168.200.8 GET /api/saldos 304 76.61 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 66ced568-06e3-446b-b132-41bf267a8304 Acceso autenticado {"method":"GET","path":"/api/snc-motivos","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 6d0d1855-c722-458c-a5c4-2897b85d3756 Acceso autenticado {"method":"GET","path":"/api/sucursales","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] be9eeda7-303c-4953-a2a5-affabc2bbd9f Acceso autenticado {"method":"GET","path":"/api/tipos-comprobantes","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 265c6c0b-02b0-4b34-bf74-c48f1bd0668c Acceso autenticado {"method":"GET","path":"/api/tipos-cobros","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] f2c7fbef-a568-4aa1-a9a6-c9d001500561 Acceso autenticado {"method":"GET","path":"/api/vendedores","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] f11d8cde-2fbe-4f0f-ae4f-8d913a27adb2 Acceso autenticado {"method":"GET","path":"/api/zonas","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 66ced568-06e3-446b-b132-41bf267a8304 Permiso concedido {"userId":"R11","permission":"snc-motivos.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 6d0d1855-c722-458c-a5c4-2897b85d3756 Permiso concedido {"userId":"R11","permission":"sucursales.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] 66ced568-06e3-446b-b132-41bf267a8304 ::ffff:192.168.200.8 GET /api/snc-motivos 304 70.43 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 265c6c0b-02b0-4b34-bf74-c48f1bd0668c Permiso concedido {"userId":"R11","permission":"tipos-cobros.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] be9eeda7-303c-4953-a2a5-affabc2bbd9f Permiso concedido {"userId":"R11","permission":"tipos-comprobantes.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] f2c7fbef-a568-4aa1-a9a6-c9d001500561 Permiso concedido {"userId":"R11","permission":"vendedores.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] 6d0d1855-c722-458c-a5c4-2897b85d3756 ::ffff:192.168.200.8 GET /api/sucursales 304 68.59 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] f11d8cde-2fbe-4f0f-ae4f-8d913a27adb2 Permiso concedido {"userId":"R11","permission":"zonas.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] 265c6c0b-02b0-4b34-bf74-c48f1bd0668c ::ffff:192.168.200.8 GET /api/tipos-cobros 304 67.62 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] be9eeda7-303c-4953-a2a5-affabc2bbd9f ::ffff:192.168.200.8 GET /api/tipos-comprobantes 304 77.7 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] f2c7fbef-a568-4aa1-a9a6-c9d001500561 ::ffff:192.168.200.8 GET /api/vendedores 304 76.27 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] f11d8cde-2fbe-4f0f-ae4f-8d913a27adb2 ::ffff:192.168.200.8 GET /api/zonas 304 70.51 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] db5dc587-05bc-4015-b8c1-e83e07ca5121 Acceso autenticado {"method":"GET","path":"/api/clientes","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 38cac5d2-d39e-46cd-b29d-57a3ec3c47ed Acceso autenticado {"method":"GET","path":"/api/condiciones","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 47059aac-0f22-4634-9fea-9a52cfc03651 Acceso autenticado {"method":"GET","path":"/api/articulos","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] e0caa027-3472-430f-b7f2-8f982ff6dab1 Acceso autenticado {"method":"GET","path":"/api/parametros","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] a855779c-9374-41b8-8767-a5599c2ca6d6 Acceso autenticado {"method":"GET","path":"/api/existencias","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 3a5d80f1-4741-458c-be1b-796b4885ebee Acceso autenticado {"method":"GET","path":"/api/facturas","userId":"R11"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] db5dc587-05bc-4015-b8c1-e83e07ca5121 Permiso concedido {"userId":"R11","permission":"clientes.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] db5dc587-05bc-4015-b8c1-e83e07ca5121 ::ffff:192.168.200.8 GET /api/clientes 304 95.78 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 47059aac-0f22-4634-9fea-9a52cfc03651 Permiso concedido {"userId":"R11","permission":"articulos.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 38cac5d2-d39e-46cd-b29d-57a3ec3c47ed Permiso concedido {"userId":"R11","permission":"condiciones.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] e0caa027-3472-430f-b7f2-8f982ff6dab1 Permiso concedido {"userId":"R11","permission":"parametros.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] a855779c-9374-41b8-8767-a5599c2ca6d6 Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 11:37:56] [TRACE] [IAM] [can] 3a5d80f1-4741-458c-be1b-796b4885ebee Permiso concedido {"userId":"R11","permission":"facturas.list"}
+[2026-10-20 11:37:56] [INFO] [api] [request] 47059aac-0f22-4634-9fea-9a52cfc03651 ::ffff:192.168.200.8 GET /api/articulos 304 111.79 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] 38cac5d2-d39e-46cd-b29d-57a3ec3c47ed ::ffff:192.168.200.8 GET /api/condiciones 304 108.08 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [INFO] [api] [request] 3a5d80f1-4741-458c-be1b-796b4885ebee ::ffff:192.168.200.8 GET /api/facturas 304 120.46 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] 3eafe1ae-8da3-4bbf-8313-63e41e4ab415 Acceso autenticado {"method":"GET","path":"/api/recibos","userId":"R11"}
+[2026-10-20 11:37:56] [INFO] [api] [request] e0caa027-3472-430f-b7f2-8f982ff6dab1 ::ffff:192.168.200.8 GET /api/parametros 304 131.69 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:56] [TRACE] [IAM] [auth] c35bfb31-b456-4a98-baf9-212f7d5ca7e3 Acceso autenticado {"method":"GET","path":"/api/snc","userId":"R11"}
+[2026-10-20 11:37:57] [TRACE] [IAM] [auth] 59967fcd-7a0e-490f-92b5-238332f9ceda Acceso autenticado {"method":"GET","path":"/api/sifen","userId":"R11"}
+[2026-10-20 11:37:57] [TRACE] [IAM] [can] 3eafe1ae-8da3-4bbf-8313-63e41e4ab415 Permiso concedido {"userId":"R11","permission":"recibos.list"}
+[2026-10-20 11:37:57] [TRACE] [IAM] [can] c35bfb31-b456-4a98-baf9-212f7d5ca7e3 Permiso concedido {"userId":"R11","permission":"snc.list"}
+[2026-10-20 11:37:57] [TRACE] [IAM] [auth] 7eab6521-8536-43a7-bc9c-02de3f403589 Acceso autenticado {"method":"GET","path":"/api/registro-cliente","userId":"R11"}
+[2026-10-20 11:37:57] [INFO] [api] [request] 3eafe1ae-8da3-4bbf-8313-63e41e4ab415 ::ffff:192.168.200.8 GET /api/recibos 304 141.17 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:57] [TRACE] [IAM] [can] 59967fcd-7a0e-490f-92b5-238332f9ceda Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 11:37:57] [TRACE] [IAM] [auth] df5c5491-3480-434b-b984-97f07b3dd6b2 Acceso autenticado {"method":"GET","path":"/api/ciudades","userId":"R11"}
+[2026-10-20 11:37:57] [INFO] [api] [request] c35bfb31-b456-4a98-baf9-212f7d5ca7e3 ::ffff:192.168.200.8 GET /api/snc 304 124.43 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:57] [TRACE] [IAM] [can] 7eab6521-8536-43a7-bc9c-02de3f403589 Permiso concedido {"userId":"R11","permission":"registro-cliente.list"}
+[2026-10-20 11:37:57] [TRACE] [IAM] [can] df5c5491-3480-434b-b984-97f07b3dd6b2 Permiso concedido {"userId":"R11","permission":"ciudades.list"}
+[2026-10-20 11:37:57] [INFO] [api] [request] 7eab6521-8536-43a7-bc9c-02de3f403589 ::ffff:192.168.200.8 GET /api/registro-cliente 304 116.26 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:57] [ERROR] [api] [http.error] [59967fcd-7a0e-490f-92b5-238332f9ceda] Error ENOENT: no such file or directory, open 'C:tmpproyectosdatacertF1T_54814.p12' 500 ENOENT GET /api/sifen {} {"stack":"Error: ENOENT: no such file or directory, open 'C:tmpproyectosdatacertF1T_54814.p12'"}
+[2026-10-20 11:37:57] [INFO] [api] [request] 59967fcd-7a0e-490f-92b5-238332f9ceda ::ffff:192.168.200.8 GET /api/sifen 500 144.4 186 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:57] [INFO] [api] [request] df5c5491-3480-434b-b984-97f07b3dd6b2 ::ffff:192.168.200.8 GET /api/ciudades?page=2 304 118.5 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:57] [INFO] [api] [request] a855779c-9374-41b8-8767-a5599c2ca6d6 ::ffff:192.168.200.8 GET /api/existencias 304 267.17 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:37:57] [TRACE] [IAM] [auth] 34c270f5-caf3-491a-a29b-bbdcdf277eed Acceso autenticado {"method":"GET","path":"/api/existencias","userId":"R11"}
+[2026-10-20 11:37:57] [TRACE] [IAM] [can] 34c270f5-caf3-491a-a29b-bbdcdf277eed Permiso concedido {"userId":"R11","permission":"existencias.list"}
+[2026-10-20 11:37:57] [INFO] [api] [request] 34c270f5-caf3-491a-a29b-bbdcdf277eed ::ffff:192.168.200.8 GET /api/existencias?page=2 304 155.83 0 Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+[2026-10-20 11:38:44] [INFO] [api] [request] c7e9784e-2443-448d-9738-0b970533c673 ::ffff:192.168.200.8 GET /api/ping 304 0.38 0 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36
+[2026-10-20 11:38:44] [TRACE] [IAM] [auth] a521cc03-ee5c-4e0c-a225-3d014402adae Acceso autenticado {"method":"GET","path":"/api/parametros","userId":"R11"}
+[2026-10-20 11:38:44] [TRACE] [IAM] [auth] acade1fb-a93c-448b-af6b-9be8385748b0 Acceso autenticado {"method":"GET","path":"/api/sifen","userId":"R11"}
+[2026-10-20 11:38:44] [TRACE] [IAM] [can] a521cc03-ee5c-4e0c-a225-3d014402adae Permiso concedido {"userId":"R11","permission":"parametros.list"}
+[2026-10-20 11:38:44] [TRACE] [IAM] [can] acade1fb-a93c-448b-af6b-9be8385748b0 Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 11:38:44] [TRACE] [IAM] [auth] 2b3df055-94d2-4565-93a9-c51b199c3a20 Acceso autenticado {"method":"GET","path":"","userId":"R11"}
+[2026-10-20 11:38:44] [INFO] [api] [request] a521cc03-ee5c-4e0c-a225-3d014402adae ::ffff:192.168.200.8 GET /api/parametros 304 33.79 0 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36
+[2026-10-20 11:38:44] [TRACE] [IAM] [can] 2b3df055-94d2-4565-93a9-c51b199c3a20 Permiso concedido {"userId":"R11","permission":"audit.changes"}
+[2026-10-20 11:38:44] [INFO] [api] [request] acade1fb-a93c-448b-af6b-9be8385748b0 ::ffff:192.168.200.8 GET /api/sifen 500 34.86 186 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36
+[2026-10-20 11:38:44] [ERROR] [api] [http.error] [acade1fb-a93c-448b-af6b-9be8385748b0] Error ENOENT: no such file or directory, open 'C:tmpproyectosdatacertF1T_54814.p12' 500 ENOENT GET /api/sifen {} {"stack":"Error: ENOENT: no such file or directory, open 'C:tmpproyectosdatacertF1T_54814.p12'"}
+[2026-10-20 11:38:44] [INFO] [api] [request] 2b3df055-94d2-4565-93a9-c51b199c3a20 ::ffff:192.168.200.8 GET /api/changes?since=2026-10-20T14%3A38%3A44.701Z 200 30.33 21 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36
+[2026-10-20 11:38:44] [TRACE] [IAM] [auth] fdcc11a4-5c94-4bd5-b603-0289fdd7e339 Acceso autenticado {"method":"GET","path":"","userId":"R11"}
+[2026-10-20 11:38:44] [TRACE] [IAM] [can] fdcc11a4-5c94-4bd5-b603-0289fdd7e339 Permiso concedido {"userId":"R11","permission":"audit.sse"}
+[2026-10-20 11:38:44] [INFO] [api] [audit.sse] 00MVGSFJYQBEL3GRJBHUP00000 ::ffff:192.168.200.8 GET /api/sse 200 0 0 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36
+[2026-10-20 11:38:52] [TRACE] [IAM] [auth] 5208b08d-c3db-4325-b54a-38f4fe7e9a61 Acceso autenticado {"method":"GET","path":"/api/sifen","userId":"R11"}
+[2026-10-20 11:38:52] [TRACE] [IAM] [can] 5208b08d-c3db-4325-b54a-38f4fe7e9a61 Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 11:38:52] [ERROR] [api] [http.error] [5208b08d-c3db-4325-b54a-38f4fe7e9a61] Error ENOENT: no such file or directory, open 'C:tmpproyectosdatacertF1T_54814.p12' 500 ENOENT GET /api/sifen {} {"stack":"Error: ENOENT: no such file or directory, open 'C:tmpproyectosdatacertF1T_54814.p12'"}
+[2026-10-20 11:38:52] [INFO] [api] [request] 5208b08d-c3db-4325-b54a-38f4fe7e9a61 ::1 GET /api/sifen 500 25.39 186 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36
+[2026-10-20 11:39:39] [INFO] [app] api-kit Oracle disponible en http://localhost:3000/api
+[2026-10-20 11:39:41] [TRACE] [IAM] [auth] 9bc1888d-f5e6-485f-9278-44d049eb756b Acceso autenticado {"method":"GET","path":"/api/sifen","userId":"R11"}
+[2026-10-20 11:39:41] [TRACE] [IAM] [can] 9bc1888d-f5e6-485f-9278-44d049eb756b Permiso concedido {"userId":"R11","permission":"sifen.list"}
+[2026-10-20 11:39:41] [INFO] [api] [request] 9bc1888d-f5e6-485f-9278-44d049eb756b ::1 GET /api/sifen 200 87.07 0 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36

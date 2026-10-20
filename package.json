@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.2.76",
+  "version": "1.2.8",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -35,6 +35,10 @@
     "./cli": {
       "types": "./dist/api-cli.d.ts",
       "import": "./dist/api-cli.js"
+    },
+    "./log-viewer": {
+      "types": "./dist/api-log-viewer.d.ts",
+      "import": "./dist/api-log-viewer.js"
     }
   },
   "scripts": {
@@ -45,7 +49,8 @@
     "test:mysql": "node --env-file=.env --test --test-concurrency=1",
     "dev": "node ./example/app.js",
     "dev:mysql": "node --env-file=.env ./example/app.js",
-    "lint": "eslint src tests example rollup.config.js eslint.config.js"
+    "lint": "eslint src tests example rollup.config.js eslint.config.js",
+    "dev:logs": "node ./example/log-viewer.js"
   },
   "dependencies": {
     "idb-keyval": "^6.3.0",

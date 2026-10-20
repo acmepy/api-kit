@@ -1,4 +1,6 @@
 export interface RequestContext { requestId?: string; user?: unknown; [key: string]: unknown; }
+export { createLogViewer, parseLogLine } from "./api-log-viewer";
+export type { LogViewerOptions, ParsedLogLine } from "./api-log-viewer";
 export interface ApiResponse<T = unknown> { ok: true; data: T; [key: string]: unknown; }
 export interface ListResponse<T = unknown> extends ApiResponse<T[]> { total?: number; page?: number; pageSize?: number; }
 export class AppError extends Error { status: number; code?: string; details?: unknown; constructor(message?: string, options?: Record<string, unknown>); }

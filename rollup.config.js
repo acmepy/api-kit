@@ -28,6 +28,7 @@ const bundles = [
   ["src/client/index.js", "dist/api-client", "api-client.d.ts"],
   ["src/vue/index.js", "dist/api-vue", "api-vue.d.ts"],
   ["src/cli/index.js", "dist/api-cli", "api-cli.d.ts"],
+  ["src/log-viewer/index.js", "dist/api-log-viewer", "api-log-viewer.d.ts"],
 ];
 
 function declarationFile(source, fileName) {

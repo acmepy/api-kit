@@ -1,4 +1,5 @@
 export { createApi } from "./api.js";
+export { createLogViewer, parseLogLine } from "../log-viewer/index.js";
 export { log, requestLogger, setLogging } from "./logger/index.js";
 export { defineResource } from "./config/config-resource.js";
 export { BaseModel, BaseModule, BaseRouter, BaseService } from "./base/index.js";
