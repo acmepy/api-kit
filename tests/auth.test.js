@@ -61,6 +61,53 @@ describe("auth", () => {
     assert.ok(events.some(([prefix, message]) => prefix === "[IAM]" && message === "Error de inicio de sesión"));
   });
 
+  it("passes the request context to IAM logs without mixing concurrent transaction IDs", async () => {
+    const seq = createTestSeq({ logging: false });
+    const events = [];
+    const capture = (...args) => {
+      if (args[0] === "[IAM]") events.push({ message: args[1], ...args[2] });
+    };
+    const logger = { info: capture, trace: capture, warn: capture, error: capture };
+    const api = await createApi({
+      seq, basePath: "/api", modules, logging: logger,
+      auth: { required: true, secret: "test-secret" },
+    });
+    await seq.authenticate();
+    await seq.sync({ force: true });
+    await seedIam(api.auth.models, ["clientes.list"]);
+    const server = await listen(api.app);
+    try {
+      const login = await request(server, "POST", "/api/login", {
+        headers: { "x-transaction-id": "tx-login" },
+        body: { username: "admin", password: "1234" },
+      });
+      assert.equal(login.status, 200);
+      assert.equal(events.find(event => event.message === "Sesión iniciada").txId, "tx-login");
+      events.length = 0;
+      const token = login.body.data.token;
+      const responses = await Promise.all([
+        request(server, "GET", "/api/clientes", { token, headers: { "x-transaction-id": "tx-allowed" } }),
+        request(server, "PUT", "/api/clientes/1", { token, headers: { "x-transaction-id": "tx-denied" }, body: { activo: false } }),
+        request(server, "GET", "/api/clientes", { token: "invalid", headers: { "x-transaction-id": "tx-invalid" } }),
+      ]);
+      assert.deepEqual(responses.map(response => response.status), [200, 403, 401]);
+      assert.equal(events.find(event => event.permission === "clientes.list").txId, "tx-allowed");
+      assert.equal(events.find(event => event.permission === "clientes.update").txId, "tx-denied");
+      assert.equal(events.find(event => event.status === 401).txId, "tx-invalid");
+      assert.ok(events.every(event => ["tx-allowed", "tx-denied", "tx-invalid"].includes(event.txId)));
+
+      events.length = 0;
+      assert.equal((await request(server, "GET", "/api/clientes", { token })).status, 200);
+      assert.ok(events.length >= 2);
+      assert.match(events[0].txId, /^[0-9a-f-]{36}$/i);
+      assert.ok(events.every(event => event.txId === events[0].txId));
+      assert.equal(Object.hasOwn(logger, "getContext"), false);
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+
   it("logs in, authorizes bearer/basic requests, checks permissions, and logs out", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({
@@ -252,7 +299,7 @@ function close(server) {
 
 function request(server, method, path, options = {}) {
   const { port } = server.address();
-  const headers = { Accept: "application/json" };
+  const headers = { Accept: "application/json", ...options.headers };
   let body = null;
 
   if (options.token) headers.Authorization = `Bearer ${options.token}`;

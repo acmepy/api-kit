@@ -89,6 +89,7 @@ function composeMiddlewares(middlewares) {
 function iamAuthOptions(auth, adapter) {
   return {
     adapter,
+    getContext,
     logging: auth.logging,
     jwt: {
       secret: auth.secret,

@@ -163,7 +163,7 @@ auth: {
 
 ## Logger
 
-`logging` puede ser `false`, `true`, una funcion o un objeto tipo logger. Cuando `auth` esta habilitado, el mismo logger se reenvia a `iam`; se puede sobrescribir solo para autenticacion con `auth.logging`.
+`logging` puede ser `false`, `true`, una funcion o un objeto tipo logger. Cuando `auth` esta habilitado, el mismo logger se reenvia a `iam`; se puede sobrescribir solo para autenticacion con `auth.logging`. `api-kit` tambien pasa `getContext` a IAM para que sus logs incluyan el `txId` de la peticion, sin modificar el logger.
 
 ```js
 const logger = {
