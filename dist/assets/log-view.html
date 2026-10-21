@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es" data-bs-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Archivo de log · Log Explorer</title>
+<link rel="stylesheet" href="{{base}}/assets/bootstrap.min.css">
+<link rel="stylesheet" href="{{base}}/assets/viewer.css">
+<script src="{{base}}/assets/viewer.js" defer>
+</script>
+</head>
+<body data-base="{{base}}" data-page="view">
+<header class="navbar border-bottom"><a class="brand navbar-brand" href="{{base}}/"><span class="brand-icon">&#8801;</span> Log Explorer</a><span class="header-note">DIAGNÓSTICO / REGISTROS</span>
+</header>
+<main class="container-fluid viewer-container">
+<nav class="breadcrumb"><a href="{{base}}/">Archivos de log</a><span>/</span><span>Explorar archivo</span>
+</nav>
+<div class="heading">
+<div>
+<p class="eyebrow">OBSERVABILIDAD</p>
+<h1><span id="filename">Archivo de log</span>
+</h1>
+<p class="description">Filtra el ruido. Sigue una transacción de principio a fin.</p>
+</div><button id="refresh" class="button btn btn-outline-secondary">&#8635; Actualizar</button>
+</div>
+<p id="error" class="error alert alert-danger" role="alert" hidden>
+</p>
+
+<section class="stats card" aria-label="Resumen del archivo">
+<div><span>ENTRADAS</span><strong id="total">—</strong>
+</div>
+<div><span>COINCIDENCIAS</span><strong id="matched">—</strong>
+</div>
+<div><span>TAMAÑO</span><strong id="file-size">—</strong>
+</div>
+<div><span>ÚLTIMA MODIFICACIÓN</span><strong id="file-updated" class="date-value">—</strong>
+</div>
+</section>
+<div class="summary-heading"><span>RESUMEN DEL ARCHIVO</span><span>Totales de todas las entradas</span>
+</div>
+<section id="level-summary" class="level-summary" aria-label="Cantidad de entradas por nivel">
+</section>
+<div class="explorer-layout">
+<aside class="tx-sidebar card" aria-label="Transacciones del archivo">
+<details id="tx-panel" open>
+<summary>Transacciones <span id="tx-total" class="count">0</span>
+</summary>
+<div class="tx-tools">
+<label class="visually-hidden" for="tx-search">Buscar transacciones</label><input class="form-control" id="tx-search" type="search" placeholder="Buscar txId..." autocomplete="off" spellcheck="false">
+<label class="tx-errors-filter"><input class="form-check-input" id="tx-errors-only" type="checkbox"> Solo con errores</label>
+</div>
+<nav id="tx-list" class="tx-list list-group" aria-label="Seleccionar transaccion">
+</nav>
+<p id="tx-none" class="tx-empty" hidden>Sin transacciones coincidentes</p><button type="button" id="tx-more" class="tx-more btn btn-outline-secondary btn-sm" hidden>Mostrar 100 m&aacute;s</button>
+<div class="tx-footer"><span id="tx-shown">0 / 0</span><span id="tx-unassigned"></span>
+</div>
+</details>
+</aside>
+<div class="explorer-main">
+<form id="filters" class="filters">
+<label>Nivel<select class="form-select" id="level"><option value="">Todos los niveles</option></select>
+</label>
+<label>Origen<select class="form-select" id="source"><option value="">Todos los orígenes</option></select>
+</label>
+<label class="tx-filter">Transacción · txId<input class="form-control" id="txId" type="search" autocomplete="off" spellcheck="false" placeholder="Pega el txId completo para seguir su recorrido">
+</label><button type="button" id="clear" class="button subtle btn btn-outline-secondary">Limpiar filtros</button><button type="submit" class="sr-only">Filtrar</button>
+</form>
+<div id="active-tx" class="active-tx" hidden><span>TRANSACCIÓN</span><code id="active-tx-value"></code><button id="copy-tx" type="button">Copiar txId</button><button id="clear-tx" type="button" aria-label="Quitar filtro de transacción">×</button>
+</div>
+<section class="results card">
+<div class="results-toolbar"><span id="status" role="status">Preparando visor…</span>
+<div>
+<label class="expand"><input class="form-check-input" id="expand" type="checkbox"> Expandir detalles</label><button id="download" class="text-button btn btn-sm btn-link text-decoration-none">Exportar p&aacute;gina &#8595;</button>
+</div>
+</div>
+<div class="table-wrap table-responsive">
+<table class="table table-hover align-middle mb-0">
+<thead>
+<tr>
+<th>LÍNEA</th>
+<th>FECHA / HORA</th>
+<th>NIVEL</th>
+<th>ORIGEN</th>
+<th>TXID</th>
+<th>MENSAJE</th>
+</tr>
+</thead>
+<tbody id="entries">
+</tbody>
+</table>
+</div>
+<div id="empty" class="empty" hidden><strong>Sin coincidencias</strong>
+<p>Prueba con otro nivel, origen o identificador de transacción.</p>
+</div>
+<div class="pagination"><span id="page-number">Página 1</span>
+<div><button id="newer" class="button btn btn-outline-secondary" disabled>&#8592; M&aacute;s recientes</button><button id="older" class="button btn btn-outline-secondary" disabled>M&aacute;s antiguas &#8594;</button>
+</div>
+</div>
+</section>
+</div>
+</div>
+
+<footer><span>Log Explorer</span><span>Haz clic en un txId para filtrar la transacción completa.</span>
+</footer>
+</main>
+</body>
+</html>

@@ -61,7 +61,7 @@ El import raiz `api` no exporta API publica.
 
 ## Visor de logs
 
-El visor es un middleware independiente de IAM, seq y de la configuracion de `createApi`. Se puede importar desde `api/log-viewer` o `api/server`:
+El visor es un middleware independiente de IAM, seq y de la configuracion de `createApi`. La interfaz utiliza Bootstrap 5.3.8 servido localmente y conserva la paleta oscura del visor. Las paginas estan en `src/log-viewer/assets/log-index.html` y `log-view.html`, con estilos propios en `viewer.css`. El build copia estos archivos y el CSS y la licencia de Bootstrap a `dist/assets`; el visor no necesita un CDN ni instalar Bootstrap en produccion. Se puede importar desde `api/log-viewer` o `api/server`:
 
 ```js
 import express from "express";

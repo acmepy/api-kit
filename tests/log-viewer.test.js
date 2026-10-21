@@ -138,9 +138,21 @@ describe("log viewer", () => {
       const html = await response.text();
       assert.match(html, /src="\/admin\/logs\/assets\/viewer.js"/);
       assert.match(html, /href="\/admin\/logs\/assets\/viewer.css"/);
+      assert.match(html, /href="\/admin\/logs\/assets\/bootstrap.min.css"/);
+      assert.match(html, /data-bs-theme="dark"/);
+      assert.match(html, /btn btn-outline-secondary/);
+      assert.doesNotMatch(html, /\{\{base\}\}|https?:\/\//);
+      if (route.startsWith("/view")) {
+        assert.match(html, /class="form-select"/);
+        assert.match(html, /class="table table-hover/);
+      }
       assert.doesNotMatch(html, /<script>/);
     }
     for (const route of ["/assets/viewer.js", "/assets/viewer.css"]) assert.equal((await fetch(`${base}${route}`)).status, 200);
+    const bootstrap = await fetch(`${base}/assets/bootstrap.min.css`);
+    assert.equal(bootstrap.status, 200);
+    assert.match(bootstrap.headers.get("content-type"), /text\/css/);
+    assert.match(await bootstrap.text(), /Bootstrap\s+v5\.3\.8/);
     const files = await get("/api/files");
     assert.equal(files.body.files[0].name, "reparto.log");
     assert.equal(files.headers.get("cache-control"), "no-store");
@@ -178,7 +190,7 @@ describe("log viewer", () => {
     app.use("/logs", (_req, res) => res.sendStatus(403), createLogViewer({ directory }));
     const listener = await new Promise(resolve => { const s = app.listen(0, "127.0.0.1", () => resolve(s)); });
     t.after(() => new Promise(resolve => listener.close(resolve)));
-    for (const route of ["/", "/view", "/api/files", "/api/entries?file=reparto.log", "/assets/viewer.js"]) {
+    for (const route of ["/", "/view", "/api/files", "/api/entries?file=reparto.log", "/assets/viewer.js", "/assets/bootstrap.min.css"]) {
       assert.equal((await fetch(`http://127.0.0.1:${listener.address().port}/logs${route}`)).status, 403);
     }
   });

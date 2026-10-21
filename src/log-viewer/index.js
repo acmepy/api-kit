@@ -1,6 +1,6 @@
 import express from "express";
 import { createLogReader, LogFileError } from "./reader.js";
-import { renderPage, stylesheet } from "./page.js";
+import { renderPage, stylesheet, bootstrapStylesheet } from "./page.js";
 import { viewerBrowser } from "./browser.js";
 
 export { parseLogLine } from "./parser.js";
@@ -13,6 +13,7 @@ export function createLogViewer(options = {}) {
   const router = express.Router();
   router.use((_req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
   router.get("/assets/viewer.css", (_req, res) => res.type("css").send(stylesheet));
+  router.get("/assets/bootstrap.min.css", (_req, res) => res.type("css").send(bootstrapStylesheet));
   router.get("/assets/viewer.js", (_req, res) => res.type("js").send(`(${viewerBrowser.toString()})();`));
   router.get("/", (req, res) => res.type("html").send(renderPage(req.baseUrl, "files")));
   router.get("/view", (req, res) => res.type("html").send(renderPage(req.baseUrl, "view")));

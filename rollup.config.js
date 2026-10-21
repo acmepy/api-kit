@@ -1,5 +1,5 @@
 import terser from "@rollup/plugin-terser";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const minify = process.env.MINIFY === "true";
 
@@ -48,11 +48,26 @@ function createBundle(input, outputName, declaration, shouldMinify = false) {
   return {
     input,
     external,
-    plugins: [declarationFile(`types/${declaration}`, declaration), ...(shouldMinify ? [terser()] : [])],
+    plugins: [
+      declarationFile(`types/${declaration}`, declaration),
+      ...(["src/server/index.js", "src/log-viewer/index.js"].includes(input) ? [logViewerAssets()] : []),
+      ...(shouldMinify ? [terser()] : []),
+    ],
     output: {
       file: `${outputName}${shouldMinify ? ".min" : ""}.js`,
       format: "es",
       sourcemap: true,
+    },
+  };
+}
+
+function logViewerAssets() {
+  return {
+    name: "log-viewer-assets",
+    generateBundle() {
+      for (const name of readdirSync("src/log-viewer/assets")) {
+        this.emitFile({ type: "asset", fileName: `assets/${name}`, source: readFileSync(`src/log-viewer/assets/${name}`) });
+      }
     },
   };
 }

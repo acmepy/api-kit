@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es" data-bs-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Logs disponibles · Log Explorer</title>
+<link rel="stylesheet" href="{{base}}/assets/bootstrap.min.css">
+<link rel="stylesheet" href="{{base}}/assets/viewer.css">
+<script src="{{base}}/assets/viewer.js" defer>
+</script>
+</head>
+<body data-base="{{base}}" data-page="files">
+<header class="navbar border-bottom"><a class="brand navbar-brand" href="{{base}}/"><span class="brand-icon">&#8801;</span> Log Explorer</a><span class="header-note">DIAGNÓSTICO / REGISTROS</span>
+</header>
+<main class="container-fluid viewer-container">
+<nav class="breadcrumb"><a href="{{base}}/">Archivos de log</a>
+</nav>
+<div class="heading">
+<div>
+<p class="eyebrow">OBSERVABILIDAD</p>
+<h1>Cada evento, en contexto.</h1>
+<p class="description">Selecciona un archivo para explorar sus eventos y seguir una transacción.</p>
+</div><button id="refresh" class="button btn btn-outline-secondary">&#8635; Actualizar</button>
+</div>
+<p id="error" class="error alert alert-danger" role="alert" hidden>
+</p>
+
+<div class="section-label"><span>ARCHIVOS DISPONIBLES <span id="file-count" class="count">—</span></span><span id="status" role="status">Buscando archivos…</span>
+</div>
+<section id="files" class="file-list" aria-label="Archivos disponibles">
+</section>
+<div id="empty" class="empty" hidden><strong>Todavía no hay archivos de log</strong>
+<p>Los archivos .log del directorio configurado aparecerán aquí.</p>
+</div>
+
+<footer><span>Log Explorer</span><span>Archivos ordenados por su última modificación.</span>
+</footer>
+</main>
+</body>
+</html>

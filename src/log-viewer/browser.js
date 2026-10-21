@@ -51,7 +51,7 @@ export function viewerBrowser() {
       $("status").textContent = `${result.files.length} ${result.files.length === 1 ? "archivo disponible" : "archivos disponibles"}`;
       $("empty").hidden = result.files.length > 0;
       for (const file of result.files) {
-        const link = node("a", undefined, "file-card");
+        const link = node("a", undefined, "file-card card flex-row");
         link.href = `${base}/view?${new URLSearchParams({ file: file.name })}`;
         const icon = node("span", "\u21b3", "file-icon");
         const content = node("div");
@@ -69,7 +69,7 @@ export function viewerBrowser() {
   function renderSummary(result) {
     const levels = [...new Set(["ERROR", "INFO", "TRACE", ...result.facets.levels])];
     $("level-summary").replaceChildren(...levels.map(level => {
-      const button = node("button", undefined, `level-card level-card-${level.toLowerCase()}`);
+      const button = node("button", undefined, `level-card card btn level-card-${level.toLowerCase()}`);
       button.type = "button";
       button.setAttribute("aria-pressed", String($("level").value === level));
       button.append(node("span", level), node("strong", (result.summary.byLevel[level] || 0).toLocaleString()));
@@ -96,7 +96,7 @@ export function viewerBrowser() {
       (!search || transaction.txId.toLowerCase().includes(search)) && (!onlyErrors || transaction.errorCount > 0)
     ));
     $("tx-list").replaceChildren(...transactions.slice(0, transactionLimit).map(transaction => {
-      const button = node("button", undefined, "transaction");
+      const button = node("button", undefined, "transaction list-group-item list-group-item-action");
       button.type = "button";
       button.title = transaction.txId;
       button.setAttribute("aria-pressed", String(transaction.txId.toLowerCase() === $("txId").value.toLowerCase()));

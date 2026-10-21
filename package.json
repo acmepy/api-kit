@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -104,6 +104,7 @@
     "@rollup/plugin-terser": "^1.0.0",
     "adm-zip": "^0.6.0",
     "better-sqlite3": "^12.11.1",
+    "bootstrap": "^5.3.8",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "eslint": "^10.7.0",
