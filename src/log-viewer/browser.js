@@ -18,6 +18,7 @@ export function viewerBrowser() {
     if (className) el.className = className;
     return el;
   };
+  const levelColor = level => ({ ERROR: "text-danger", FATAL: "text-danger", INFO: "text-success", WARN: "text-warning", WARNING: "text-warning", TRACE: "text-info", DEBUG: "text-info" })[level.toUpperCase()] || "text-secondary";
   const bytes = value => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : `${(value / 1048576).toFixed(1)} MB`;
   async function get(endpoint, query) {
     request?.abort();
@@ -51,12 +52,12 @@ export function viewerBrowser() {
       $("status").textContent = `${result.files.length} ${result.files.length === 1 ? "archivo disponible" : "archivos disponibles"}`;
       $("empty").hidden = result.files.length > 0;
       for (const file of result.files) {
-        const link = node("a", undefined, "file-card card flex-row");
+        const link = node("a", undefined, "card card-body d-flex flex-row flex-wrap align-items-center gap-3 text-decoration-none");
         link.href = `${base}/view?${new URLSearchParams({ file: file.name })}`;
-        const icon = node("span", "\u21b3", "file-icon");
-        const content = node("div");
-        content.append(node("h2", file.name), node("p", `${bytes(file.size)} · Modificado ${new Date(file.modifiedAt).toLocaleString()}`));
-        link.append(icon, content, node("span", "Abrir \u2192", "file-open"));
+        const icon = node("span", "\u21b3", "fs-3 text-success");
+        const content = node("div", undefined, "flex-grow-1 text-break");
+        content.append(node("h2", file.name, "h6 mb-1"), node("p", `${bytes(file.size)} · Modificado ${new Date(file.modifiedAt).toLocaleString()}`, "small text-secondary mb-0"));
+        link.append(icon, content, node("span", "Abrir \u2192", "small"));
         $("files").append(link);
       }
     } catch (cause) { error(cause); }
@@ -69,10 +70,12 @@ export function viewerBrowser() {
   function renderSummary(result) {
     const levels = [...new Set(["ERROR", "INFO", "TRACE", ...result.facets.levels])];
     $("level-summary").replaceChildren(...levels.map(level => {
-      const button = node("button", undefined, `level-card card btn level-card-${level.toLowerCase()}`);
+      const button = node("button", undefined, `btn btn-outline-secondary w-100 text-start p-3 ${levelColor(level)}`);
       button.type = "button";
+      button.dataset.level = level;
+      button.classList.toggle("active", $("level").value === level);
       button.setAttribute("aria-pressed", String($("level").value === level));
-      button.append(node("span", level), node("strong", (result.summary.byLevel[level] || 0).toLocaleString()));
+      button.append(node("span", level, "d-block small"), node("strong", (result.summary.byLevel[level] || 0).toLocaleString(), "d-block fs-3"));
       button.title = `Filtrar por ${level}`;
       button.addEventListener("click", () => {
         const value = $("level").value === level ? "" : level;
@@ -82,7 +85,9 @@ export function viewerBrowser() {
         $("level").value = value;
         restart();
       });
-      return button;
+      const column = node("div", undefined, "col");
+      column.append(button);
+      return column;
     }));
     $("tx-total").textContent = result.summary.transactions.toLocaleString();
     $("tx-unassigned").textContent = `${result.summary.withoutTxId.toLocaleString()} entradas sin txId`;
@@ -96,15 +101,17 @@ export function viewerBrowser() {
       (!search || transaction.txId.toLowerCase().includes(search)) && (!onlyErrors || transaction.errorCount > 0)
     ));
     $("tx-list").replaceChildren(...transactions.slice(0, transactionLimit).map(transaction => {
-      const button = node("button", undefined, "transaction list-group-item list-group-item-action");
+      const button = node("button", undefined, "list-group-item list-group-item-action text-start");
       button.type = "button";
       button.title = transaction.txId;
+      button.dataset.txId = transaction.txId;
+      button.classList.toggle("active", transaction.txId.toLowerCase() === $("txId").value.toLowerCase());
       button.setAttribute("aria-pressed", String(transaction.txId.toLowerCase() === $("txId").value.toLowerCase()));
-      const details = node("span", undefined, "transaction-meta");
+      const details = node("span", undefined, "d-flex flex-wrap justify-content-between gap-2 small text-secondary mt-1");
       details.append(node("span", `${transaction.count} ${transaction.count === 1 ? "entrada" : "entradas"}`));
-      if (transaction.errorCount) details.append(node("span", `${transaction.errorCount} ${transaction.errorCount === 1 ? "error" : "errores"}`, "transaction-errors"));
-      button.append(node("code", transaction.txId), details);
-      if (transaction.timestamp) button.append(node("small", transaction.timestamp));
+      if (transaction.errorCount) details.append(node("span", `${transaction.errorCount} ${transaction.errorCount === 1 ? "error" : "errores"}`, "text-danger"));
+      button.append(node("code", transaction.txId, "d-block text-break"), details);
+      if (transaction.timestamp) button.append(node("small", transaction.timestamp, "d-block text-secondary mt-1"));
       button.addEventListener("click", () => filterTransaction(transaction.txId));
       return button;
     }));
@@ -114,25 +121,25 @@ export function viewerBrowser() {
   }
   function render(entry) {
     const tr = node("tr");
-    tr.append(node("td", entry.line, "line-number"));
-    tr.append(node("td", entry.timestamp || "—", "timestamp"));
+    tr.append(node("td", entry.line, "text-secondary small"));
+    tr.append(node("td", entry.timestamp || "—", "text-nowrap small"));
     const level = node("td");
-    level.append(node("span", entry.level, `badge level-${entry.level.toLowerCase()}`));
+    level.append(node("span", entry.level, `badge bg-secondary-subtle ${levelColor(entry.level)}`));
     const source = node("td");
-    source.append(node("span", entry.source, "source"));
-    if (entry.scope) source.append(node("small", entry.scope, "scope"));
+    source.append(node("span", entry.source, "fw-semibold text-nowrap"));
+    if (entry.scope) source.append(node("small", entry.scope, "d-block small text-secondary text-nowrap"));
     const tx = node("td");
     if (entry.txId) {
-      const button = node("button", entry.txId, "tx-link");
+      const button = node("button", entry.txId, "btn btn-link btn-sm p-0 text-start text-break font-monospace text-decoration-none");
       button.title = entry.txId + " - " + "Ver todas las entradas de esta transacción";
       button.addEventListener("click", () => filterTransaction(entry.txId));
       tx.append(button);
-    } else { tx.append(node("span", "—", "muted")); }
-    const message = node("td", undefined, "message");
+    } else { tx.append(node("span", "—", "text-secondary")); }
+    const message = node("td", undefined, "text-break font-monospace small");
     const details = node("details");
     details.open = $("expand").checked;
     const summary = node("summary", entry.message.split("\n")[0]);
-    details.append(summary, node("pre", entry.raw));
+    details.append(summary, node("pre", entry.raw, "text-wrap text-break border rounded p-2 mt-2 mb-0"));
     message.append(details);
     tr.append(level, source, tx, message);
     return tr;
@@ -174,7 +181,7 @@ export function viewerBrowser() {
   }
   $("refresh").addEventListener("click", () => page === "files" ? files() : restart());
   if (page === "files") { files(); return; }
-  if (window.matchMedia("(max-width: 1100px)").matches) $("tx-panel").open = false;
+  if (window.matchMedia("(max-width: 1199.98px)").matches) $("tx-panel").open = false;
   for (const id of ["tx-search", "tx-errors-only"]) $(id).addEventListener(id === "tx-search" ? "input" : "change", () => {
     transactionLimit = 100;
     renderTransactions();
