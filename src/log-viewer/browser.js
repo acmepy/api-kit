@@ -70,12 +70,12 @@ export function viewerBrowser() {
   function renderSummary(result) {
     const levels = [...new Set(["ERROR", "INFO", "TRACE", ...result.facets.levels])];
     $("level-summary").replaceChildren(...levels.map(level => {
-      const button = node("button", undefined, `btn btn-outline-secondary w-100 text-start p-3 ${levelColor(level)}`);
+      const button = node("button", undefined, `card card-body log-metric btn btn-outline-secondary w-100 h-100 text-start ${levelColor(level)}`);
       button.type = "button";
       button.dataset.level = level;
       button.classList.toggle("active", $("level").value === level);
       button.setAttribute("aria-pressed", String($("level").value === level));
-      button.append(node("span", level, "d-block small"), node("strong", (result.summary.byLevel[level] || 0).toLocaleString(), "d-block fs-3"));
+      button.append(node("span", level, "d-block small"), node("strong", (result.summary.byLevel[level] || 0).toLocaleString(), "d-block fs-4"));
       button.title = `Filtrar por ${level}`;
       button.addEventListener("click", () => {
         const value = $("level").value === level ? "" : level;
@@ -124,9 +124,9 @@ export function viewerBrowser() {
     tr.append(node("td", entry.line, "text-secondary small"));
     tr.append(node("td", entry.timestamp || "—", "text-nowrap small"));
     const level = node("td");
-    level.append(node("span", entry.level, `badge bg-secondary-subtle ${levelColor(entry.level)}`));
+    level.append(node("span", entry.level, `small fw-semibold text-nowrap rounded px-2 py-1 bg-secondary-subtle ${levelColor(entry.level)}`));
     const source = node("td");
-    source.append(node("span", entry.source, "fw-semibold text-nowrap"));
+    source.append(node("span", entry.source, "small fw-semibold text-nowrap"));
     if (entry.scope) source.append(node("small", entry.scope, "d-block small text-secondary text-nowrap"));
     const tx = node("td");
     if (entry.txId) {

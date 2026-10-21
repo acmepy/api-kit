@@ -1,4 +1,5 @@
-/* Only colors are customized; layout and components use Bootstrap. */
+/* Bootstrap components with compact typography and persistent explorer controls. */
+html { font-size: 14px; }
 [data-bs-theme="dark"] {
   --bs-body-bg: #101419;
   --bs-body-color: #e2e9f0;
@@ -30,4 +31,28 @@
 .table {
   --bs-table-bg: #171d24;
   --bs-table-hover-bg: #1d252e;
+}
+
+.log-metric { min-height: 6rem; }
+#filters {
+  position: sticky;
+  top: .75rem;
+  z-index: 1020;
+  box-shadow: 0 .35rem 1rem #0003;
+  max-height: 55dvh;
+  overflow-y: auto;
+}
+#tx-list { max-height: 42dvh; }
+@media (min-width: 1200px) {
+  .log-transactions {
+    width: 18.75%;
+    position: sticky;
+    top: .75rem;
+    align-self: flex-start;
+  }
+  #tx-panel {
+    max-height: calc(100dvh - 1.5rem);
+    overflow-y: auto;
+  }
+  #tx-list { max-height: calc(100dvh - 20rem); }
 }

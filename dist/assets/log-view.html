@@ -19,7 +19,7 @@
     <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
       <div class="text-break">
         <p class="small text-secondary mb-2">OBSERVABILIDAD</p>
-        <h1 id="filename" class="h3">Archivo de log</h1>
+        <h1 id="filename" class="h6">Archivo de log</h1>
         <p class="text-secondary mb-0">Filtra el ruido. Sigue una transacción de principio a fin.</p>
       </div>
       <button id="refresh" class="btn btn-outline-secondary">&#8635; Actualizar</button>
@@ -33,16 +33,16 @@
     </div>
     <div class="card-body">
       <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3 mb-4">
-        <div class="col"><span class="small text-secondary d-block">ENTRADAS</span><strong id="total" class="fs-4">—</strong></div>
-        <div class="col"><span class="small text-secondary d-block">COINCIDENCIAS</span><strong id="matched" class="fs-4">—</strong></div>
-        <div class="col"><span class="small text-secondary d-block">TAMAÑO</span><strong id="file-size" class="fs-4">—</strong></div>
-        <div class="col"><span class="small text-secondary d-block">ÚLTIMA MODIFICACIÓN</span><strong id="file-updated">—</strong></div>
+        <div class="col"><div class="card h-100 log-metric"><div class="card-body"><span class="small text-secondary d-block">ENTRADAS</span><strong id="total" class="fs-4">—</strong></div></div></div>
+        <div class="col"><div class="card h-100 log-metric"><div class="card-body"><span class="small text-secondary d-block">COINCIDENCIAS</span><strong id="matched" class="fs-4">—</strong></div></div></div>
+        <div class="col"><div class="card h-100 log-metric"><div class="card-body"><span class="small text-secondary d-block">TAMAÑO</span><strong id="file-size" class="fs-4">—</strong></div></div></div>
+        <div class="col"><div class="card h-100 log-metric"><div class="card-body"><span class="small text-secondary d-block">ÚLTIMA MODIFICACIÓN</span><strong id="file-updated">—</strong></div></div></div>
       </div>
       <div id="level-summary" class="row row-cols-1 row-cols-sm-3 g-3" aria-label="Cantidad de entradas por nivel"></div>
     </div>
   </section>
   <div class="row g-4">
-    <aside class="col-12 col-xl-3" aria-label="Transacciones del archivo">
+    <aside class="col-12 col-xl-3 log-transactions" aria-label="Transacciones del archivo">
       <details id="tx-panel" class="card" open>
         <summary class="card-header fw-semibold">Transacciones <span id="tx-total" class="badge text-bg-secondary ms-2">0</span></summary>
         <div class="card-body">
@@ -50,19 +50,19 @@
           <input class="form-control mb-3" id="tx-search" type="search" placeholder="Buscar txId..." autocomplete="off" spellcheck="false">
           <div class="form-check"><input class="form-check-input" id="tx-errors-only" type="checkbox"><label class="form-check-label" for="tx-errors-only">Solo con errores</label></div>
         </div>
-        <nav id="tx-list" class="list-group list-group-flush overflow-auto vh-100" aria-label="Seleccionar transacción"></nav>
+        <nav id="tx-list" class="list-group list-group-flush overflow-auto" aria-label="Seleccionar transacción"></nav>
         <p id="tx-none" class="text-secondary p-3 mb-0" hidden>Sin transacciones coincidentes</p>
         <div class="card-body"><button type="button" id="tx-more" class="btn btn-outline-secondary btn-sm w-100" hidden>Mostrar 100 más</button></div>
         <div class="card-footer small text-secondary d-flex flex-wrap justify-content-between gap-2"><span id="tx-shown">0 / 0</span><span id="tx-unassigned"></span></div>
       </details>
     </aside>
-    <div class="col-12 col-xl-9">
+    <div class="col-12 col-xl">
       <form id="filters" class="card card-body mb-3">
         <div class="row g-3 align-items-end">
           <div class="col-12 col-sm-6 col-lg-3"><label class="form-label" for="level">Nivel</label><select class="form-select" id="level"><option value="">Todos los niveles</option></select></div>
           <div class="col-12 col-sm-6 col-lg-3"><label class="form-label" for="source">Origen</label><select class="form-select" id="source"><option value="">Todos los orígenes</option></select></div>
-          <div class="col-12 col-lg-6"><label class="form-label" for="txId">Transacción · txId</label><input class="form-control" id="txId" type="search" autocomplete="off" spellcheck="false" placeholder="Pega el txId completo"></div>
-          <div class="col-12"><button type="button" id="clear" class="btn btn-outline-secondary btn-sm">Limpiar filtros</button><button type="submit" class="visually-hidden">Filtrar</button></div>
+          <div class="col-12 col-lg"><label class="form-label" for="txId">Transacción · txId</label><input class="form-control" id="txId" type="search" autocomplete="off" spellcheck="false" placeholder="Pega el txId completo"></div>
+          <div class="col-12 col-lg-auto"><button type="button" id="clear" class="btn btn-outline-secondary">Limpiar filtros</button><button type="submit" class="visually-hidden">Filtrar</button></div>
         </div>
       </form>
       <div id="active-tx" class="alert alert-success" hidden>
@@ -79,7 +79,7 @@
           </div>
         </div>
         <div class="table-responsive">
-          <table class="table table-hover align-top mb-0"><thead><tr><th>LÍNEA</th><th>FECHA / HORA</th><th>NIVEL</th><th>ORIGEN</th><th>TXID</th><th>MENSAJE</th></tr></thead><tbody id="entries"></tbody></table>
+          <table class="table table-hover align-top mb-0"><thead class="small"><tr><th>LÍNEA</th><th>FECHA / HORA</th><th>NIVEL</th><th>ORIGEN</th><th>TXID</th><th>MENSAJE</th></tr></thead><tbody id="entries"></tbody></table>
         </div>
         <div id="empty" class="card-body text-center" hidden><strong>Sin coincidencias</strong><p class="text-secondary mb-0">Prueba con otro nivel, origen o identificador de transacción.</p></div>
         <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-3">

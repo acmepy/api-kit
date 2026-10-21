@@ -45,6 +45,22 @@ async function server(t, directory, options = {}) {
 }
 
 describe("log viewer", () => {
+  it("serves compact metric cards and persistent desktop controls", async t => {
+    const { directory } = await fixture(t);
+    const { base } = await server(t, directory);
+    const html = await (await fetch(`${base}/view?file=reparto.log`)).text();
+    assert.equal((html.match(/class="card h-100 log-metric"/g) || []).length, 4);
+    assert.match(html, /col-xl-3 log-transactions/);
+    assert.doesNotMatch(html, /vh-100/);
+    const css = await (await fetch(`${base}/assets/viewer.css`)).text();
+    assert.match(css, /html\s*\{\s*font-size:\s*14px/);
+    assert.match(css, /#filters\s*\{[^}]*position:\s*sticky/);
+    assert.match(css, /\.log-transactions\s*\{[^}]*position:\s*sticky/);
+    assert.match(css, /#tx-list\s*\{[^}]*max-height:/);
+    const js = await (await fetch(`${base}/assets/viewer.js`)).text();
+    assert.match(js, /card card-body log-metric btn/);
+  });
+
   it("parses bare, bracketed and JSON transaction IDs without guessing absent IDs", () => {
     const parsed = rows.filter(row => row.startsWith("[")).map(parseLogLine);
     assert.deepEqual(parsed.map(entry => entry.txId), [TX, TX, TX, TX, OTHER]);
