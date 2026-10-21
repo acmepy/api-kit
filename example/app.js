@@ -1,4 +1,4 @@
-import { createApi } from "api/server";
+import { createApi, getContext } from "api/server";
 import { SeqAdapter } from "iam/adapters";
 import { createLogger, logger, LEVELS } from "logger";
 import { MySQLAdapter, Seq, SQLiteAdapter } from "seq";
@@ -15,7 +15,7 @@ async function main() {
   await fs.mkdir(dataDir, { recursive: true });
 
   const adapter = createAdapter({ dataDir });
-  const seq = new Seq({ adapter, logging:false });
+  const seq = new Seq({ adapter, logging: logger, getContext });
   const iamAdapter = new SeqAdapter({ seq });
 
   const api = await createApi({

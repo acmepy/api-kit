@@ -134,6 +134,16 @@ await seq.sync();
 api.app.listen(3000);
 ```
 
+Para incluir el `txId` de la peticion en los logs de `seq`, importa `getContext` de `api/server` y pasalo al construir el ORM junto con su logger:
+
+```js
+import { getContext } from "api/server";
+
+const seq = new Seq({ adapter, logging: logger, getContext });
+```
+
+Esto requiere una version de `seq` que implemente la opcion `getContext`. El identificador se consulta al emitir cada log y se agrega como JSON al final del mensaje, compatible con el visor de logs. Fuera de una peticion, como durante `seq.sync()` al iniciar, no se agrega un `txId`. `createApi()` no modifica la configuracion de logging de la instancia de `seq` recibida.
+
 `createApi()` devuelve:
 
 - `app`: instancia Express.
