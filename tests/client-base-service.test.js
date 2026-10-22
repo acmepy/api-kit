@@ -3,6 +3,34 @@ import assert from "node:assert/strict";
 import { BaseService } from "../src/client/services/base-service.js";
 
 describe("Client BaseService", () => {
+  it("save creates new records with or without a key and updates cached records", async () => {
+    const records = [];
+    const calls = [];
+    let online = false;
+    const service = new BaseService({ name: "clientes", createAdapter: () => memoryAdapter(records),
+      operations: { create: { path: "/clientes", method: "POST" }, update: { path: "/clientes/{id}", method: "PUT" } },
+      client: { connected: () => online, async request(path, options) {
+        calls.push({ path, ...options });
+        return { ok: true, data: options.body };
+      } },
+    });
+    const created = await service.save({ name: "Ana" });
+    assert.equal(created.data.operation, "create");
+    await service.save({ id: created.data.id, name: "Ana editada" });
+    assert.equal(records[0].operation, "create");
+    assert.equal(records[0].name, "Ana editada");
+    assert.deepEqual(calls, []);
+    online = true;
+    await service.save({ id: created.data.id, name: "Ana confirmada" }, { pending: true });
+    await service.save({ id: created.data.id, name: "Ana actualizada" }, { pending: false });
+    await service.save({ id: "001", name: "Beto" }, { pending: false });
+    assert.deepEqual(calls.map(call => [call.path, call.method]), [
+      ["/clientes", "POST"], ["/clientes/1", "PUT"], ["/clientes", "POST"],
+    ]);
+    assert.equal(records[0].name, "Ana actualizada");
+    assert.deepEqual((await service.pending()).data, []);
+  });
+
   it("saves an offline create successfully and sends the same pending record later", async () => {
     const records = [];
     const calls = [];

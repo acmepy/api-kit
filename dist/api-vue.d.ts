@@ -34,6 +34,7 @@ export interface ApiVueService<T extends ServiceRecord = ServiceRecord> {
   pull: BaseService<T>["pull"];
   pullOne: BaseService<T>["pullOne"];
   create: BaseService<T>["create"];
+  save: BaseService<T>["save"];
   update: BaseService<T>["update"];
   remove: BaseService<T>["remove"];
   push: BaseService<T>["push"];

@@ -173,6 +173,7 @@ export function useApiService(name) {
     pull: run("pull"),
     pullOne: run("pullOne"),
     create: run("create"),
+    save: run("save"),
     update: run("update"),
     remove: run("remove"),
     push: run("push"),

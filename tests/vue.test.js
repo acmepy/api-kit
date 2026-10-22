@@ -23,6 +23,11 @@ describe("Vue client layer", () => {
             records.push({ id: 2, ...data });
             return { ok: true, data };
           },
+          save: async (data, options) => {
+            assert.deepEqual(options, { pending: true });
+            Object.assign(records.find(record => record.id === data.id), data);
+            return { ok: true, data };
+          },
         };
       },
     };
@@ -43,6 +48,9 @@ describe("Vue client layer", () => {
 
     await resource.create({ nombre: "Beto" });
     assert.deepEqual(resource.records.value, [{ id: 1, nombre: "Ana" }, { id: 2, nombre: "Beto" }]);
+    const saved = await resource.save({ id: 2, nombre: "Beto editado" }, { pending: true });
+    assert.deepEqual(saved, { ok: true, data: { id: 2, nombre: "Beto editado" } });
+    assert.equal(resource.records.value[1].nombre, "Beto editado");
 
     records.push({ id: 3, nombre: "Cora" });
     for (const listener of listeners) listener({ type: "sse", lastReceivedAt: "2026-01-01T00:00:00.000Z" });

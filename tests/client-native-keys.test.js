@@ -25,8 +25,8 @@ for (const type of ["memory", "localStorage", "indexedDB"]) {
         storage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
       }),
     });
-    await service.create({ lista: "001", articulo: "A1", precio: 10, extras: [{ codigo: "01" }] });
-    await service.create({ lista: "002", articulo: "A1", precio: 20 });
+    await service.save({ lista: "001", articulo: "A1", precio: 10, extras: [{ codigo: "01" }] });
+    await service.save({ lista: "002", articulo: "A1", precio: 20 });
     assert.equal((await service.list()).data.length, 2);
     const key = { lista: "001", articulo: "A1" };
     assert.equal((await service.get(key)).data.id, undefined);
@@ -36,13 +36,13 @@ for (const type of ["memory", "localStorage", "indexedDB"]) {
     assert.deepEqual(calls[0].body.extras, [{ codigo: "01" }]);
     online = false;
     const other = { lista: "002", articulo: "A1" };
-    await service.update(other, { precio: 30 });
+    await service.save({ ...other, precio: 30 });
     online = true;
     await service.push(other);
     assert.equal(calls[1].path, "/items");
     assert.equal(calls[1].method, "POST");
     assert.deepEqual(calls[1].body, { ...other, precio: 30 });
-    await service.update(other, { precio: 35 }, { pending: true });
+    await service.save({ ...other, precio: 35 }, { pending: true });
     assert.equal(calls[2].path, "/items/002");
     assert.equal(calls[2].method, "PUT");
     assert.deepEqual(calls[2].query, other);

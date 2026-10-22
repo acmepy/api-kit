@@ -172,6 +172,7 @@ export class BaseService<T extends ServiceRecord = ServiceRecord> {
   pending(): Promise<ApiResponse<T[]>>;
   get(id: ServiceId): Promise<ApiResponse<T | null>>;
   create(data: Partial<T>, options?: { pending?: boolean }): Promise<ApiResponse<T>>;
+  save(data: Partial<T>, options?: { pending?: boolean }): Promise<ApiResponse<T>>;
   update(id: ServiceId, data: Partial<T>, options?: { pending?: boolean }): Promise<ApiResponse<T>>;
   remove(id: ServiceId, options?: { pending?: boolean }): Promise<ApiResponse<T>>;
   createDetail(id: ServiceId, detail: string, data?: Record<string, unknown>): Promise<ApiResponse>;

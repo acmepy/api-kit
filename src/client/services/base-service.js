@@ -77,6 +77,13 @@ export class BaseService {
     return { ok: Boolean(data), data };
   }
 
+  async save(data = {}, options = {}) {
+    const key = this.keyOf(data);
+    return key !== undefined && await this.adapter.get(key)
+      ? this.update(this.primaryKeyAttributes.length === 1 ? key : data, data, options)
+      : this.create(data, options);
+  }
+
   async create(data = {}, options = {}) {
     const record = await this.validate(data, "create");
     const pending = options.pending ?? !this.client.connected?.();
