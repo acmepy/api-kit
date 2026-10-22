@@ -101,10 +101,11 @@ export class BaseService {
 
   async update(id, data = {}, options = {}) {
     const current = await this.adapter.get(this.#cacheKey(id));
-    const record = await this.validate({...current, ...data, ...this.#keyValues(id)}, "update");
+    const creating = current?.pending && current.operation === "create";
+    const record = await this.validate({...current, ...data, ...this.#keyValues(id)}, creating ? "create" : "update");
     const pending = options.pending ?? !this.client.connected?.();
     let networkFailed = false;
-    if(!pending) {
+    if(!pending && !creating) {
       try {
         const response = await this.#send("update", { params: { id }, body: data });
         const nextRecord = response.data || record;
@@ -116,7 +117,7 @@ export class BaseService {
         networkFailed = true;
       }
     }
-    data = {...current, ...data, ...this.#keyValues(id), pending: true, operation:'update', status: "pending", message: "", errors: null };
+    data = {...record, ...this.#keyValues(id), pending: true, operation: creating ? "create" : "update", status: "pending", message: "", errors: null };
     await this.adapter.put(this.keyOf(data) ?? this.#cacheKey(id), data)
     this.#notify();
     if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
@@ -125,6 +126,11 @@ export class BaseService {
 
   async remove(id, options = {}) {
     const current = await this.adapter.get(this.#cacheKey(id));
+    if (current?.pending && current.operation === "create") {
+      await this.adapter.delete(this.#cacheKey(id));
+      this.#notify();
+      return { ok: true, data: current };
+    }
     const pending = options.pending ?? !this.client.connected?.();
     let networkFailed = false;
     if (!pending) {
@@ -217,11 +223,12 @@ export class BaseService {
   async pushOne(record) {
     try {
       const response = await this.#sendPendingOperation(record);
-      if (record.operation === "create" || record.operation === "remove") {
+      if (record.operation === "remove") {
         await this.adapter.delete(this.keyOf(record));
-      } else if (record.operation === "update") {
+      } else {
         const nextRecord = { ...this.#pendingBody(record), ...response.data };
         await this.adapter.put(this.keyOf(nextRecord), nextRecord);
+        if (this.keyOf(nextRecord) !== this.keyOf(record)) await this.adapter.delete(this.keyOf(record));
       }
       this.#notify();
       return { ok: true, id: this.keyOf(record), operation: record.operation, response };

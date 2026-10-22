@@ -34,7 +34,7 @@ describe("Client BaseService", () => {
     assert.equal(pushed.ok, true);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].options.body.id, saved.data.id);
-    assert.deepEqual(records, []);
+    assert.deepEqual(records, [{ id: 10, name: "Ana" }]);
     await service.push();
     assert.equal(calls.length, 1);
   });
@@ -237,7 +237,7 @@ describe("Client BaseService", () => {
     assert.deepEqual(records, [{ id: 1, name: "Ana editada" }]);
   });
 
-  it("removes temporary create records after pending create is sent", async () => {
+  it("replaces temporary create records with the server response after sending", async () => {
     const records = [];
     const calls = [];
     const service = new BaseService({
@@ -264,7 +264,59 @@ describe("Client BaseService", () => {
         options: { method: "POST", query: {}, body: { id: 1, name: "Ana" } },
       },
     ]);
-    assert.deepEqual(records, []);
+    assert.deepEqual(records, [{ id: 10, name: "Ana" }]);
+  });
+
+  for (const online of [false, true]) {
+    it(`keeps an edited pending create as POST when online=${online}`, async () => {
+      const records = [{ id: 1, name: "Ana", pending: true, operation: "create", status: "error", message: "Rejected", errors: { name: "Invalid" } }];
+      const calls = [];
+      let connected = online;
+      let reject = true;
+      const service = new BaseService({
+        name: "clientes", createAdapter: () => memoryAdapter(records),
+        operations: { create: { path: "/clientes", method: "POST" }, update: { path: "/clientes/{id}", method: "PUT" } },
+        client: { connected: () => connected, async request(path, options) {
+          calls.push({ path, ...options });
+          if (reject) throw new Error("Rejected");
+          return { ok: true, data: { id: 10, name: "ANA EDITADA", createdAt: "2026-10-22" } };
+        } },
+      });
+      if (online) await assert.rejects(() => service.update(1, { name: "Ana editada" }), /Rejected/);
+      else await service.update(1, { name: "Ana editada" });
+      assert.equal(records[0].operation, "create");
+      assert.equal(records[0].name, "Ana editada");
+      assert.equal(calls.length, online ? 1 : 0);
+      connected = true;
+      reject = false;
+      assert.equal((await service.push()).ok, true);
+      assert.ok(calls.every(call => call.method === "POST" && call.path === "/clientes"));
+      assert.equal(calls.at(-1).body.name, "Ana editada");
+      assert.equal(Object.hasOwn(calls.at(-1).body, "pending"), false);
+      assert.deepEqual(records, [{ id: 10, name: "ANA EDITADA", createdAt: "2026-10-22" }]);
+      assert.deepEqual((await service.pending()).data, []);
+    });
+
+    it(`cancels a pending create locally when online=${online}`, async () => {
+      const records = [{ id: 1, pending: true, operation: "create", status: "error" }];
+      const service = new BaseService({ name: "clientes", createAdapter: () => memoryAdapter(records),
+        client: { connected: () => online, request() { assert.fail("An unsent create must not issue DELETE"); } },
+      });
+      assert.equal((await service.remove(1)).ok, true);
+      assert.deepEqual(records, []);
+      assert.deepEqual((await service.push()).results, []);
+    });
+  }
+
+  it("keeps a confirmed create when the server preserves its key", async () => {
+    const records = [{ id: "001", name: "Ana", pending: true, operation: "create" }];
+    const service = new BaseService({ name: "clientes", createAdapter: () => memoryAdapter(records),
+      operations: { create: { path: "/clientes", method: "POST" } },
+      client: { async request() { return { ok: true, data: { id: "001", name: "ANA" } }; } },
+    });
+    assert.equal((await service.push()).ok, true);
+    assert.deepEqual(records, [{ id: "001", name: "ANA" }]);
+    assert.deepEqual((await service.push()).results, []);
   });
 
   it("propagates validation errors from pending sends", async () => {
