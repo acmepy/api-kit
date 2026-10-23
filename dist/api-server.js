@@ -86,19 +86,24 @@ async function validateNestedCreate(values, options) {
     return;
   }
   const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction);
+  for (const key of Object.keys(values)) {
+    if (!Object.hasOwn(validated, key) && !context.foreignKeys.get(this)?.has(key)) delete values[key];
+  }
   Object.assign(values, validated);
 }
 
-function nestedSchemaValidationOptions(root, includes) {
+function nestedSchemaValidationOptions(root, includes, foreignKeys = new Map()) {
   for (const include of includes) {
     const target = include.model;
+    if (!foreignKeys.has(target)) foreignKeys.set(target, new Set());
+    for (const key of [include.foreignKey].flat()) foreignKeys.get(target).add(key);
     if (target.resourceSchemas?.create && !configuredModels.has(target)) {
       target.addHook("beforeCreate", validateNestedCreate);
       configuredModels.add(target);
     }
-    if (include.include) nestedSchemaValidationOptions(root, include.include);
+    if (include.include) nestedSchemaValidationOptions(root, include.include, foreignKeys);
   }
-  return { [validationContext]: { root, rootVisited: false } };
+  return { [validationContext]: { root, rootVisited: false, foreignKeys } };
 }
 
 const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes"]);
@@ -1553,15 +1558,15 @@ class BaseService {
   }
 
   async create({ params, query, body, transaction = null } = {}) {
-    const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
+    const { masterBody, detailBody, include, hasDetails } = this.#masterDetailsContext(body);
     const data = await validateResourceSchema(this.#schemas.create, masterBody, transaction);
-    const payload = hasDetails ? { ...body, ...data } : data;
+    const payload = hasDetails ? { ...detailBody, ...data } : data;
     const instance = await this.#model.create(payload, { ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
   async update({ params, query, body, transaction = null } = {}) {
-    const { masterBody, include, hasDetails } = this.#masterDetailsContext(body);
+    const { masterBody, detailBody, include, hasDetails } = this.#masterDetailsContext(body);
     const pk = this.#model.primaryKeyAttribute;
     const key = await this.#primaryKey(params, query);
     const composite = typeof key === "object" && key !== null;
@@ -1574,7 +1579,7 @@ class BaseService {
       }
     }
     const data = await validateResourceSchema(this.#schemas.update, { ...masterBody, __uniqueId: key }, transaction);
-    const payload = hasDetails ? { ...(body || {}), ...data, ...where } : data;
+    const payload = hasDetails ? { ...detailBody, ...data, ...where } : data;
     await this.#model.update(payload, { where, ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     const instance = await this.#model.findByPk(composite ? key : data[pk] ?? key, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName);
@@ -1663,7 +1668,8 @@ class BaseService {
     for (const key of detailNames) delete masterBody[key];
     const include = this.#model.getAssociationIncludes();
 
-    return { masterBody, include, hasDetails: true };
+    const detailBody = Object.fromEntries(detailNames.map((key) => [key, body[key]]));
+    return { masterBody, detailBody, include, hasDetails: true };
   }
 
   #detailsConfig() {

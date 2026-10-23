@@ -460,6 +460,41 @@ describe("BaseService details", () => {
     assert.equal(await cobroResource.model.count(), 1);
   });
 
+  for (const operation of ["create", "update"]) {
+    for (const location of ["master", "detail"]) {
+      it(`filters unknown ${location} fields through Yep during nested ${operation}`, async () => {
+        const existing = operation === "update" ? await service.create({
+          body: { cliente: "Original", items: [{ producto: "Mouse", cantidad: 1 }] },
+        }) : null;
+        const item = { producto: "Teclado", cantidad: "2", ...(location === "detail" && { desArticulo: "Display only" }) };
+        const body = { cliente: "Ana", total: "150", items: [item], cobros: [{ medio: "efectivo", monto: "150" }],
+          ...(location === "master" && { desArticulo: "Display only" }),
+        };
+        const result = await service[operation]({ body, ...(existing && { params: { id: existing.data.id } }) });
+        assert.equal(result.data.cliente, "Ana");
+        assert.equal(Object.hasOwn(result.data, "desArticulo"), false);
+        assert.equal(result.data.items.length, 1);
+        assert.equal(Object.hasOwn(result.data.items[0], "desArticulo"), false);
+        assert.equal(result.data.items[0].cantidad, 2);
+        assert.equal(result.data.items[0].ventaId, result.data.id);
+        assert.equal(result.data.cobros.length, 1);
+        const stored = await itemResource.model.findOne({ where: { ventaId: result.data.id }, plain: true });
+        assert.equal(stored.producto, "Teclado");
+        assert.equal(stored.cantidad, 2);
+        assert.equal(Object.hasOwn(stored, "desArticulo"), false);
+        assert.equal(await ventaResource.model.count(), 1);
+        assert.equal(await itemResource.model.count(), 1);
+        assert.equal(body.desArticulo ?? item.desArticulo, "Display only");
+      });
+    }
+  }
+
+  it("keeps Seq rejection of unknown attributes when bypassing the resource schema", async () => {
+    await assert.rejects(() => ventaResource.model.create({ cliente: "Ana", desArticulo: "Unknown" }),
+      { code: "SEQ_VALIDATION_UNKNOWN_ATTRIBUTE" });
+    assert.equal(await ventaResource.model.count(), 0);
+  });
+
   it("returns plain objects for included details when reloading a master record", async () => {
     const result = await service.create({
       body: {
@@ -485,7 +520,8 @@ describe("BaseService details", () => {
           ...(existing && { params: { id: existing.data.id } }),
           body: {
             cliente: "Cambio",
-            items: [{ producto: "Teclado", cantidad: 2 }, { producto: "Mouse", cantidad: 1, [field]: value }],
+            desArticulo: "Display only",
+            items: [{ producto: "Teclado", cantidad: 2, desArticulo: "Display only" }, { producto: "Mouse", cantidad: 1, [field]: value }],
             cobros: [{ medio: "efectivo", monto: 100 }],
           },
         }), (error) => error.code === "VALIDATION_ERROR" && typeof error.errors?.[field] === "string");

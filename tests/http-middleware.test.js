@@ -348,7 +348,8 @@ describe("http middleware", () => {
         body: JSON.stringify({
           cliente: "Ana",
           total: 2,
-          items: [{ producto: "Mouse", cantidad: 2 }],
+          desArticulo: "Display only",
+          items: [{ producto: "Mouse", cantidad: 2, desArticulo: "Display only", ventaId: 999 }],
         }),
       });
 
@@ -356,6 +357,8 @@ describe("http middleware", () => {
       assert.equal(created.body.data.cliente, "Ana");
       assert.equal(created.body.data.items.length, 1);
       assert.equal(created.body.data.items[0].ventaId, created.body.data.id);
+      assert.equal(Object.hasOwn(created.body.data, "desArticulo"), false);
+      assert.equal(Object.hasOwn(created.body.data.items[0], "desArticulo"), false);
 
       const detail = await request(server, "POST", `/api/ventas/${created.body.data.id}/items`, {
         headers: { "Content-Type": "application/json" },
