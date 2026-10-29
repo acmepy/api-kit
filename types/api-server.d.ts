@@ -1,4 +1,4 @@
-export interface RequestContext { requestId?: string; user?: unknown; [key: string]: unknown; }
+export interface RequestContext { requestId?: string; txId?: string; tenantId?: string | number; user?: unknown; [key: string]: unknown; }
 export { createLogViewer, parseLogLine } from "./api-log-viewer";
 export type { LogViewerOptions, ParsedLogLine } from "./api-log-viewer";
 export interface ApiResponse<T = unknown> { ok: true; data: T; [key: string]: unknown; }
@@ -15,11 +15,12 @@ export class BaseModel { static init(...args: unknown[]): unknown; }
 export class BaseService<T = Record<string, unknown>> { constructor(options?: Record<string, unknown>); list(options?: Record<string, unknown>): Promise<T[]>; get(id: string | number, options?: Record<string, unknown>): Promise<T>; create(data: Partial<T>, options?: Record<string, unknown>): Promise<T>; update(id: string | number, data: Partial<T>, options?: Record<string, unknown>): Promise<T>; remove(id: string | number, options?: Record<string, unknown>): Promise<void>; }
 export class BaseRouter { constructor(options?: Record<string, unknown>); }
 export class BaseModule { constructor(options?: Record<string, unknown>); }
-export interface ResourceDefinition { name: string; [key: string]: unknown; }
+export interface ResourceDefinition { name: string; tenant?: boolean | { attribute: string }; [key: string]: unknown; }
 export function defineResource(definition: ResourceDefinition): ResourceDefinition;
 export interface RouteDefinition { method: string; path: string; permission?: string; handler?: (...args: unknown[]) => unknown; [key: string]: unknown; }
 export class RouteRegistry { add(route: RouteDefinition): RouteDefinition; all(): RouteDefinition[]; find(method: string, path: string): RouteDefinition | undefined; }
-export interface CreateApiOptions { modules?: unknown[]; models?: unknown[]; services?: unknown[]; routes?: RouteDefinition[]; [key: string]: unknown; }
+export interface TenantConfig { attribute: string; type?: string; maxLength?: number; }
+export interface CreateApiOptions { tenant?: boolean | TenantConfig; modules?: unknown[]; models?: unknown[]; services?: unknown[]; routes?: RouteDefinition[]; [key: string]: unknown; }
 export interface ApiInstance { app: unknown; router: unknown; errorHandler: (...args: unknown[]) => unknown; modules: unknown; models: unknown; services: unknown; routes: RouteRegistry; schemas: unknown; events: unknown; audit: { sseClients(): unknown[] }; auth: unknown; close(): Promise<void>; }
 export function createApi(options?: CreateApiOptions): Promise<ApiInstance>;
 export function getContext(): RequestContext | undefined;

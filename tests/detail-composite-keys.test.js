@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { request as httpRequest } from "node:http";
 import { createApi } from "../src/server/index.js";
 import { createTestSeq } from "./helpers/seq.js";
 
@@ -48,14 +49,22 @@ describe("detail routes with composite primary keys", () => {
       const server = await new Promise((resolve) => {
         const listener = api.app.listen(0, "127.0.0.1", () => resolve(listener));
       });
-      const request = async (method, path, body) => {
-        const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {
-          method,
-          headers: { "Content-Type": "application/json" },
-          ...(body !== undefined && { body: JSON.stringify(body) }),
+      // An OS-assigned port can be on fetch's blocked-port list (especially on Windows).
+      const request = (method, path, body) => new Promise((resolve, reject) => {
+        const req = httpRequest({ hostname: "127.0.0.1", port: server.address().port, path,
+          method, headers: { "Content-Type": "application/json" } }, (response) => {
+          let text = "";
+          response.setEncoding("utf8");
+          response.on("data", chunk => { text += chunk; });
+          response.on("error", reject);
+          response.on("end", () => {
+            try { resolve({ status: response.statusCode, body: JSON.parse(text) }); }
+            catch (error) { reject(error); }
+          });
         });
-        return { status: response.status, body: await response.json() };
-      };
+        req.on("error", reject);
+        req.end(body === undefined ? undefined : JSON.stringify(body));
+      });
       try {
         const result = creates
           ? await request("POST", "/api/listasPrecios/001/detalles", { codArticulo: "A1", precio: 150, ...(operation === "create with parent in body" && { codListaPrecio: "002" }) })

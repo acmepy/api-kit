@@ -40,6 +40,7 @@ function validateConfig(config) {
   const errors = {};
   if (!config.seq)  errors.seq = "seq instance is required";
   if (!config.baseDir) errors.baseDir = "baseDir is required";
+  if (config.tenant && (!config.auth || config.auth.required === false)) errors.tenant = "tenant requiere autenticacion";
   if (Object.keys(errors).length > 0) throw new ConfigError("Configuración inválida", { errors });
   return true;
 }
@@ -66,12 +67,57 @@ async function fileExists(filePath) {
   }
 }
 
+const storage = new AsyncLocalStorage();
+
+function runWithContext(req, res, next) {
+  const txId = req.headers["x-transaction-id"] || crypto.randomUUID();
+  const context = {
+    txId,
+    audit: {
+      clientIp: req.ip || req.socket?.remoteAddress || "",
+      userId: req.user?.id || null,
+    },
+    baseUrl: `${req.protocol}://${req.get("host")}${req.originalUrl}`
+  };
+  storage.run(context, () => {next();});
+}
+
+function getContext() {
+  return storage.getStore() || null;
+}
+
+function normalizeTenantConfig(tenant) {
+  if (tenant === undefined || tenant === false) return false;
+  if (tenant === true) return { attribute: "tenantId", type: "integer" };
+  if (!tenant || typeof tenant !== "object" || Array.isArray(tenant) || typeof tenant.attribute !== "string" || !tenant.attribute.trim()) {
+    throw new ConfigError("tenant requiere un attribute valido");
+  }
+  return { type: "integer", ...tenant };
+}
+
+function tenantAttribute(model) {
+  return model?.options?.tenant?.attribute;
+}
+
+function tenantValues(model, values) {
+  const attribute = tenantAttribute(model);
+  if (!attribute) return values;
+  const tenantId = getContext()?.tenantId;
+  if (tenantId === undefined || tenantId === null) {
+    throw new AppError("Falta el tenant de la sesion autenticada", { status: 403, code: "TENANT_CONTEXT_MISSING" });
+  }
+  if (Object.hasOwn(values || {}, attribute) && values[attribute] !== tenantId) {
+    throw new AppError("El tenant enviado no corresponde a la sesion", { status: 403, code: "TENANT_MISMATCH" });
+  }
+  return { ...values, [attribute]: tenantId };
+}
+
 const validationContext = Symbol("api-kit nested schema validation");
 const configuredModels = new WeakSet();
 const validationTransactions = new AsyncLocalStorage();
 
-function validateResourceSchema(schema, values, transaction) {
-  return validationTransactions.run(transaction, () => schema.validate(values));
+function validateResourceSchema(schema, values, transaction, model) {
+  return validationTransactions.run(transaction, () => schema.validate(tenantValues(model, values)));
 }
 
 function schemaValidationTransaction() {
@@ -85,9 +131,9 @@ async function validateNestedCreate(values, options) {
     context.rootVisited = true;
     return;
   }
-  const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction);
+  const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction, this);
   for (const key of Object.keys(values)) {
-    if (!Object.hasOwn(validated, key) && !context.foreignKeys.get(this)?.has(key)) delete values[key];
+    if (!Object.hasOwn(validated, key) && !context.foreignKeys.get(this)?.has(key) && key !== tenantAttribute(this)) delete values[key];
   }
   Object.assign(values, validated);
 }
@@ -106,7 +152,7 @@ function nestedSchemaValidationOptions(root, includes, foreignKeys = new Map()) 
   return { [validationContext]: { root, rootVisited: false, foreignKeys } };
 }
 
-const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes"]);
+const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes", "tenant"]);
 const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
 const DECLARATIVE_RULE_KEYS = new Set(["title", "required", "nullable", "default", "defaultValue", "oneOf", "notOneOf", "in", "pattern", "regexp", "matches", "email", "positive", "min", "max", "maxLength", "between"]);
 const ATTRIBUTE_METADATA_KEYS = new Set([...ATTRIBUTE_OPTION_KEYS, ...DECLARATIVE_RULE_KEYS, "schema", "create", "update", "precision", "scale", "itemType", "items", "of", "returnType", "fields"]);
@@ -141,6 +187,17 @@ function defineResource(definition = {}) {
   ResourceModel.resourceDefinition = definition;
 
   return { model: ResourceModel, schemas: generatedSchemas, attributes: modelAttributes, definition: normalizedAttributes, options: modelOptions};
+}
+
+function configureResourceTenant(resource, tenant) {
+  const protection = resource?.options?.tenant ?? resource?.model?.options?.tenant;
+  if (!protection) return;
+  if (!tenant) throw new ConfigError("Un recurso con tenant requiere habilitar tenant en createApi");
+  const options = protection === true ? { attribute: tenant.attribute } : protection;
+  if (!Object.hasOwn(resource.model.rawAttributes, options.attribute)) throw new ConfigError(`Falta el atributo de tenant "${options.attribute}"`);
+  resource.options.tenant = options;
+  resource.model.options.tenant = options;
+  Object.assign(resource.schemas, buildSchemas(resource.definition, resource.model.resourceDefinition.schemas || {}, resource.model.resourceDefinition, resource.model));
 }
 
 function pickModelOptions(definition) {
@@ -213,6 +270,7 @@ function buildSchemas(attributes, explicitSchemas, definition = {}, model) {
 function buildShape(attributes, operation, model) {
   const shape = {};
   for (const [name, definition] of Object.entries(attributes)) {
+    if (name === tenantAttribute(model)) continue;
     if (!shouldIncludeInSchema(definition, operation)) continue;
     const schema = resolveValidation(definition, operation, model, primaryKeyName(attributes));
     if (schema) shape[name] = schema;
@@ -1180,9 +1238,10 @@ function buildSchemaDocument({ routes, modules, session } = {}) {
     if (!services.has(route.module)) services.set(route.module, {
       name: route.module,
       primaryKeyAttributes: module.model?.primaryKeyAttributes || ["id"],
+      ...(module.model?.options.tenant && { tenant: module.model.options.tenant }),
       details: Object.fromEntries((module.model?.getAssociationIncludes?.() || [])
         .filter(({ as }) => Object.hasOwn(module.config?.details || {}, as))
-        .map(({ as, model, foreignKey }) => [as, { foreignKey, primaryKeyAttributes: model.primaryKeyAttributes }])),
+        .map(({ as, model, foreignKey }) => [as, { foreignKey, primaryKeyAttributes: model.primaryKeyAttributes, ...(model.options.tenant && { tenant: model.options.tenant }) }])),
       operations: {},
       schemas: {},
     });
@@ -1269,25 +1328,6 @@ function getModelForModule(moduleConfig, modelsMap) {
   const pascal = pascalCase(modelName);
   if (modelsMap.has(pascal)) return modelsMap.get(pascal);
   return null;
-}
-
-const storage = new AsyncLocalStorage();
-
-function runWithContext(req, res, next) {
-  const txId = req.headers["x-transaction-id"] || crypto.randomUUID();
-  const context = {
-    txId,
-    audit: {
-      clientIp: req.ip || req.socket?.remoteAddress || "",
-      userId: req.user?.id || null,
-    },
-    baseUrl: `${req.protocol}://${req.get("host")}${req.originalUrl}`
-  };
-  storage.run(context, () => {next();});
-}
-
-function getContext() {
-  return storage.getStore() || null;
 }
 
 class BaseModel extends Model {
@@ -1531,6 +1571,7 @@ class BaseService {
   }
 
   async list({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const context = getContext();
     const page = Math.max(1, parseInt(query?.page, 10) || 1);
     const maxSize = this.#config.maxSize || 100;
@@ -1544,6 +1585,7 @@ class BaseService {
   }
 
   async get({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const key = await this.#primaryKey(params, query);
     const instance = await this.#model.findByPk(key, { plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName)
@@ -1558,14 +1600,16 @@ class BaseService {
   }
 
   async create({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const { masterBody, detailBody, include, hasDetails } = this.#masterDetailsContext(body);
-    const data = await validateResourceSchema(this.#schemas.create, masterBody, transaction);
+    const data = await validateResourceSchema(this.#schemas.create, masterBody, transaction, this.#model);
     const payload = hasDetails ? { ...detailBody, ...data } : data;
     const instance = await this.#model.create(payload, { ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
   async update({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const { masterBody, detailBody, include, hasDetails } = this.#masterDetailsContext(body);
     const pk = this.#model.primaryKeyAttribute;
     const key = await this.#primaryKey(params, query);
@@ -1578,7 +1622,7 @@ class BaseService {
         }
       }
     }
-    const data = await validateResourceSchema(this.#schemas.update, { ...masterBody, __uniqueId: key }, transaction);
+    const data = await validateResourceSchema(this.#schemas.update, { ...masterBody, __uniqueId: key }, transaction, this.#model);
     const payload = hasDetails ? { ...detailBody, ...data, ...where } : data;
     await this.#model.update(payload, { where, ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     const instance = await this.#model.findByPk(composite ? key : data[pk] ?? key, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
@@ -1587,6 +1631,7 @@ class BaseService {
   }
 
   async remove({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const key = await this.#primaryKey(params, query);
     const instance = await this.#model.findByPk(key, { ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName)
@@ -1595,17 +1640,21 @@ class BaseService {
   }
 
   async createDetail({ params, query, body, transaction = null } = {}) {
+    await this.#detailParent(params, query, transaction);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
+    await this.#checkTenantQuery(target, query);
     if (typeof foreignKey !== "string") throw new ValidationError("La ruta de detalle requiere una clave foranea simple");
     const parentId = await this.#castFilterValue(foreignKey, params.id, target.rawAttributes[foreignKey]);
-    const data = await validateResourceSchema(target.resourceSchemas.create, { ...body, [foreignKey]: parentId }, transaction);
+    const data = await validateResourceSchema(target.resourceSchemas.create, { ...body, [foreignKey]: parentId }, transaction, target);
     const instance = await target.create({ ...data, [foreignKey]: parentId }, { ...(transaction && { transaction }) });
     return { data: instance.toJSON() }
   }
 
   async updateDetail({ params, query, body, transaction = null } = {}) {
+    await this.#detailParent(params, query, transaction);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
-    const data = await validateResourceSchema(target.resourceSchemas.update, body, transaction);
+    await this.#checkTenantQuery(target, query);
+    const data = await validateResourceSchema(target.resourceSchemas.update, body, transaction, target);
     const name = params.detail;
     const where = await this.#detailWhere(target, foreignKey, params, body);
     await target.update(data, { where, ...(transaction && { transaction }) });
@@ -1615,7 +1664,9 @@ class BaseService {
   }
 
   async removeDetail({ params, query, body, transaction = null } = {}) {
+    await this.#detailParent(params, query, transaction);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
+    await this.#checkTenantQuery(target, query);
     const name = params.detail;
     const where = await this.#detailWhere(target, foreignKey, params, body);
     const instance = await target.findOne({ where, ...(transaction && { transaction }) });
@@ -1628,7 +1679,7 @@ class BaseService {
 
   async #primaryKey(params = {}, query = {}) {
     const keys = this.#model.primaryKeyAttributes || [this.#model.primaryKeyAttribute];
-    if (keys.length <= 1) return params.id;
+    if (keys.length <= 1) return this.#castFilterValue(keys[0], params.id, this.#model.rawAttributes[keys[0]]);
     const supplied = params.id && typeof params.id === "object" && !Array.isArray(params.id)
       ? params.id : { ...query, [keys[0]]: params.id };
     const key = {};
@@ -1640,6 +1691,20 @@ class BaseService {
       key[field] = await this.#castFilterValue(field, value, this.#model.rawAttributes[field]);
     }
     return key;
+  }
+
+  async #checkTenantQuery(model, query) {
+    const attribute = tenantAttribute(model);
+    const values = attribute && query?.[attribute] !== undefined
+      ? { [attribute]: await this.#castFilterValue(attribute, query[attribute], model.rawAttributes[attribute]) } : {};
+    tenantValues(model, values);
+  }
+
+  async #detailParent(params, query, transaction) {
+    if (!tenantAttribute(this.#model)) return;
+    const key = await this.#primaryKey(params, query);
+    const parent = await this.#model.findByPk(key, { ...(transaction && { transaction }) });
+    if (!parent) throw new NotFoundError(this.#model.modelName);
   }
 
   async #detailWhere(target, foreignKey, params, body) {
@@ -2164,15 +2229,17 @@ function errorLogger(err, req, { txId, status, code, errors }) {
   );
 }
 
-function createAuditResource() {
+function createAuditResource(tenant = false) {
   return defineResource({
     modelName: "audit",
     //tableName: "audit",
     timestamps: true,
+    ...(tenant && { tenant: { attribute: tenant.attribute } }),
     indexes: [
       { name: "idx_audit_created_at", columns: ["createdAt"] },
     ],
     attributes: {
+      ...(tenant && { [tenant.attribute]: { type: tenant.type, maxLength: tenant.maxLength, allowNull: false, create: false, update: false } }),
       id: { type: "integer", primaryKey: true, autoIncrement: true },
       txId: { type: "string", maxLength: 50, allowNull: false },
       clientIp: { type: "string", maxLength: 50, allowNull: false },
@@ -2288,10 +2355,10 @@ function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, conf
     operationId: "audit.sse",
     serviceMethod: "sse",
     summary: "Cambios en vivo",
-    handler: ({ config, modules, authContext }) => async (req, res) => {
+    handler: ({ config, modules, authContext, AuditModel }) => async (req, res) => {
       const [ip, session, userAgent] = [req.ip || req.socket?.remoteAddress || "", req.session?.id || "no-session", req.headers["user-agent"] || ""];
       const expiresAt = await bearerTokenExpiresAt(req, authContext);
-      const client = {id: ++nextClientId, req, res, sessionId: req.session?.id, connectedAt: new Date().toISOString(), expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, heartbeat: null, expirationTimer: null, closed: false};
+      const client = {id: ++nextClientId, req, res, sessionId: req.session?.id, tenantId: req.session?.tenantId, connectedAt: new Date().toISOString(), expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, heartbeat: null, expirationTimer: null, closed: false};
       clients.set(client.id, client);
 
       const closeClient = (event = "session-closed") => {
@@ -2309,12 +2376,20 @@ function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, conf
       const validateClientSession = async (options = {}) => {
         if (!client.sessionId || !authContext?.adapter?.findSessionById) return true;
         const session = await findSessionById(authContext.adapter, client.sessionId, options);
-        if (session && session.active !== false) return true;
+        if (session && session.active !== false) {
+          if (!config.tenant) return true;
+          if (session.tenantId !== client.tenantId) { closeClient("tenant-changed"); return false; }
+          const user = await authContext.adapter.findUserById(session.userId);
+          const tenant = await authContext.adapter.findTenantById(client.tenantId);
+          const allowed = await authContext.adapter.findTenantsByUserId(session.userId);
+          if (user?.active !== false && user && tenant?.active !== false && tenant && allowed.some(item => item.id === client.tenantId)) return true;
+        }
         closeClient("session-closed");
         return false;
       };
 
       client.sendChange = (change, options = {}) => {
+        if (config.tenant && change[tenantAttribute(AuditModel)] !== client.tenantId) return;
         Promise.resolve(validateClientSession(options))
           .then((active) => active && canViewAuditChange(change, { req, modules, authContext }))
           .then((allowed) => {
@@ -2328,6 +2403,10 @@ function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, conf
           .catch((error) => log("error", "audit.sse", error));
       };
       config.audit.events.on("change", client.sendChange);
+      client.tenantChanged = ({ sessionId, tenantId }) => {
+        if (sessionId === client.sessionId && tenantId !== client.tenantId) closeClient("tenant-changed");
+      };
+      config.audit.events.on("session-tenant-changed", client.tenantChanged);
 
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
@@ -2376,6 +2455,7 @@ function cleanupSseClient(clients, client, config) {
     client.expirationTimer = null;
   }
   if (client.sendChange) config.audit.events.off("change", client.sendChange);
+  if (client.tenantChanged) config.audit.events.off("session-tenant-changed", client.tenantChanged);
 }
 
 async function bearerTokenExpiresAt(req, authContext) {
@@ -2496,7 +2576,12 @@ async function writeAudit(AuditModel, auditConfig, moduleConfig, action, model, 
     },
     { hooks: false, ...(options.transaction && { transaction: options.transaction }) },
   );
-  if (options.emit !== false) auditConfig?.events?.emit("change", auditRow.toJSON(), { transaction: options.transaction });
+  if (options.emit !== false) {
+    const change = auditRow.toJSON();
+    const emit = () => auditConfig?.events?.emit("change", change);
+    if (options.transaction) options.transaction.afterCommit(emit);
+    else emit();
+  }
 }
 
 async function findSessionById(adapter, sessionId, options = {}) {
@@ -2594,12 +2679,26 @@ function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
   authRouter.post(authContext.loginPath, authContext.middleware);
   authRouter.get(authContext.sessionPath, authContext.middleware);
   authRouter.post(authContext.logoutPath, authContext.middleware);
+  for (const [method, path, operation] of [
+    ["patch", "/me/options", "updateUserOptions"], ["patch", "/session/options", "updateSessionOptions"],
+    ...(config.tenant ? [["get", "/me/tenants", "getTenants"], ["patch", "/me/tenant", "setUserTenant"], ["patch", "/session/tenant", "setSessionTenant"]] : []),
+  ]) {
+    const fullPath = joinPaths(config.basePath, path);
+    routeRegistry.register({ module: "auth", operationId: `auth.${operation}`, method, expressPath: fullPath, openApiPath: fullPath,
+      serviceMethod: operation, auth: { required: true, strategies: authContext.strategies }, permissions: [], summary: operation, description: "", tags: ["auth"], deprecated: false });
+    authRouter[method](path, (req, res, next) => {
+      if (operation === "setSessionTenant") res.on("finish", () => {
+        if (res.statusCode < 400 && req.session) config.audit?.events?.emit("session-tenant-changed", { sessionId: req.session.id, tenantId: req.session.tenantId });
+      });
+      return authContext.middleware(req, res, next);
+    });
+  }
   mainRouter.use(basePath, authRouter);
   return authContext;
 }
 
 function createAuthContext(config, authBackend) {
-  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models });
+  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models, tenant: Boolean(config.tenant) });
   const rbac = new RBAC({ adapter });
   const logging = authBackend.logging ?? config.logging;
   const authConfig = { ...authBackend, logging };
@@ -2660,6 +2759,7 @@ function composeMiddlewares(middlewares) {
 function iamAuthOptions(auth, adapter) {
   return {
     adapter,
+    tenant: Boolean(auth.tenant),
     getContext,
     logging: auth.logging,
     jwt: {
@@ -2795,7 +2895,7 @@ function errorHandler(err, req, res, _next) {
   if (res.headersSent) return;
 
   const txId = getContext()?.txId || req.headers["x-transaction-id"] || null;
-  const status = err.status || err.statusCode || 500;
+  const status = err.status || err.statusCode || (err.name === "TenantError" && err.code !== "SEQ_TENANT_CONFIG" ? 403 : 500);
   const code = err.type === "entity.parse.failed" ? "INVALID_JSON" : err.code || "INTERNAL_ERROR";
   const errors = err.errors && typeof err.errors === "object" ? err.errors : {};
   const message = status >= 500 && process.env.NODE_ENV === "production" ? "Error interno" : err.message;
@@ -2823,6 +2923,7 @@ async function createApi(conf = {}) {
       schemas: conf.paths?.schemas || "./schemas",
     },
     auth: conf.auth,
+    tenant: normalizeTenantConfig(conf.tenant ?? conf.auth?.tenant),
     cors: conf.cors ?? false,
     helmet: conf.helmet ?? false,
     compression: conf.compression ?? false,
@@ -2840,6 +2941,7 @@ async function createApi(conf = {}) {
     sse: conf.sse || { enabled: false },
   };
   setLogging(config.logging || false);
+  if (config.tenant && config.schema) config.schema.auth ??= true;
   if (config.audit) config.audit.events = auditEvents;
 
   validateConfig(config);
@@ -2852,6 +2954,9 @@ async function createApi(conf = {}) {
   };
 
   const moduleBundle = await loadModuleBundle(config.modules, config.baseDir);
+  for (const module of moduleBundle.modules) {
+    for (const resource of [module.resource, ...(module.detailResources || [])]) configureResourceTenant(resource, config.tenant);
+  }
   config.staticModules.push(...moduleBundle.staticModules);
   config.installableApps = normalizeInstallableApps(config.staticModules, config.baseDir);
   config.auth = normalizeGlobalAuth(config.auth);
@@ -2859,7 +2964,8 @@ async function createApi(conf = {}) {
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
   const authBackend = conf.auth ? normalizeAuthBackendConfig(config.auth) : null;
-  const auditResource = config.audit ? createAuditResource() : null;
+  if (authBackend) authBackend.tenant = Boolean(config.tenant);
+  const auditResource = config.audit ? createAuditResource(config.tenant) : null;
   let authContext = null;
   const authorize = createAuthorizer(() => authContext);
 
@@ -2879,6 +2985,9 @@ async function createApi(conf = {}) {
   }
 
   const modelsMap = await loadModels({seq: config.seq, explicitModels, modelsDir: resolvedPaths.models,moduleConfigs});
+  for (const model of modelsMap.values()) {
+    if (model.options?.tenant === true && config.tenant) model.options.tenant = { attribute: config.tenant.attribute };
+  }
   registerSeqModels(config.seq, modelsMap.values());
 
   const routeRegistry = new RouteRegistry();

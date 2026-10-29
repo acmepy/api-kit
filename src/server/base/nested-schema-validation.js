@@ -1,11 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { tenantValues, tenantAttribute } from "../context/tenant-context.js";
 
 const validationContext = Symbol("api-kit nested schema validation");
 const configuredModels = new WeakSet();
 const validationTransactions = new AsyncLocalStorage();
 
-export function validateResourceSchema(schema, values, transaction) {
-  return validationTransactions.run(transaction, () => schema.validate(values));
+export function validateResourceSchema(schema, values, transaction, model) {
+  return validationTransactions.run(transaction, () => schema.validate(tenantValues(model, values)));
 }
 
 export function schemaValidationTransaction() {
@@ -19,9 +20,9 @@ async function validateNestedCreate(values, options) {
     context.rootVisited = true;
     return;
   }
-  const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction);
+  const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction, this);
   for (const key of Object.keys(values)) {
-    if (!Object.hasOwn(validated, key) && !context.foreignKeys.get(this)?.has(key)) delete values[key];
+    if (!Object.hasOwn(validated, key) && !context.foreignKeys.get(this)?.has(key) && key !== tenantAttribute(this)) delete values[key];
   }
   Object.assign(values, validated);
 }

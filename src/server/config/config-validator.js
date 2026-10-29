@@ -4,6 +4,7 @@ export function validateConfig(config) {
   const errors = {};
   if (!config.seq)  errors.seq = "seq instance is required";
   if (!config.baseDir) errors.baseDir = "baseDir is required";
+  if (config.tenant && (!config.auth || config.auth.required === false)) errors.tenant = "tenant requiere autenticacion";
   if (Object.keys(errors).length > 0) throw new ConfigError("Configuración inválida", { errors });
   return true;
 }

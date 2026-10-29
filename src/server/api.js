@@ -21,6 +21,8 @@ import { runWithContext } from "./context/request-context.js";
 import { errorHandler } from "./http/error-handler.js";
 import { requestLogger, setLogging } from "./logger/index.js";
 import { normalizeAuthBackendConfig, normalizeGlobalAuth } from "./utils/normalize.js";
+import { normalizeTenantConfig } from "./context/tenant-context.js";
+import { configureResourceTenant } from "./config/config-resource.js";
 
 export async function createApi(conf = {}) {
   const auditEvents = new EventEmitter();
@@ -37,6 +39,7 @@ export async function createApi(conf = {}) {
       schemas: conf.paths?.schemas || "./schemas",
     },
     auth: conf.auth,
+    tenant: normalizeTenantConfig(conf.tenant ?? conf.auth?.tenant),
     cors: conf.cors ?? false,
     helmet: conf.helmet ?? false,
     compression: conf.compression ?? false,
@@ -54,6 +57,7 @@ export async function createApi(conf = {}) {
     sse: conf.sse || { enabled: false },
   };
   setLogging(config.logging || false);
+  if (config.tenant && config.schema) config.schema.auth ??= true;
   if (config.audit) config.audit.events = auditEvents;
 
   validateConfig(config);
@@ -66,6 +70,9 @@ export async function createApi(conf = {}) {
   };
 
   const moduleBundle = await loadModuleBundle(config.modules, config.baseDir);
+  for (const module of moduleBundle.modules) {
+    for (const resource of [module.resource, ...(module.detailResources || [])]) configureResourceTenant(resource, config.tenant);
+  }
   config.staticModules.push(...moduleBundle.staticModules);
   config.installableApps = normalizeInstallableApps(config.staticModules, config.baseDir);
   config.auth = normalizeGlobalAuth(config.auth);
@@ -73,7 +80,8 @@ export async function createApi(conf = {}) {
   const rawModuleConfigs = moduleBundle.modules;
   const moduleConfigs = normalizeModules(rawModuleConfigs, { basePath: config.basePath, auth: config.auth });
   const authBackend = conf.auth ? normalizeAuthBackendConfig(config.auth) : null;
-  const auditResource = config.audit ? createAuditResource() : null;
+  if (authBackend) authBackend.tenant = Boolean(config.tenant);
+  const auditResource = config.audit ? createAuditResource(config.tenant) : null;
   let authContext = null;
   const authorize = createAuthorizer(() => authContext);
 
@@ -93,6 +101,9 @@ export async function createApi(conf = {}) {
   }
 
   const modelsMap = await loadModels({seq: config.seq, explicitModels, modelsDir: resolvedPaths.models,moduleConfigs});
+  for (const model of modelsMap.values()) {
+    if (model.options?.tenant === true && config.tenant) model.options.tenant = { attribute: config.tenant.attribute };
+  }
   registerSeqModels(config.seq, modelsMap.values());
 
   const routeRegistry = new RouteRegistry();

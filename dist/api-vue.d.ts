@@ -8,9 +8,15 @@ export interface ApiVue {
   lastReceivedAt: Readonly<Ref<unknown>>;
   error: Readonly<Ref<unknown>>;
   ready: Readonly<Ref<boolean>>;
+  tenantChanging: Readonly<Ref<boolean>>;
   initialized: Promise<void>;
   login(credentials?: Record<string, unknown>, options?: LoginOptions): Promise<unknown>;
   logout(): Promise<unknown>;
+  getTenants: ApiClient["getTenants"];
+  setUserTenant: ApiClient["setUserTenant"];
+  setSessionTenant: ApiClient["setSessionTenant"];
+  updateUserOptions: ApiClient["updateUserOptions"];
+  updateSessionOptions: ApiClient["updateSessionOptions"];
   sync(force?: boolean): Promise<void>;
   install(app: App): void;
   dispose(): void;

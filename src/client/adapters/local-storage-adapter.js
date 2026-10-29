@@ -3,7 +3,6 @@ import { BaseAdapter } from "./base-adapter.js";
 export class LocalStorageAdapter extends BaseAdapter {
   #storage;
   #key;
-  #data;
   #keyOf;
 
   constructor({ storage = globalThis.localStorage, service = "", prefix = "api", keyOf = (record) => record.id } = {}) {
@@ -15,8 +14,7 @@ export class LocalStorageAdapter extends BaseAdapter {
   }
 
   async getAll() {
-    if(!this.#data) this.#data = JSON.parse(this.#storage.getItem(this.#key) || "[]");
-    return this.#data;
+    return JSON.parse(this.#storage.getItem(this.#key) || "[]");
   }
 
   async get(key) {
@@ -28,7 +26,6 @@ export class LocalStorageAdapter extends BaseAdapter {
       const records = (await this.getAll()).filter((item) => !value.some((nextItem) => this.#keyOf(nextItem) === this.#keyOf(item)));
       const nextRecords = [...records,...value];
       this.#storage.setItem(this.#key, JSON.stringify(nextRecords));
-      this.#data = undefined;
       return value;
     }
     await this.put(this.#keyOf(value), value);
@@ -39,7 +36,6 @@ export class LocalStorageAdapter extends BaseAdapter {
     const records = await this.getAll();
     const nextRecords = [...records.filter((item) => this.#keyOf(item) !== key), value];
     this.#storage.setItem(this.#key, JSON.stringify(nextRecords));
-    this.#data = undefined;
     return value;
   }
 
@@ -47,11 +43,9 @@ export class LocalStorageAdapter extends BaseAdapter {
     const records = await this.getAll();
     const nextRecords = records.filter((item) => this.#keyOf(item) !== key);
     this.#storage.setItem(this.#key, JSON.stringify(nextRecords));
-    this.#data = undefined;
   }
 
   async clear() {
-    this.#data = undefined;
     this.#storage.removeItem(this.#key);
   }
 }

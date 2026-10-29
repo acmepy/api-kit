@@ -11,10 +11,7 @@ export class SessionService extends BaseService {
   }
 
   async pull() {
-    const response = await this.client.request(this.path, { method: "GET" });
-    await this.adapter.clear();
-    if (response.data) await this.adapter.add(response.data);
-    return response;
+    return this.client.refreshSession();
   }
 
   async get() {

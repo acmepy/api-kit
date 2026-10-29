@@ -101,6 +101,15 @@ export interface ChangeEvent {
 }
 
 export interface LoginOptions { sync?: boolean; }
+export interface TenantInfo { id: string | number; name: string; }
+export interface ClientSession {
+  id?: string | number | null;
+  token?: string | null;
+  tenantId?: string | number;
+  user?: { id: string | number; tenantId?: string | number; options?: Record<string, unknown>; [key: string]: unknown };
+  options?: Record<string, unknown>;
+  [key: string]: unknown;
+}
 
 export class ApiClient {
   constructor(options?: ApiClientOptions);
@@ -108,8 +117,16 @@ export class ApiClient {
   readonly adapter: StorageAdapter;
   login(credentials?: Record<string, unknown>, options?: LoginOptions): Promise<unknown>;
   logout(): Promise<void>;
+  tenantChanging(): boolean;
+  tenantId(): string | number | undefined;
+  refreshSession(): Promise<ApiResponse<ClientSession>>;
+  getTenants(): Promise<ApiResponse<TenantInfo[]>>;
+  setUserTenant(tenantId: string | number): Promise<ApiResponse<NonNullable<ClientSession["user"]>>>;
+  setSessionTenant(tenantId: string | number): Promise<ApiResponse<ClientSession>>;
+  updateUserOptions(options: Record<string, unknown>): Promise<ApiResponse<NonNullable<ClientSession["user"]>>>;
+  updateSessionOptions(options: Record<string, unknown>): Promise<ApiResponse<ClientSession>>;
   sessionService(): SessionService;
-  session(): Promise<unknown>;
+  session(): Promise<ClientSession>;
   token(): string | null;
   service(name: string): BaseService | undefined;
   services(): Map<string, BaseService>;
@@ -136,7 +153,8 @@ export interface ServiceOptions {
   operations?: Record<string, unknown>;
   schemas?: Record<string, unknown>;
   primaryKeyAttributes?: string[];
-  details?: Record<string, { foreignKey: string; primaryKeyAttributes: string[] }>;
+  details?: Record<string, { foreignKey: string; primaryKeyAttributes: string[]; tenant?: { attribute: string } }>;
+  tenant?: { attribute: string };
   prefix?: string;
   createAdapter?: (options?: CreateAdapterOptions) => StorageAdapter;
 }

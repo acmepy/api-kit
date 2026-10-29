@@ -73,6 +73,15 @@ export class ApiClient {
   #sseEnabled;
   #logging;
   #paths;
+  #tenantChangePromise = null;
+  #tenantChanging = false;
+  #tenantReloading = false;
+  #tenantConflict = false;
+  #tenantVerified = false;
+  #tenantVerification = null;
+  #activeOperations = new Set();
+  #requests = new Set();
+  #tenantChannel = null;
 
   constructor(options = {}) {
     const url = new URL(options.url || "http://localhost:3000/api");
@@ -103,6 +112,11 @@ export class ApiClient {
     };
 
     if (!this.#fetch) throw new Error("ApiClient requiere fetch");
+    this.#tenantChannel = options.tenantChannel || (typeof window !== "undefined" && typeof BroadcastChannel === "function"
+      ? new BroadcastChannel(`api-tenant:${this.#host}${this.#baseUrl}:${this.#prefix}`) : null);
+    if (this.#tenantChannel) this.#tenantChannel.onmessage = ({ data }) => {
+      if (data?.sessionId != null && data.sessionId === this.#session?.id && !this.#tenantChanging) this.#adoptExternalTenant();
+    };
     queueMicrotask(() => this.#startPing());
   }
 
@@ -124,6 +138,10 @@ export class ApiClient {
         response: { ok: false, code: "SESSION_USER_MISMATCH" },
       });
     }
+    if ((previousSession?.tenantId !== undefined || response.data?.tenantId !== undefined)
+        && (previousSession?.tenantId !== response.data?.tenantId || previousSession?.user?.id !== response.data?.user?.id)) {
+      return this.#startTenantChange(response.data?.tenantId, { supplied: response, sync });
+    }
     this.#sessionSyncEnabled = sync;
     this.#authExpired = false;
     this.#stopPing();
@@ -131,6 +149,8 @@ export class ApiClient {
     this.#clearWatchdog();
     this.#clearScheduledServiceSyncs();
     await this.sessionService().create(response.data || null);
+    this.#session = response.data || null;
+    this.#tenantVerified = response.data?.tenantId !== undefined;
     this.#sessionVersion++;
     this.#onLine("login", response.data);
 
@@ -155,7 +175,202 @@ export class ApiClient {
     return response;
   }
 
+  tenantChanging() { return this.#tenantChanging; }
+  tenantId() { return this.#session?.tenantId; }
+
+  async refreshSession() {
+    if (this.#tenantChanging) throw this.#tenantError("Cambio de tenant en curso", "TENANT_CHANGE_IN_PROGRESS");
+    const previous = this.#session || (await this.sessionService().adapter.getAll())[0];
+    const response = await this.request(this.#paths.session, { token: previous?.token, requireToken: true, tenantChange: true });
+    if ((previous?.tenantId !== undefined || response.data?.tenantId !== undefined)
+        && (previous?.tenantId !== response.data?.tenantId || previous?.user?.id !== response.data?.user?.id)) {
+      return this.#startTenantChange(response.data?.tenantId, { supplied: response, external: true });
+    }
+    this.#session = { ...previous, ...response.data };
+    await this.sessionService().create(this.#session);
+    this.#tenantVerified = response.data?.tenantId !== undefined;
+    this.#emitChange({ type: "session", source: "session-updated" });
+    return response;
+  }
+
+  getTenants() { return this.request("/me/tenants"); }
+
+  async updateUserOptions(options) {
+    return this.#updateUser("/me/options", { options });
+  }
+
+  async setUserTenant(tenantId) {
+    return this.#updateUser("/me/tenant", { tenantId });
+  }
+
+  async #updateUser(path, body) {
+    const response = await this.request(path, { method: "PATCH", body });
+    const session = (await this.sessionService().adapter.getAll())[0];
+    await this.sessionService().create({ ...session, user: response.data });
+    this.#session = { ...session, user: response.data };
+    this.#emitChange({ type: "session", source: "session-updated" });
+    return response;
+  }
+
+  async updateSessionOptions(options) {
+    const response = await this.request("/session/options", { method: "PATCH", body: { options } });
+    const session = (await this.sessionService().adapter.getAll())[0];
+    this.#session = { ...session, ...response.data };
+    await this.sessionService().create(this.#session);
+    this.#emitChange({ type: "session", source: "session-updated" });
+    return response;
+  }
+
+  setSessionTenant(tenantId) { return this.#startTenantChange(tenantId); }
+
+  #startTenantChange(tenantId, options = {}) {
+    if (this.#tenantChangePromise) return Promise.reject(this.#tenantError("Cambio de tenant en curso", "TENANT_CHANGE_IN_PROGRESS"));
+    let failed = false;
+    const task = this.#changeTenant(tenantId, options).catch(error => { failed = true; throw error; }).finally(() => {
+      this.#tenantChangePromise = null;
+      this.#tenantChanging = false;
+      this.#tenantReloading = false;
+      this.#emitChange({ type: "session", source: "tenant-change-finished" });
+      if (failed && !this.#tenantConflict && this.#sessionSyncEnabled) this.#startPing();
+    });
+    this.#tenantChangePromise = task;
+    return task;
+  }
+
+  async #changeTenant(tenantId, { supplied, external = false, sync = true } = {}) {
+    this.#tenantChanging = true;
+    const previous = this.#session || (await this.sessionService().adapter.getAll())[0];
+    const wasSyncEnabled = this.#sessionSyncEnabled;
+    let changed = false;
+    let committed = false;
+    let mutationSent = false;
+    try {
+      this.#sessionSyncEnabled = false;
+      this.#sessionVersion++;
+      this.#stopPing(); this.#closeSse(); this.#clearWatchdog(); this.#clearScheduledServiceSyncs();
+      this.#changesAbort?.abort();
+      for (const controller of this.#requests) controller.abort();
+      this.#emitChange({ type: "session", source: "tenant-changing" });
+      await Promise.allSettled([...this.#activeOperations, ...this.#backgroundServiceSyncs.values(), ...this.#cachedRequests.values(),
+        this.#syncServicesPromise, this.#backgroundSyncPromise, this.#changesPromise].filter(Boolean));
+      const cachedSchema = await this.#cachedDocument(this.#services.get("schema") || new SchemaService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter }));
+      const services = new Map(this.#services);
+      for (const descriptor of discoverServiceDescriptors(cachedSchema || {}, this.#baseUrl)) {
+        if (!services.has(descriptor.name)) services.set(descriptor.name, new BaseService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, ...descriptor }));
+      }
+      const hasPending = async () => {
+        for (const [name, service] of services) if (!["schema", "session", "pending"].includes(name) && (await service.pending()).data.length) return true;
+        return false;
+      };
+      if (!external && (tenantId !== previous?.tenantId || supplied && supplied.data?.user?.id !== previous?.user?.id) && await hasPending()) {
+        throw this.#tenantError("Envie o elimine los pendientes antes de cambiar de tenant", "TENANT_PENDING_OPERATIONS");
+      }
+      const stored = (await this.sessionService().adapter.getAll())[0];
+      mutationSent = !external && !supplied;
+      const response = supplied || await this.request(external ? this.#paths.session : "/session/tenant", {
+        method: external ? "GET" : "PATCH", body: external ? undefined : { tenantId },
+        token: external ? stored?.token || previous?.token : previous?.token, tenantChange: true, requireToken: true,
+      });
+      const session = { ...previous, ...response.data, token: response.data?.token || stored?.token || previous?.token, authExpired: false };
+      changed = session.tenantId !== previous?.tenantId || session.user?.id !== previous?.user?.id;
+      if (external && changed && await hasPending()) {
+        this.#tenantConflict = true;
+        throw this.#tenantError("El tenant cambio en otra conexion y hay pendientes locales; restaure el tenant anterior para enviarlos", "TENANT_CHANGED_WITH_PENDING");
+      }
+      if (changed) {
+        for (const service of services.values()) await service.clear();
+        await this.#adapter.clear();
+        this.#services.clear();
+        this.#services.set("pending", new PendingService({ client: this, prefix: this.#prefix }));
+        this.#lastReceivedAt = null;
+      }
+      this.#session = session;
+      await this.sessionService().create(session);
+      committed = true;
+      this.#tenantConflict = false;
+      this.#tenantVerified = true;
+      this.#authExpired = false;
+      this.#sessionSyncEnabled = sync;
+      this.#tenantReloading = true;
+      this.#onLine("tenant-changed", session);
+      if (!external) this.#tenantChannel?.postMessage({ sessionId: previous?.id });
+      if (sync) {
+        const since = this.#now();
+        await this.syncServices(changed);
+        if (changed) {
+          this.#clearScheduledServiceSyncs();
+          const pulls = await Promise.allSettled([...this.#services].filter(([name]) => !["schema", "session", "pending"].includes(name)).map(([, service]) => service.pull()));
+          const failure = pulls.find(result => result.status === "rejected");
+          if (failure) throw failure.reason;
+        }
+        if (this.#changesEnabled) await this.changes(since);
+        if (this.#sseEnabled) await this.#openSse();
+      }
+      return response;
+    } catch (error) {
+      if (!changed) this.#sessionSyncEnabled = wasSyncEnabled;
+      if (changed && !committed || mutationSent && error.code === "NETWORK_ERROR") this.#tenantConflict = true;
+      if (this.#tenantConflict) this.#sessionSyncEnabled = false;
+      this.#emitChange({ type: "session", source: "tenant-change-failed", error });
+      throw error;
+    }
+  }
+
+  #tenantError(message, code) { return new ApiClientError(message, { status: 409, response: { ok: false, code } }); }
+
+  async #verifyTenantSession() {
+    if (this.#tenantVerified || this.#session?.tenantId === undefined) return;
+    if (this.#tenantVerification) return this.#tenantVerification;
+    const verification = (async () => {
+      const response = await this.request(this.#paths.session, { token: this.#session.token, tenantChange: true, requireToken: true });
+      if (response.data?.tenantId !== this.#session.tenantId || response.data?.user?.id !== this.#session.user?.id) {
+        this.#adoptExternalTenant();
+        throw this.#tenantError("El tenant cambio en el servidor; espere la recarga", "TENANT_CHANGED");
+      }
+      this.#tenantVerified = true;
+    })();
+    this.#tenantVerification = verification;
+    try { await verification; }
+    finally { if (this.#tenantVerification === verification) this.#tenantVerification = null; }
+  }
+
+  #adoptExternalTenant() {
+    if (this.#tenantChanging) return;
+    this.#startTenantChange(undefined, { external: true }).catch(error => this.#emitChange({ type: "error", source: "tenant-change-failed", error }));
+  }
+
+  async #checkStoredTenant() {
+    if (this.#tenantChanging) return;
+    const stored = (await this.sessionService().adapter.getAll())[0];
+    if (!this.#session) { this.#session = stored || null; return; }
+    if (stored && (stored.tenantId !== this.#session.tenantId || stored.user?.id !== this.#session.user?.id)) {
+      this.#adoptExternalTenant();
+      throw this.#tenantError("El tenant de la sesion cambio; espere la recarga", "TENANT_CHANGED");
+    }
+  }
+
+  trackServiceOperation(service, method, execute) {
+    if (this.#session?.tenantId === undefined && !this.#tenantChanging && !this.#tenantConflict) return execute();
+    return this.#trackTenantOperation(service, method, execute);
+  }
+
+  async #trackTenantOperation(service, method, execute) {
+    await this.#checkStoredTenant();
+    if (this.#tenantConflict) throw this.#tenantError("Restaure el tenant de los pendientes locales", "TENANT_CHANGED_WITH_PENDING");
+    if (this.#tenantChanging && !(this.#tenantReloading && ["pull", "pullOne", "applyData"].includes(method))) {
+      throw this.#tenantError("Cambio de tenant en curso", "TENANT_CHANGE_IN_PROGRESS");
+    }
+    if (this.#services.get(service.name) !== service) throw this.#tenantError("El servicio fue reemplazado; obtengalo nuevamente", "SERVICE_REPLACED");
+    const task = Promise.resolve().then(execute);
+    this.#activeOperations.add(task);
+    const done = () => this.#activeOperations.delete(task);
+    task.then(done, done);
+    return task;
+  }
+
   async #resetSession(source, data) {
+    this.#tenantVerified = false;
+    if (source !== "auth-expired") { this.#session = null; this.#tenantConflict = false; }
     this.#sessionVersion++;
     this.#stopPing();
     this.#closeSse();
@@ -193,7 +408,8 @@ export class ApiClient {
       this.#sessionSyncEnabled = false;
       return {};
     }
-    if (session?.token && this.#sessionSyncEnabled && !this.#syncServicesPromise) await this.syncServices();
+    if (!this.#session?.token) this.#session = session;
+    if (session?.token && this.#sessionSyncEnabled && !this.#tenantChanging && !this.#syncServicesPromise) await this.syncServices();
     return session;
   }
 
@@ -332,6 +548,19 @@ export class ApiClient {
     for (const descriptor of discoverServiceDescriptors(schema, this.#baseUrl)) {
       if (!descriptor.operations.list) continue;
       const service = new BaseService({ client: this, prefix: this.#prefix, createAdapter: this.#createAdapter, ...descriptor });
+      if (this.#session?.tenantId !== undefined) {
+        const scopeId = `tenant:${descriptor.name}`;
+        const scope = await this.#adapter.get(scopeId);
+        if (scope?.tenantId !== this.#session.tenantId || scope?.userId !== this.#session.user?.id) {
+          if ((await service.pending()).data.length) {
+            this.#services.set(descriptor.name, service);
+            this.#tenantConflict = true;
+            throw this.#tenantError("Hay pendientes cuyo tenant local no coincide con la sesion", "TENANT_CHANGED_WITH_PENDING");
+          }
+          await service.clear();
+        }
+        await this.#adapter.put(scopeId, { id: scopeId, tenantId: this.#session.tenantId, userId: this.#session.user?.id });
+      }
       this.#services.set(descriptor.name, service);
       if (Object.keys(descriptor.schemas || {}).length > 0) await schemaService.update(descriptor.name, descriptor.schemas);
       try {
@@ -424,6 +653,8 @@ export class ApiClient {
   }
 
   destroy() {
+    this.#tenantChannel?.close();
+    for (const controller of this.#requests) controller.abort();
     this.#stopPing();
     this.#clearScheduledServiceSyncs();
     this.#closeSse();
@@ -482,12 +713,28 @@ export class ApiClient {
   }
 
   async request(path, options = {}) {
+    if (!options.tenantChange) {
+      if (this.#tenantConflict) throw this.#tenantError("El tenant cambio y hay pendientes locales", "TENANT_CHANGED_WITH_PENDING");
+      if (this.#tenantChanging && !this.#tenantReloading) throw this.#tenantError("Cambio de tenant en curso", "TENANT_CHANGE_IN_PROGRESS");
+      if (this.#session?.tenantId !== undefined) await this.#checkStoredTenant();
+    }
+    const controller = new AbortController();
+    this.#requests.add(controller);
+    try {
+      return await this.#request(path, { ...options, sessionVersion: this.#sessionVersion,
+        signal: options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal });
+    } finally { this.#requests.delete(controller); }
+  }
+
+  async #request(path, options = {}) {
     const url = this.url(path, options.query);
     const headers = { Accept: "application/json", ...(options.headers || {}) };
     const body = encodeBody(options.body, headers);
     const token = options.auth === false ? null : options.token || await this.token() || null;
+    if (options.auth !== false && token && !options.tenantChange) await this.#verifyTenantSession();
     if (options.auth !== false && this.#authExpired) throw new ApiClientError("Sesion expirada; vuelva a iniciar sesion", { status: 401 });
-    const sessionVersion = this.#sessionVersion;
+    const sessionVersion = options.sessionVersion;
+    if (sessionVersion !== this.#sessionVersion) throw new DOMException("Sesion cambiada", "AbortError");
     if (options.requireToken && !token) throw new ApiClientError("Sesion local requerida", { status: 401 });
     if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`;
 
@@ -510,6 +757,10 @@ export class ApiClient {
     if (!response.ok || payload?.ok === false){
       const error = new ApiClientError(payload?.message || response.statusText, { status: response.status, response: payload });
       if (error.status === 401 && options.auth !== false) await this.#expireSession(error, sessionVersion);
+      if (error.code === "TENANT_MISMATCH" && !options.tenantChange && !this.#tenantChanging) {
+        this.#tenantVerified = false;
+        this.#adoptExternalTenant();
+      }
       throw error;
     }
 
@@ -556,6 +807,7 @@ export class ApiClient {
       if (!this.#sessionSyncEnabled) return;
       const localSession = await this.session() || null;
       if (!localSession?.token) throw new ApiClientError("Sesion local requerida", { status: 401 });
+      await this.#verifyTenantSession();
       await this.syncServices();
       if (this.#changesEnabled) await this.changes();
       this.#stopPing();
@@ -580,6 +832,7 @@ export class ApiClient {
   }
 
   #startPing() {
+    if (this.#tenantChanging || this.#tenantConflict) return;
     if (this.#pingTimer) return;
     this.#pingTimer = setInterval(() => {this.#ping()}, this.#pingInterval);
     this.#pingTimer.unref?.();
@@ -630,7 +883,7 @@ export class ApiClient {
         }
         if (!response.ok) throw new Error(response.statusText);
         this.#resetWatchdog();
-        return this.#readSse(response);
+        return this.#readSse(response, sessionVersion);
       })
       .catch(() => {
         if (this.#sseAbort === controller) {
@@ -641,7 +894,7 @@ export class ApiClient {
       });
   }
 
-  async #readSse(response) {
+  async #readSse(response, sessionVersion) {
     if (!response.body?.getReader) return;
     const reader = response.body.getReader();
     this.#sseReader = reader;
@@ -655,7 +908,10 @@ export class ApiClient {
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split(/\r?\n\r?\n/);
         buffer = parts.pop() || "";
-        for (const part of parts) await this.#handleSseMessage(part);
+        for (const part of parts) {
+          if (sessionVersion !== this.#sessionVersion) break;
+          await this.#handleSseMessage(part, sessionVersion);
+        }
       }
     } finally {
       if (this.#sseReader === reader) this.#sseReader = null;
@@ -663,8 +919,15 @@ export class ApiClient {
     }
   }
 
-  async #handleSseMessage(raw) {
+  async #handleSseMessage(raw, sessionVersion) {
     if (!raw.trim()) return;
+    if (/^event:\s*tenant-changed\s*$/m.test(raw)) { this.#closeSse(); this.#adoptExternalTenant(); return; }
+    if (/^event:\s*(auth-expired|session-closed)\s*$/m.test(raw)) {
+      await this.#expireSession(new ApiClientError("La sesion fue cerrada o expiro", {
+        status: 401, response: { ok: false, code: "SESSION_CLOSED" },
+      }), sessionVersion);
+      return;
+    }
     const receivedAt = this.#touchLastReceivedAt();
     this.#onLine("sse", undefined, { lastReceivedAt: receivedAt });
     this.#resetWatchdog();

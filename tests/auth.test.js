@@ -228,7 +228,7 @@ describe("auth", () => {
       assert.equal(postman.status, 200);
       const root = postman.body.item.find((item) => item.name === "api");
       const sessionFolder = root.item.find((item) => item.name === "session");
-      assert.deepEqual(sessionFolder.item.map((item) => item.name), ["Login", "Session", "Logout"]);
+      assert.deepEqual(sessionFolder.item.map((item) => item.name), ["Login", "Session", "Logout", "updateUserOptions", "updateSessionOptions"]);
       const loginRequest = sessionFolder.item.find((item) => item.name === "Login");
       assert.deepEqual(JSON.parse(loginRequest.request.body.raw), { username: "admin", password: "1234" });
       assert.deepEqual(loginRequest.event[0].script.exec, [

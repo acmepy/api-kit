@@ -14,9 +14,10 @@ export function buildSchemaDocument({ routes, modules, session } = {}) {
     if (!services.has(route.module)) services.set(route.module, {
       name: route.module,
       primaryKeyAttributes: module.model?.primaryKeyAttributes || ["id"],
+      ...(module.model?.options.tenant && { tenant: module.model.options.tenant }),
       details: Object.fromEntries((module.model?.getAssociationIncludes?.() || [])
         .filter(({ as }) => Object.hasOwn(module.config?.details || {}, as))
-        .map(({ as, model, foreignKey }) => [as, { foreignKey, primaryKeyAttributes: model.primaryKeyAttributes }])),
+        .map(({ as, model, foreignKey }) => [as, { foreignKey, primaryKeyAttributes: model.primaryKeyAttributes, ...(model.options.tenant && { tenant: model.options.tenant }) }])),
       operations: {},
       schemas: {},
     });

@@ -23,12 +23,26 @@ export function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
   authRouter.post(authContext.loginPath, authContext.middleware);
   authRouter.get(authContext.sessionPath, authContext.middleware);
   authRouter.post(authContext.logoutPath, authContext.middleware);
+  for (const [method, path, operation] of [
+    ["patch", "/me/options", "updateUserOptions"], ["patch", "/session/options", "updateSessionOptions"],
+    ...(config.tenant ? [["get", "/me/tenants", "getTenants"], ["patch", "/me/tenant", "setUserTenant"], ["patch", "/session/tenant", "setSessionTenant"]] : []),
+  ]) {
+    const fullPath = joinPaths(config.basePath, path);
+    routeRegistry.register({ module: "auth", operationId: `auth.${operation}`, method, expressPath: fullPath, openApiPath: fullPath,
+      serviceMethod: operation, auth: { required: true, strategies: authContext.strategies }, permissions: [], summary: operation, description: "", tags: ["auth"], deprecated: false });
+    authRouter[method](path, (req, res, next) => {
+      if (operation === "setSessionTenant") res.on("finish", () => {
+        if (res.statusCode < 400 && req.session) config.audit?.events?.emit("session-tenant-changed", { sessionId: req.session.id, tenantId: req.session.tenantId });
+      });
+      return authContext.middleware(req, res, next);
+    });
+  }
   mainRouter.use(basePath, authRouter);
   return authContext;
 }
 
 export function createAuthContext(config, authBackend) {
-  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models });
+  const adapter = authBackend.adapter || new SeqAdapter({ seq: config.seq, models: authBackend.models, tenant: Boolean(config.tenant) });
   const rbac = new RBAC({ adapter });
   const logging = authBackend.logging ?? config.logging;
   const authConfig = { ...authBackend, logging };
@@ -89,6 +103,7 @@ function composeMiddlewares(middlewares) {
 function iamAuthOptions(auth, adapter) {
   return {
     adapter,
+    tenant: Boolean(auth.tenant),
     getContext,
     logging: auth.logging,
     jwt: {

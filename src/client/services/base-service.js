@@ -1,20 +1,28 @@
 import yep from "yep";
 import { fillPath } from "../utils.js";
 import {defaultAdapter} from "../adapters/index.js";
+import { ApiClientError } from "../errors.js";
 
 export class BaseService {
   #temporaryStorage = null;
 
-  constructor({ client, name, path, operations = {}, schemas = {}, primaryKeyAttributes = ["id"], details = {}, prefix = "api", createAdapter }) {
+  constructor({ client, name, path, operations = {}, schemas = {}, primaryKeyAttributes = ["id"], details = {}, tenant, prefix = "api", createAdapter }) {
     this.client = client;
     this.name = name;
     this.path = path;
     this.operations = operations;
     this.primaryKeyAttributes = primaryKeyAttributes;
     this.details = details;
+    this.tenant = tenant;
     this.schemas = Object.keys(schemas).length > 0 ? schemas : null;
     this.prefix = prefix;
     this.adapter = createAdapter?.({ service: name, prefix: this.prefix, keyOf: (record) => this.keyOf(record) });
+    if (client.trackServiceOperation && !["pending", "session", "schema"].includes(name)) {
+      for (const method of ["save", "create", "update", "remove", "createDetail", "updateDetail", "removeDetail", "pull", "pullOne", "push", "pushOne", "applyData", "request"]) {
+        const execute = this[method].bind(this);
+        this[method] = (...args) => client.trackServiceOperation(this, method, () => execute(...args));
+      }
+    }
   }
 
   keyOf(record) {
@@ -85,7 +93,8 @@ export class BaseService {
   }
 
   async create(data = {}, options = {}) {
-    const record = await this.validate(data, "create");
+    this.#assertPendingTenant(data);
+    const record = { ...await this.validate({ ...data, ...this.#tenantScope() }, "create"), ...this.#tenantScope() };
     const pending = options.pending ?? !this.client.connected?.();
     let networkFailed = false;
     if (!pending) {
@@ -99,7 +108,7 @@ export class BaseService {
         networkFailed = true;
       }
     }
-    data = {...record, [this.primaryKeyAttributes[0]]: record[this.primaryKeyAttributes[0]] ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
+    data = {...record, ...this.#pendingScope(), [this.primaryKeyAttributes[0]]: record[this.primaryKeyAttributes[0]] ?? await this.nextTemporaryId(), pending: true, operation:'create', status: "pending", message: "", errors: null };
     await this.adapter.add(data);
     this.#notify();
     if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
@@ -108,6 +117,7 @@ export class BaseService {
 
   async update(id, data = {}, options = {}) {
     const current = await this.adapter.get(this.#cacheKey(id));
+    this.#assertPendingTenant(current);
     const creating = current?.pending && current.operation === "create";
     const record = await this.validate({...current, ...data, ...this.#keyValues(id)}, creating ? "create" : "update");
     const pending = options.pending ?? !this.client.connected?.();
@@ -124,7 +134,7 @@ export class BaseService {
         networkFailed = true;
       }
     }
-    data = {...record, ...this.#keyValues(id), pending: true, operation: creating ? "create" : "update", status: "pending", message: "", errors: null };
+    data = {...record, ...this.#pendingScope(current), ...this.#keyValues(id), pending: true, operation: creating ? "create" : "update", status: "pending", message: "", errors: null };
     await this.adapter.put(this.keyOf(data) ?? this.#cacheKey(id), data)
     this.#notify();
     if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
@@ -133,6 +143,7 @@ export class BaseService {
 
   async remove(id, options = {}) {
     const current = await this.adapter.get(this.#cacheKey(id));
+    this.#assertPendingTenant(current);
     if (current?.pending && current.operation === "create") {
       await this.adapter.delete(this.#cacheKey(id));
       this.#notify();
@@ -151,7 +162,7 @@ export class BaseService {
         networkFailed = true;
       }
     }
-    const data = {...current, ...this.#keyValues(id), pending: true, operation:'remove', status: "pending", message: "", errors: null };
+    const data = {...current, ...this.#pendingScope(current), ...this.#keyValues(id), pending: true, operation:'remove', status: "pending", message: "", errors: null };
     await this.adapter.put(this.keyOf(data), data);
     this.#notify();
     if (!networkFailed && this.client.connected?.()) this.#throwPushError(await this.pushOne(data));
@@ -285,6 +296,9 @@ export class BaseService {
   async #send(operationName, { params = {}, query = {}, body } = {}) {
     const operation = this.operations[operationName];
     if (!operation) throw new Error(`Operacion "${operationName}" no disponible en "${this.name}"`);
+    const attribute = (params.detail ? this.details[params.detail]?.tenant : this.tenant)?.attribute;
+    const tenantId = this.client.tenantId?.();
+    if (attribute && tenantId !== undefined) query = { ...query, [attribute]: tenantId };
     if (params.id && typeof params.id === "object") {
       const key = this.#keyValues(params.id);
       query = { ...query, ...key };
@@ -311,14 +325,32 @@ export class BaseService {
   }
 
   async #sendPendingOperation(record) {
+    this.#assertPendingTenant(record);
     if (record.operation === "create") return this.#send("create", { body: this.#pendingBody(record) });
     if (record.operation === "update") return this.#send("update", { params: { id: this.primaryKeyAttributes.length === 1 ? this.keyOf(record) : record }, body: this.#pendingBody(record) });
     if (record.operation === "remove") return this.#send("remove", { params: { id: this.primaryKeyAttributes.length === 1 ? this.keyOf(record) : record } });
     throw new Error(`Operacion pendiente "${record.operation}" no soportada`);
   }
   #pendingBody(record) {
-    const { pending, operation, status, message, errors, ...body } = record;
+    const { pending, operation, status, message, errors, pendingTenantId, ...body } = record;
     return body;
+  }
+
+  #pendingScope(record) {
+    const tenantId = record?.pendingTenantId ?? this.client.tenantId?.();
+    return tenantId === undefined ? {} : { ...this.#tenantScope(), pendingTenantId: tenantId };
+  }
+
+  #tenantScope() {
+    const tenantId = this.client.tenantId?.();
+    return this.tenant?.attribute && tenantId !== undefined ? { [this.tenant.attribute]: tenantId } : {};
+  }
+
+  #assertPendingTenant(record) {
+    const tenantId = record?.pendingTenantId ?? (this.tenant?.attribute ? record?.[this.tenant.attribute] : undefined);
+    if (tenantId !== undefined && tenantId !== this.client.tenantId?.()) {
+      throw new ApiClientError("El registro pertenece a otro tenant", { status: 409, response: { ok: false, code: "TENANT_MISMATCH" } });
+    }
   }
 
   #throwPushError(result) {

@@ -20,6 +20,7 @@ export function createApiVue(client) {
   const event = ref(null);
   const error = ref(null);
   const ready = ref(false);
+  const tenantChanging = ref(Boolean(client.tenantChanging?.()));
 
   const refreshSession = async () => {
     try {
@@ -33,7 +34,9 @@ export function createApiVue(client) {
     event.value = nextEvent;
     connected.value = Boolean(client.connected?.());
     lastReceivedAt.value = nextEvent?.lastReceivedAt || client.lastReceivedAt?.() || null;
-    if (["login", "logout", "auth-expired"].includes(nextEvent?.source)) refreshSession();
+    tenantChanging.value = Boolean(client.tenantChanging?.());
+    if (nextEvent?.error) error.value = nextEvent.error;
+    if (["login", "logout", "auth-expired", "session-updated", "tenant-changed", "tenant-change-finished"].includes(nextEvent?.source)) refreshSession();
   });
 
   const initialized = refreshSession().finally(() => {
@@ -48,6 +51,7 @@ export function createApiVue(client) {
     event: readonly(event),
     error: readonly(error),
     ready: readonly(ready),
+    tenantChanging: readonly(tenantChanging),
     initialized,
     async login(credentials, options) {
       error.value = null;
@@ -88,6 +92,14 @@ export function createApiVue(client) {
     },
   };
 
+  for (const method of ["getTenants", "setUserTenant", "setSessionTenant", "updateUserOptions", "updateSessionOptions"]) {
+    api[method] = async (...args) => {
+      error.value = null;
+      try { return await client[method](...args); }
+      catch (cause) { error.value = cause; throw cause; }
+      finally { await refreshSession(); }
+    };
+  }
   return api;
 }
 

@@ -5,7 +5,7 @@ export function errorHandler(err, req, res, _next) {
   if (res.headersSent) return;
 
   const txId = getContext()?.txId || req.headers["x-transaction-id"] || null;
-  const status = err.status || err.statusCode || 500;
+  const status = err.status || err.statusCode || (err.name === "TenantError" && err.code !== "SEQ_TENANT_CONFIG" ? 403 : 500);
   const code = err.type === "entity.parse.failed" ? "INVALID_JSON" : err.code || "INTERNAL_ERROR";
   const errors = err.errors && typeof err.errors === "object" ? err.errors : {};
   const message = status >= 500 && process.env.NODE_ENV === "production" ? "Error interno" : err.message;

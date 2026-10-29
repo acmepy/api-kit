@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ejemplo de tenants · api-kit</title>
+  <link rel="stylesheet" href="/assets/bootstrap/css/bootstrap.min.css">
+  <script type="importmap">
+    {"imports":{"api/client":"/assets/api/api-client.js","yep":"/assets/yep/yep.js","idb-keyval":"/assets/idb-keyval/index.js"}}
+  </script>
+</head>
+<body class="bg-body-tertiary">
+  <main class="container py-4">
+    <h1 class="h4">Tenants y facturas maestro/detalle</h1>
+    <p class="text-body-secondary">Cada empresa tiene sus propias facturas. Al cambiar de empresa, el cliente reemplaza la caché.</p>
+    <div id="message" class="alert alert-info" role="status">Ingresa con demo / 1234.</div>
+    <section class="card mb-3">
+      <div class="card-body">
+        <form id="login" class="row g-2 align-items-end">
+          <div class="col-sm-4"><label class="form-label" for="username">Usuario</label><input id="username" class="form-control" value="demo" required autocomplete="username"></div>
+          <div class="col-sm-4"><label class="form-label" for="password">Clave</label><input id="password" class="form-control" type="password" value="1234" required autocomplete="current-password"></div>
+          <div class="col-sm-4"><button class="btn btn-primary">Ingresar</button></div>
+        </form>
+        <div id="session" hidden>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-5"><label for="tenant" class="form-label">Empresa de la sesión</label><select id="tenant" class="form-select"></select></div>
+            <div class="col-md-7 d-flex gap-2 flex-wrap">
+              <button id="change" class="btn btn-primary">Cambiar empresa</button>
+              <button id="defaultTenant" class="btn btn-outline-secondary">Usar como predeterminada</button>
+              <button id="logout" class="btn btn-outline-danger">Salir</button>
+            </div>
+          </div>
+          <p id="identity" class="small text-body-secondary mt-2 mb-0"></p>
+        </div>
+      </div>
+    </section>
+    <div id="workspace" hidden>
+      <div class="row g-3">
+        <section class="col-lg-5">
+          <div class="card"><div class="card-body">
+            <h2 class="h6">Nueva factura con detalles</h2>
+            <form id="create">
+              <label class="form-label" for="customer">Cliente</label><input id="customer" class="form-control mb-3" required maxlength="100">
+              <div id="lines"></div>
+              <button id="addLine" type="button" class="btn btn-outline-secondary btn-sm mb-3">Agregar línea</button>
+              <div><button class="btn btn-success">Crear factura</button></div>
+            </form>
+          </div></div>
+        </section>
+        <section class="col-lg-7">
+          <div class="card"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 mb-0">Facturas de la empresa actual</h2><button id="refresh" class="btn btn-outline-secondary btn-sm">Actualizar</button></div>
+            <div id="invoices"></div>
+          </div></div>
+        </section>
+      </div>
+      <section class="card mt-3"><div class="card-body"><h2 class="h6">Última respuesta</h2><pre id="result" class="small mb-0 text-wrap"></pre></div></section>
+    </div>
+  </main>
+  <script type="module" src="/browser.js"></script>
+</body>
+</html>

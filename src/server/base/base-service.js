@@ -4,6 +4,7 @@ import { Op } from "seq";
 import yep from 'yep'
 import { getContext } from "../context/request-context.js";
 import { nestedSchemaValidationOptions, validateResourceSchema } from "./nested-schema-validation.js";
+import { tenantValues, tenantAttribute } from "../context/tenant-context.js";
 
 const FILTER_OPERATORS = { eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between };
 const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
@@ -53,6 +54,7 @@ export class BaseService {
   }
 
   async list({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const context = getContext();
     const page = Math.max(1, parseInt(query?.page, 10) || 1);
     const maxSize = this.#config.maxSize || 100;
@@ -66,6 +68,7 @@ export class BaseService {
   }
 
   async get({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const key = await this.#primaryKey(params, query);
     const instance = await this.#model.findByPk(key, { plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName)
@@ -80,14 +83,16 @@ export class BaseService {
   }
 
   async create({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const { masterBody, detailBody, include, hasDetails } = this.#masterDetailsContext(body);
-    const data = await validateResourceSchema(this.#schemas.create, masterBody, transaction);
+    const data = await validateResourceSchema(this.#schemas.create, masterBody, transaction, this.#model);
     const payload = hasDetails ? { ...detailBody, ...data } : data;
     const instance = await this.#model.create(payload, { ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     return { data: instance.toJSON() };
   }
 
   async update({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const { masterBody, detailBody, include, hasDetails } = this.#masterDetailsContext(body);
     const pk = this.#model.primaryKeyAttribute;
     const key = await this.#primaryKey(params, query);
@@ -100,7 +105,7 @@ export class BaseService {
         }
       }
     }
-    const data = await validateResourceSchema(this.#schemas.update, { ...masterBody, __uniqueId: key }, transaction);
+    const data = await validateResourceSchema(this.#schemas.update, { ...masterBody, __uniqueId: key }, transaction, this.#model);
     const payload = hasDetails ? { ...detailBody, ...data, ...where } : data;
     await this.#model.update(payload, { where, ...(hasDetails && { include, ...nestedSchemaValidationOptions(this.#model, include) }), ...(transaction && { transaction }) });
     const instance = await this.#model.findByPk(composite ? key : data[pk] ?? key, { plain: true, ...(hasDetails && { include }), ...(transaction && { transaction }) });
@@ -109,6 +114,7 @@ export class BaseService {
   }
 
   async remove({ params, query, body, transaction = null } = {}) {
+    await this.#checkTenantQuery(this.#model, query);
     const key = await this.#primaryKey(params, query);
     const instance = await this.#model.findByPk(key, { ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName)
@@ -117,17 +123,21 @@ export class BaseService {
   }
 
   async createDetail({ params, query, body, transaction = null } = {}) {
+    await this.#detailParent(params, query, transaction);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail);
+    await this.#checkTenantQuery(target, query);
     if (typeof foreignKey !== "string") throw new ValidationError("La ruta de detalle requiere una clave foranea simple");
     const parentId = await this.#castFilterValue(foreignKey, params.id, target.rawAttributes[foreignKey]);
-    const data = await validateResourceSchema(target.resourceSchemas.create, { ...body, [foreignKey]: parentId }, transaction)
+    const data = await validateResourceSchema(target.resourceSchemas.create, { ...body, [foreignKey]: parentId }, transaction, target)
     const instance = await target.create({ ...data, [foreignKey]: parentId }, { ...(transaction && { transaction }) })
     return { data: instance.toJSON() }
   }
 
   async updateDetail({ params, query, body, transaction = null } = {}) {
+    await this.#detailParent(params, query, transaction);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail)
-    const data = await validateResourceSchema(target.resourceSchemas.update, body, transaction)
+    await this.#checkTenantQuery(target, query);
+    const data = await validateResourceSchema(target.resourceSchemas.update, body, transaction, target)
     const name = params.detail;
     const where = await this.#detailWhere(target, foreignKey, params, body);
     await target.update(data, { where, ...(transaction && { transaction }) })
@@ -137,7 +147,9 @@ export class BaseService {
   }
 
   async removeDetail({ params, query, body, transaction = null } = {}) {
+    await this.#detailParent(params, query, transaction);
     const { model: target, foreignKey } = this.#model.getAssociationIncludes().find(a => a.as == params.detail)
+    await this.#checkTenantQuery(target, query);
     const name = params.detail;
     const where = await this.#detailWhere(target, foreignKey, params, body);
     const instance = await target.findOne({ where, ...(transaction && { transaction }) })
@@ -150,7 +162,7 @@ export class BaseService {
 
   async #primaryKey(params = {}, query = {}) {
     const keys = this.#model.primaryKeyAttributes || [this.#model.primaryKeyAttribute];
-    if (keys.length <= 1) return params.id;
+    if (keys.length <= 1) return this.#castFilterValue(keys[0], params.id, this.#model.rawAttributes[keys[0]]);
     const supplied = params.id && typeof params.id === "object" && !Array.isArray(params.id)
       ? params.id : { ...query, [keys[0]]: params.id };
     const key = {};
@@ -162,6 +174,20 @@ export class BaseService {
       key[field] = await this.#castFilterValue(field, value, this.#model.rawAttributes[field]);
     }
     return key;
+  }
+
+  async #checkTenantQuery(model, query) {
+    const attribute = tenantAttribute(model);
+    const values = attribute && query?.[attribute] !== undefined
+      ? { [attribute]: await this.#castFilterValue(attribute, query[attribute], model.rawAttributes[attribute]) } : {};
+    tenantValues(model, values);
+  }
+
+  async #detailParent(params, query, transaction) {
+    if (!tenantAttribute(this.#model)) return;
+    const key = await this.#primaryKey(params, query);
+    const parent = await this.#model.findByPk(key, { ...(transaction && { transaction }) });
+    if (!parent) throw new NotFoundError(this.#model.modelName);
   }
 
   async #detailWhere(target, foreignKey, params, body) {

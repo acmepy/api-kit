@@ -1,8 +1,10 @@
 import yep from "yep";
 import { Model, DataTypes } from "seq";
 import { schemaValidationTransaction } from "../base/nested-schema-validation.js";
+import { tenantAttribute } from "../context/tenant-context.js";
+import { ConfigError } from "../errors/config-error.js";
 
-const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes"]);
+const MODEL_OPTION_KEYS = new Set([ "modelName", "tableName", "timestamps", "createdAt", "updatedAt", "alias", "hooks", "indexes", "tenant"]);
 const ATTRIBUTE_OPTION_KEYS = new Set(["type", "primaryKey", "autoIncrement", "allowNull", "defaultValue", "unique", "field", "references", "get", "set"]);
 const DECLARATIVE_RULE_KEYS = new Set(["title", "required", "nullable", "default", "defaultValue", "oneOf", "notOneOf", "in", "pattern", "regexp", "matches", "email", "positive", "min", "max", "maxLength", "between"]);
 const ATTRIBUTE_METADATA_KEYS = new Set([...ATTRIBUTE_OPTION_KEYS, ...DECLARATIVE_RULE_KEYS, "schema", "create", "update", "precision", "scale", "itemType", "items", "of", "returnType", "fields"]);
@@ -37,6 +39,17 @@ export function defineResource(definition = {}) {
   ResourceModel.resourceDefinition = definition;
 
   return { model: ResourceModel, schemas: generatedSchemas, attributes: modelAttributes, definition: normalizedAttributes, options: modelOptions};
+}
+
+export function configureResourceTenant(resource, tenant) {
+  const protection = resource?.options?.tenant ?? resource?.model?.options?.tenant;
+  if (!protection) return;
+  if (!tenant) throw new ConfigError("Un recurso con tenant requiere habilitar tenant en createApi");
+  const options = protection === true ? { attribute: tenant.attribute } : protection;
+  if (!Object.hasOwn(resource.model.rawAttributes, options.attribute)) throw new ConfigError(`Falta el atributo de tenant "${options.attribute}"`);
+  resource.options.tenant = options;
+  resource.model.options.tenant = options;
+  Object.assign(resource.schemas, buildSchemas(resource.definition, resource.model.resourceDefinition.schemas || {}, resource.model.resourceDefinition, resource.model));
 }
 
 function pickModelOptions(definition) {
@@ -109,6 +122,7 @@ function buildSchemas(attributes, explicitSchemas, definition = {}, model) {
 function buildShape(attributes, operation, model) {
   const shape = {};
   for (const [name, definition] of Object.entries(attributes)) {
+    if (name === tenantAttribute(model)) continue;
     if (!shouldIncludeInSchema(definition, operation)) continue;
     const schema = resolveValidation(definition, operation, model, primaryKeyName(attributes));
     if (schema) shape[name] = schema;

@@ -6,16 +6,19 @@ import { ok } from "../http/response.js";
 import { log } from "../logger/index.js";
 import { joinPaths } from "../utils/paths.js";
 import { defineResource } from "../config/config-resource.js";
+import { tenantAttribute } from "../context/tenant-context.js";
 
-export function createAuditResource() {
+export function createAuditResource(tenant = false) {
   return defineResource({
     modelName: "audit",
     //tableName: "audit",
     timestamps: true,
+    ...(tenant && { tenant: { attribute: tenant.attribute } }),
     indexes: [
       { name: "idx_audit_created_at", columns: ["createdAt"] },
     ],
     attributes: {
+      ...(tenant && { [tenant.attribute]: { type: tenant.type, maxLength: tenant.maxLength, allowNull: false, create: false, update: false } }),
       id: { type: "integer", primaryKey: true, autoIncrement: true },
       txId: { type: "string", maxLength: 50, allowNull: false },
       clientIp: { type: "string", maxLength: 50, allowNull: false },
@@ -131,10 +134,10 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
     operationId: "audit.sse",
     serviceMethod: "sse",
     summary: "Cambios en vivo",
-    handler: ({ config, modules, authContext }) => async (req, res) => {
+    handler: ({ config, modules, authContext, AuditModel }) => async (req, res) => {
       const [ip, session, userAgent] = [req.ip || req.socket?.remoteAddress || "", req.session?.id || "no-session", req.headers["user-agent"] || ""];
       const expiresAt = await bearerTokenExpiresAt(req, authContext);
-      const client = {id: ++nextClientId, req, res, sessionId: req.session?.id, connectedAt: new Date().toISOString(), expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, heartbeat: null, expirationTimer: null, closed: false};
+      const client = {id: ++nextClientId, req, res, sessionId: req.session?.id, tenantId: req.session?.tenantId, connectedAt: new Date().toISOString(), expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null, heartbeat: null, expirationTimer: null, closed: false};
       clients.set(client.id, client);
 
       const closeClient = (event = "session-closed") => {
@@ -152,12 +155,20 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
       const validateClientSession = async (options = {}) => {
         if (!client.sessionId || !authContext?.adapter?.findSessionById) return true;
         const session = await findSessionById(authContext.adapter, client.sessionId, options);
-        if (session && session.active !== false) return true;
+        if (session && session.active !== false) {
+          if (!config.tenant) return true;
+          if (session.tenantId !== client.tenantId) { closeClient("tenant-changed"); return false; }
+          const user = await authContext.adapter.findUserById(session.userId);
+          const tenant = await authContext.adapter.findTenantById(client.tenantId);
+          const allowed = await authContext.adapter.findTenantsByUserId(session.userId);
+          if (user?.active !== false && user && tenant?.active !== false && tenant && allowed.some(item => item.id === client.tenantId)) return true;
+        }
         closeClient("session-closed");
         return false;
       };
 
       client.sendChange = (change, options = {}) => {
+        if (config.tenant && change[tenantAttribute(AuditModel)] !== client.tenantId) return;
         Promise.resolve(validateClientSession(options))
           .then((active) => active && canViewAuditChange(change, { req, modules, authContext }))
           .then((allowed) => {
@@ -171,6 +182,10 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
           .catch((error) => log("error", "audit.sse", error));
       };
       config.audit.events.on("change", client.sendChange);
+      client.tenantChanged = ({ sessionId, tenantId }) => {
+        if (sessionId === client.sessionId && tenantId !== client.tenantId) closeClient("tenant-changed");
+      };
+      config.audit.events.on("session-tenant-changed", client.tenantChanged);
 
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
@@ -219,6 +234,7 @@ function cleanupSseClient(clients, client, config) {
     client.expirationTimer = null;
   }
   if (client.sendChange) config.audit.events.off("change", client.sendChange);
+  if (client.tenantChanged) config.audit.events.off("session-tenant-changed", client.tenantChanged);
 }
 
 async function bearerTokenExpiresAt(req, authContext) {
@@ -339,7 +355,12 @@ async function writeAudit(AuditModel, auditConfig, moduleConfig, action, model, 
     },
     { hooks: false, ...(options.transaction && { transaction: options.transaction }) },
   );
-  if (options.emit !== false) auditConfig?.events?.emit("change", auditRow.toJSON(), { transaction: options.transaction });
+  if (options.emit !== false) {
+    const change = auditRow.toJSON();
+    const emit = () => auditConfig?.events?.emit("change", change);
+    if (options.transaction) options.transaction.afterCommit(emit);
+    else emit();
+  }
 }
 
 async function findSessionById(adapter, sessionId, options = {}) {

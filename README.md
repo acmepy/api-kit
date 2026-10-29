@@ -204,6 +204,91 @@ auth: {
 
 `IAM_SECRET` es obligatorio cuando `auth` esta habilitado. `tokenExpiresIn` controla la vigencia del Bearer JWT. Las rutas protegidas usan permisos generados por ruta, por ejemplo `clientes.list`, `clientes.create` o `audit.sse`.
 
+## Tenants
+
+Requiere IAM con soporte de tenants y Seq 1.4.1. El soporte es opcional. `createApi({ tenant: true })` usa el atributo `tenantId`; para otro nombre usa `tenant: { attribute: "codEmpresa" }`. El tipo de la columna de auditoria es `integer` por defecto; se puede indicar `type` y, para strings, `maxLength`. Debe coincidir con el tipo del identificador autenticado en IAM.
+
+```js
+import { createApi, getContext } from "api/server";
+import { Seq } from "seq";
+
+const seq = new Seq({
+  adapter,
+  getContext,
+  tenant: { attribute: "codEmpresa" },
+});
+
+const api = await createApi({
+  seq,
+  basePath: "/api",
+  tenant: { attribute: "codEmpresa" },
+  auth: { secret: process.env.JWT_SECRET },
+  audit: true,
+  schema: true,
+  modules: [{
+    name: "facturas",
+    modelName: "Factura",
+    tenant: true,
+    attributes: {
+      id: { type: "integer", primaryKey: true, autoIncrement: true },
+      codEmpresa: { type: "integer", allowNull: false },
+      descripcion: { type: "string", allowNull: false },
+    },
+  }],
+});
+
+await seq.authenticate();
+await seq.init();
+await seq.sync();
+```
+
+Cada recurso protegido declara `tenant: true` para el atributo configurado en `createApi`, o `tenant: { attribute: "empresaId" }` para otro atributo. Debe existir en `attributes`; tambien se aplica a los recursos de detalle. Los recursos sin tenant o con `tenant: false` siguen siendo globales. El aislamiento de consultas y escrituras lo realiza Seq.
+
+IAM permanece global. Su adaptador creado por api-kit recibe `tenant: true`; si proporcionas uno propio, debes habilitarlo al construirlo, por ejemplo `new SeqAdapter({ seq, tenant: true })`. IAM toma el tenant activo de `sessions.tenantId`, valida que este activo y asignado al usuario y lo coloca en `getContext().tenantId`. No se toma de headers. Hay que migrar las tablas existentes y configurar `tenants`, `usersTenants` y el tenant predeterminado del usuario antes del login; api-kit no concede asignaciones ni migra datos automaticamente.
+
+Los schemas generados excluyen el atributo de tenant de los datos editables. El servidor comprueba el payload original antes de Yep: enviar otro tenant devuelve un error, incluso en detalles. El cliente descubre el atributo protegido y envia su tenant esperado como parametro de consulta en las peticiones del recurso. Ese parametro es una comprobacion contra la sesion autenticada; no selecciona el tenant. Las rutas directas a un detalle verifican ademas que su maestro sea accesible.
+
+Con tenants habilitados se autentica `schema.json` por defecto, salvo configuracion explicita de `schema.auth`. El usuario necesita los permisos del manifiesto y del recurso, igual que en el resto de endpoints. Falta de contexto, seleccion no autorizada y discrepancias devuelven errores explicitos. No se asume un tenant predeterminado ante un contexto ausente.
+
+La auditoria incorpora el atributo configurado y es un modelo protegido por Seq: `/changes` queda filtrado por tenant. Los eventos se publican despues del commit. SSE filtra cada evento por el tenant fijado al abrir la conexion y cierra la conexion si cambia la seleccion de su sesion, se revoca la asignacion o se desactiva el tenant/usuario/sesion. No reutiliza el contexto del emisor para decidir a quien enviar el evento.
+
+Rutas de IAM expuestas bajo `basePath`:
+
+| Ruta | Cuerpo | Alcance |
+| --- | --- | --- |
+| `GET /me/tenants` | Ninguno | Tenants activos autorizados. |
+| `PATCH /me/tenant` | `{ tenantId }` | Predeterminado del usuario; no cambia sesiones abiertas. |
+| `PATCH /session/tenant` | `{ tenantId }` | Activo en la sesion actual. |
+| `PATCH /me/options` | `{ options }` | Preferencias del usuario. |
+| `PATCH /session/options` | `{ options }` | Preferencias de la sesion. |
+
+Las rutas de opciones tambien estan disponibles sin habilitar tenants. No permiten seleccionar tenant desde `options`.
+
+En el cliente:
+
+```js
+await client.getTenants();
+await client.setUserTenant(2);             // Solo cambia el predeterminado.
+await client.setSessionTenant(2);          // Cambia, limpia caches y descarga.
+await client.updateUserOptions({ idioma: "es" });
+await client.updateSessionOptions({ tema: "oscuro" });
+await client.refreshSession();
+```
+
+`setSessionTenant()` rechaza un cambio con `TENANT_PENDING_OPERATIONS` si hay pendientes locales; no los borra ni los envia automaticamente. Primero deben enviarse con `pending.push()` o cancelarse. Para cambiar se detienen ping/SSE y precargas, se cancelan y esperan las operaciones anteriores, se actualiza la sesion en IAM y se limpian caches, metadatos de sincronizacion y servicios. Se descubre de nuevo el manifiesto, se descargan los recursos accesibles y se restablecen changes/SSE segun su configuracion. Las respuestas antiguas no pueden repoblar la nueva cache. Obtiene otra vez los servicios mediante `client.service(nombre)` despues del cambio; las instancias anteriores se rechazan con `SERVICE_REPLACED`.
+
+El cliente comprueba tambien la sesion persistida al arrancar. En navegador, `BroadcastChannel` avisa a las otras instancias que comparten sesion y configuracion, y SSE informa de los cambios realizados desde otras conexiones. Si se detecta un cambio externo con pendientes, devuelve `TENANT_CHANGED_WITH_PENDING`, conserva los datos y bloquea envios hasta restaurar el tenant anterior con `setSessionTenant()`. Cada pendiente conserva `pendingTenantId` como metadato local; no se envia al servidor. Si una descarga falla despues de cambiar la sesion, el error se propaga y los datos del tenant anterior permanecen descartados; puede reintentarse la sincronizacion del nuevo tenant con `syncServices(true)`.
+
+En Vue, `useApi()` expone los mismos metodos y el ref `tenantChanging`, ademas de actualizar `session` y `error`. `useApiService()` obtiene automaticamente la instancia actual del servicio al operar:
+
+```js
+const api = useApi();
+await api.setSessionTenant(2);
+// api.tenantChanging y api.session son refs.
+```
+
+Verificado con SQLite real, peticiones HTTP concurrentes, detalles y claves compuestas, auditoria/SSE y pruebas del cliente sobre pendientes, respuestas tardias y conexiones compartidas.
+
 ## Logger
 
 `logging` puede ser `false`, `true`, una funcion o un objeto tipo logger. Cuando `auth` esta habilitado, el mismo logger se reenvia a `iam`; se puede sobrescribir solo para autenticacion con `auth.logging`. `api-kit` tambien pasa `getContext` a IAM para que sus logs incluyan el `txId` de la peticion, sin modificar el logger.
