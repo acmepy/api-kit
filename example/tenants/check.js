@@ -5,6 +5,7 @@ import { start } from "./app.js";
 
 const example = await start({ port: 0, database: ":memory:" });
 const client = createApiClient({ url: `${example.url}/api`, sse: false, changes: false, serviceSyncDelay: false });
+const admin = createApiClient({ url: `${example.url}/api`, sse: false, changes: false, serviceSyncDelay: false });
 try {
   for (const asset of ["/", "/browser.js", "/assets/api/api-client.js", "/assets/yep/yep.js", "/assets/idb-keyval/index.js", "/assets/bootstrap/css/bootstrap.min.css"]) {
     assert.equal((await fetch(example.url + asset)).status, 200, asset);
@@ -41,8 +42,46 @@ try {
   await client.logout();
   await client.login({ username: "demo", password: "1234" });
   assert.equal((await client.session()).tenantId, 2, "New login uses the user's default tenant");
-  console.log("OK: login, tenants, isolation, nested create, master/detail CRUD, default tenant and assets.");
+  await assert.rejects(() => client.request("/admin/tenants"), error => error.status === 403);
+  assert.equal((await fetch(`${example.url}/api/admin/tenants`)).status, 401);
+  await admin.login({ username: "admin", password: "1234" });
+  const tenantsBefore = (await admin.request("/admin/tenants")).data.length;
+  for (const maxFacturas of [-1, 1.5, null, "2"]) {
+    await assert.rejects(() => admin.request("/admin/tenants", { method: "POST", body: { name: "Inválido", maxFacturas } }), error => error.status === 400);
+  }
+  assert.equal((await admin.request("/admin/tenants")).data.length, tenantsBefore);
+  const { data: createdTenant } = await admin.request("/admin/tenants", { method: "POST", body: { name: "Empresa nueva", maxFacturas: 2 } });
+  assert.ok((await client.getTenants()).data.some(tenant => tenant.id === createdTenant.id));
+  await client.setSessionTenant(createdTenant.id);
+  await assert.rejects(() => client.service("facturas").create({ cliente: "Inválido", items: [{ articulo: "Error", cantidad: 0 }] }), error => error.status === 400);
+  assert.equal((await client.request("/tenant-plan")).data.facturas, 0, "Failed nested creation consumes no capacity");
+  const attempts = await Promise.allSettled([1, 2, 3].map(n => client.request("/facturas", {
+    method: "POST", body: { cliente: `Concurrente ${n}` },
+  })));
+  assert.equal(attempts.filter(result => result.status === "fulfilled").length, 2);
+  const failures = attempts.filter(result => result.status === "rejected");
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].reason.code, "TENANT_INVOICE_LIMIT");
+  assert.equal(failures[0].reason.status, 409);
+  const row = (await admin.request("/admin/tenants")).data.find(tenant => tenant.id === createdTenant.id);
+  assert.equal(row.facturas, 2); assert.equal(row.maxFacturas, 2);
+  await assert.rejects(() => client.request(`/admin/tenants/${createdTenant.id}/limit`, { method: "PATCH", body: { maxFacturas: 100 } }), error => error.status === 403);
+  await admin.request(`/admin/tenants/${createdTenant.id}/limit`, { method: "PATCH", body: { maxFacturas: 1 } });
+  assert.equal((await client.service("facturas").pull()).data.length, 2, "Lowering the limit preserves invoices");
+  await assert.rejects(() => client.service("facturas").create({ cliente: "Sobre el límite" }), error => error.code === "TENANT_INVOICE_LIMIT");
+  const invoices = (await client.service("facturas").list()).data;
+  await client.service("facturas").update(invoices[0].id, { cliente: "Edición permitida" });
+  await admin.request(`/admin/tenants/${createdTenant.id}/limit`, { method: "PATCH", body: { maxFacturas: 2 } });
+  await client.service("facturas").remove(invoices[0].id);
+  await client.service("facturas").create({ cliente: "Espacio liberado" });
+  assert.equal((await client.request("/tenant-plan")).data.facturas, 2);
+  await admin.request(`/admin/tenants/${createdTenant.id}/limit`, { method: "PATCH", body: { maxFacturas: 0 } });
+  await assert.rejects(() => client.service("facturas").create({ cliente: "Bloqueado" }), error => error.code === "TENANT_INVOICE_LIMIT");
+  await client.setSessionTenant(2);
+  assert.equal((await client.request("/tenant-plan")).data.maxFacturas, 10, "Limits are independent across tenants");
+  console.log("OK: login, master/detail, isolation, administration, permissions, quotas, concurrent creates and rollback.");
 } finally {
   client.destroy();
+  admin.destroy();
   await example.close();
 }

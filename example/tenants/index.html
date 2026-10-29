@@ -13,7 +13,7 @@
   <main class="container py-4">
     <h1 class="h4">Tenants y facturas maestro/detalle</h1>
     <p class="text-body-secondary">Cada empresa tiene sus propias facturas. Al cambiar de empresa, el cliente reemplaza la caché.</p>
-    <div id="message" class="alert alert-info" role="status">Ingresa con demo / 1234.</div>
+    <div id="message" class="alert alert-info" role="status">Negocio: demo / 1234. Administración: admin / 1234.</div>
     <section class="card mb-3">
       <div class="card-body">
         <form id="login" class="row g-2 align-items-end">
@@ -35,6 +35,21 @@
       </div>
     </section>
     <div id="workspace" hidden>
+      <section id="administration" class="card mb-3" hidden><div class="card-body">
+        <h2 class="h6">Administración de tenants</h2>
+        <p class="small text-body-secondary">Crear una empresa también asigna acceso al usuario demo y al administrador que la crea. El límite cuenta facturas existentes, no líneas.</p>
+        <form id="createTenant" class="row g-2 align-items-end mb-3">
+          <div class="col-md-6"><label for="tenantName" class="form-label">Nombre del nuevo tenant</label><input id="tenantName" class="form-control" required maxlength="100"></div>
+          <div class="col-md-3"><label for="tenantLimit" class="form-label">Máximo de facturas</label><input id="tenantLimit" class="form-control" type="number" min="0" step="1" value="2" required></div>
+          <div class="col-md-3"><button class="btn btn-primary">Crear tenant</button></div>
+        </form>
+        <div class="table-responsive"><table class="table table-sm align-middle">
+          <thead><tr><th>Tenant</th><th>Facturas actuales</th><th>Límite</th><th></th></tr></thead>
+          <tbody id="tenantRows"></tbody>
+        </table></div>
+        <p class="small text-body-secondary mb-0">Cero bloquea nuevas facturas. Bajar el límite conserva las existentes. Borrar una factura libera espacio.</p>
+      </div></section>
+      <p id="quota" class="alert alert-secondary py-2 small" role="status"></p>
       <div class="row g-3">
         <section class="col-lg-5">
           <div class="card"><div class="card-body">

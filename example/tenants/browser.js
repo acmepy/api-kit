@@ -6,6 +6,7 @@ const client = createApiClient({ url: `${location.origin}/api`, prefix: "tenant-
 const $ = id => document.getElementById(id);
 // Reacquire the service after every tenant switch: old instances are invalidated.
 const facturas = () => client.service("facturas");
+let administrator = false;
 
 async function run(action) {
   const buttons = [...document.querySelectorAll("button")];
@@ -35,7 +36,14 @@ async function showSession() {
   const session = await client.session();
   $("login").hidden = Boolean(session?.token);
   $("session").hidden = $("workspace").hidden = !session?.token;
+  administrator = false;
+  $("administration").hidden = true;
   if (!session?.token) return;
+  try {
+    await client.request("/admin/tenants");
+    administrator = true;
+    $("administration").hidden = false;
+  } catch (error) { if (error.status !== 403) throw error; }
   const tenants = await client.getTenants();
   $("tenant").replaceChildren(...tenants.data.map(tenant => new Option(tenant.name, tenant.id)));
   $("tenant").value = String(session.tenantId);
@@ -88,7 +96,39 @@ async function refresh() {
   }
   $("invoices").replaceChildren(...blocks);
   if (!blocks.length) $("invoices").textContent = "Esta empresa todavía no tiene facturas.";
+  const { data: plan } = await client.request("/tenant-plan");
+  $("quota").textContent = `Empresa actual: ${plan.facturas} / ${plan.maxFacturas ?? "sin configurar"} facturas.`;
+  if (administrator) await refreshAdministration();
 }
+
+async function refreshAdministration() {
+  const { data } = await client.request("/admin/tenants");
+  $("tenantRows").replaceChildren(...data.map(tenant => {
+    const row = document.createElement("tr");
+    const name = document.createElement("td"); name.textContent = `#${tenant.id} ${tenant.name}`;
+    const used = document.createElement("td"); used.textContent = tenant.facturas;
+    const limit = document.createElement("td");
+    const input = document.createElement("input"); input.type = "number"; input.min = "0"; input.step = "1";
+    input.className = "form-control form-control-sm"; input.value = tenant.maxFacturas ?? "";
+    input.setAttribute("aria-label", `Límite de ${tenant.name}`); limit.append(input);
+    const actions = document.createElement("td");
+    actions.append(button("Guardar límite", () => client.request(`/admin/tenants/${tenant.id}/limit`, {
+      method: "PATCH", body: { maxFacturas: input.value === "" ? null : Number(input.value) },
+    })));
+    row.append(name, used, limit, actions); return row;
+  }));
+}
+
+$("createTenant").onsubmit = event => {
+  event.preventDefault();
+  run(async () => {
+    const result = await client.request("/admin/tenants", { method: "POST",
+      body: { name: $("tenantName").value, maxFacturas: Number($("tenantLimit").value) } });
+    $("createTenant").reset();
+    await showSession(); await refresh();
+    return result;
+  });
+};
 
 $("login").onsubmit = event => {
   event.preventDefault();

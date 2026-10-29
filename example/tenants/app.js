@@ -5,6 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import modules from "./modules.js";
+import { definePlans, installAdministration } from "./administration.js";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(directory, "../..");
@@ -29,8 +30,11 @@ export async function start({ port = Number(process.env.TENANT_PORT || 3001), da
   };
   try {
     api = await createApi({ seq, modules, basePath: "/api", tenant: { attribute: "codEmpresa" },
+      paths: { services: path.join(directory, "services") },
       auth: { secret: process.env.TENANT_SECRET || "tenant-example-development-secret" },
       schema: true, audit: true });
+    const plans = definePlans(seq);
+    installAdministration(api, plans);
     api.app.use("/assets/api", express.static(path.join(root, "dist")));
     api.app.use("/assets/yep", express.static(path.join(root, "node_modules/yep/dist")));
     api.app.use("/assets/idb-keyval", express.static(path.join(root, "node_modules/idb-keyval/dist")));
@@ -39,7 +43,7 @@ export async function start({ port = Number(process.env.TENANT_PORT || 3001), da
     await seq.authenticate();
     await seq.init();
     await seq.sync();
-    await seed(api);
+    await seed(api, plans);
     server = await new Promise((resolve, reject) => {
       const listener = api.app.listen(port, "127.0.0.1", () => resolve(listener));
       listener.once("error", reject);
@@ -51,13 +55,17 @@ export async function start({ port = Number(process.env.TENANT_PORT || 3001), da
   }
 }
 
-async function seed(api) {
+async function seed(api, plans) {
   const m = api.auth.models;
   for (const [id, name] of [[1, "Empresa Norte"], [2, "Empresa Sur"]]) {
     if (!await m.tenants.findByPk(id)) await m.tenants.create({ id, name });
+    if (!await plans.findByPk(id)) await plans.create({ tenantId: id, maxFacturas: 10 });
   }
   if (!await m.users.findByPk("demo")) {
     await m.users.create({ id: "demo", name: "Demo tenants", password: "1234", tenantId: 1 });
+  }
+  if (!await m.users.findByPk("admin")) {
+    await m.users.create({ id: "admin", name: "Administrador", password: "1234", tenantId: 1 });
   }
   let role = await m.roles.findOne({ where: { role: "tenant-demo" } });
   if (!role) role = await m.roles.create({ role: "tenant-demo" });
@@ -69,6 +77,12 @@ async function seed(api) {
     if (!await m.usersTenants.findOne({ where: { userId: "demo", tenantId } })) {
       await m.usersTenants.create({ userId: "demo", tenantId });
     }
+    if (!await m.usersTenants.findOne({ where: { userId: "admin", tenantId } })) {
+      await m.usersTenants.create({ userId: "admin", tenantId });
+    }
+  }
+  if (!await m.usersRoles.findOne({ where: { userId: "admin", roleId } })) {
+    await m.usersRoles.create({ userId: "admin", roleId });
   }
   const permissions = new Set(api.routes.getAll().flatMap(route => route.permissions || []));
   for (const permission of permissions) {
@@ -78,6 +92,17 @@ async function seed(api) {
     if (!await m.rolesPermissions.findOne({ where: { roleId, permissionId } })) {
       await m.rolesPermissions.create({ roleId, permissionId });
     }
+  }
+  let adminRole = await m.roles.findOne({ where: { role: "tenant-admin" } });
+  if (!adminRole) adminRole = await m.roles.create({ role: "tenant-admin" });
+  const adminRoleId = adminRole.get("id");
+  if (!await m.usersRoles.findOne({ where: { userId: "admin", roleId: adminRoleId } })) {
+    await m.usersRoles.create({ userId: "admin", roleId: adminRoleId });
+  }
+  let manage = await m.permissions.findOne({ where: { permission: "tenants.manage" } });
+  if (!manage) manage = await m.permissions.create({ permission: "tenants.manage" });
+  if (!await m.rolesPermissions.findOne({ where: { roleId: adminRoleId, permissionId: manage.get("id") } })) {
+    await m.rolesPermissions.create({ roleId: adminRoleId, permissionId: manage.get("id") });
   }
 }
 
