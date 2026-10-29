@@ -7,3 +7,4 @@ export { AppError, ConfigError, ValidationError, NotFoundError, ConflictError, A
 export { getContext, runWithContext } from "./context/request-context.js";
 export { RouteRegistry } from "./schema/route-registry.js";
 export { ok, list } from "./http/response.js";
+export { version } from "../version.js";

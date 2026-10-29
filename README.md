@@ -4,6 +4,16 @@
 
 ## Instalacion
 
+Todas las entradas publicas (`api/client`, `api/server`, `api/vue`, `api/cli` y `api/log-viewer`) exportan `version`, tomada del `package.json` de api durante el build de Rollup:
+
+```js
+import { version } from "api/client";
+
+console.log(version);
+```
+
+Es la version instalada de la libreria `api`, no la del proyecto consumidor. Los bundles incluyen el valor como una constante y no necesitan leer `package.json` en el navegador. Incluye declaraciones TypeScript.
+
 Para usar solamente `api/client`:
 
 ```bash
@@ -500,6 +510,18 @@ Devuelve:
 ```
 
 ## Cliente
+
+Para informar la identidad y version de la aplicacion consumidora:
+
+```js
+const client = createApiClient({
+  url: "http://localhost:3000/api",
+  appName: "ventas-web",
+  appVersion: "2.3.0", // version del package.json de tu aplicacion
+});
+```
+
+El cliente envia automaticamente `X-Client-Version` con la version de la libreria exportada como `version`; no se configura manualmente. Las opciones `appName` y `appVersion` son opcionales y envian `X-App-Name` y `X-App-Version`. Las tres cabeceras se incluyen tambien en SSE. El servidor las guarda como `session.options.client = { appName, version, appVersion }` (omitiendo campos no recibidos) durante el login con cuerpo JSON y actualiza los campos recibidos al acceder a rutas protegidas de los modulos, changes o SSE. Conserva las demas opciones y solo escribe si los datos cambian. Sin cabeceras o sin sesion persistida no escribe nada. Los valores son informativos: no se comparan contra una version minima ni bloquean peticiones; si falla su actualizacion, se registra el error y la peticion continua.
 
 `api/client` descubre servicios desde `schema.json`, guarda sesion local, usa Bearer token y mantiene cache local mediante adapters.
 

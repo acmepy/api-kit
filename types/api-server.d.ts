@@ -30,3 +30,4 @@ export function requestLogger(...args: unknown[]): unknown;
 export function setLogging(options?: Record<string, unknown>): void;
 export function ok<T>(data: T, options?: Record<string, unknown>): ApiResponse<T>;
 export function list<T>(data: T[], options?: Record<string, unknown>): ListResponse<T>;
+export const version: string;

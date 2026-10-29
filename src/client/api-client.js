@@ -7,6 +7,7 @@ import { PendingService } from "./services/pending-service.js";
 import { SchemaService } from "./services/schema-service.js";
 import { SessionService } from "./services/session-service.js";
 import { joinUrl, normalizeTimeout } from "./utils.js";
+import { version } from "../version.js";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
@@ -73,6 +74,7 @@ export class ApiClient {
   #sseEnabled;
   #logging;
   #paths;
+  #clientHeaders;
   #tenantChangePromise = null;
   #tenantChanging = false;
   #tenantReloading = false;
@@ -84,6 +86,10 @@ export class ApiClient {
   #tenantChannel = null;
 
   constructor(options = {}) {
+    this.#clientHeaders = {};
+    if (options.appName) this.#clientHeaders["X-App-Name"] = options.appName;
+    this.#clientHeaders["X-Client-Version"] = version;
+    if (options.appVersion) this.#clientHeaders["X-App-Version"] = options.appVersion;
     const url = new URL(options.url || "http://localhost:3000/api");
     this.#host = url.origin;
     this.#baseUrl = url.pathname.replace(/\/+$/g, "");
@@ -728,7 +734,7 @@ export class ApiClient {
 
   async #request(path, options = {}) {
     const url = this.url(path, options.query);
-    const headers = { Accept: "application/json", ...(options.headers || {}) };
+    const headers = { Accept: "application/json", ...this.#clientHeaders, ...(options.headers || {}) };
     const body = encodeBody(options.body, headers);
     const token = options.auth === false ? null : options.token || await this.token() || null;
     if (options.auth !== false && token && !options.tenantChange) await this.#verifyTenantSession();
@@ -868,7 +874,7 @@ export class ApiClient {
     if (this.#sseAbort) return;
     const controller = new AbortController();
     this.#sseAbort = controller;
-    const headers = { Accept: "text/event-stream" };
+    const headers = { Accept: "text/event-stream", ...this.#clientHeaders };
     const token = await this.token();
     if (token) headers.Authorization = `Bearer ${token}`;
     const sessionVersion = this.#sessionVersion;

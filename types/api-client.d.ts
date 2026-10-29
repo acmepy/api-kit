@@ -73,6 +73,8 @@ export class ApiClientError extends Error {
 }
 
 export interface ApiClientOptions {
+  appName?: string;
+  appVersion?: string;
   url?: string;
   baseUrl?: string;
   token?: string;
@@ -214,3 +216,4 @@ export class PendingService<T extends ServiceRecord = ServiceRecord> extends Bas
 }
 export class SchemaService<T extends ServiceRecord = ServiceRecord> extends BaseService<T> {}
 export class SessionService<T extends ServiceRecord = ServiceRecord> extends BaseService<T> {}
+export const version: string;

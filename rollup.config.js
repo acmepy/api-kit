@@ -1,5 +1,18 @@
 import terser from "@rollup/plugin-terser";
 import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const versionModule = fileURLToPath(new URL("./src/version.js", import.meta.url));
+const { version } = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+
+function packageVersion() {
+  return {
+    name: "package-version",
+    load(id) {
+      if (id === versionModule) return `export const version = ${JSON.stringify(version)};`;
+    },
+  };
+}
 
 const minify = process.env.MINIFY === "true";
 
@@ -49,6 +62,7 @@ function createBundle(input, outputName, declaration, shouldMinify = false) {
     input,
     external,
     plugins: [
+      packageVersion(),
       declarationFile(`types/${declaration}`, declaration),
       ...(["src/server/index.js", "src/log-viewer/index.js"].includes(input) ? [logViewerAssets()] : []),
       ...(shouldMinify ? [terser()] : []),

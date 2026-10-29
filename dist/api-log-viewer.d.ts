@@ -18,3 +18,4 @@ export interface LogViewerOptions {
 }
 export function createLogViewer(options: LogViewerOptions): Router;
 export function parseLogLine(line: string): ParsedLogLine | null;
+export const version: string;

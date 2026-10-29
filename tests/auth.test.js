@@ -4,7 +4,7 @@ import http from "node:http";
 import express from "express";
 import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi } from "../src/server/index.js";
-import { createAuthContext } from "../src/server/install/auth.services.js";
+import { createAuthContext, clientSessionMetadata } from "../src/server/install/auth.services.js";
 import { normalizeAuthBackendConfig } from "../src/server/utils/normalize.js";
 
 const modules = [
@@ -20,6 +20,67 @@ const modules = [
 ];
 
 describe("auth", () => {
+  it("persists consumer metadata at login and refreshes it on authenticated requests", async () => {
+    const seq = createTestSeq({ logging: false });
+    const api = await createApi({ seq, basePath: "/api", modules,
+      auth: { required: true, secret: "test-secret", logging: false } });
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+    await seedIam(api.auth.models, ["clientes.list"]);
+    const server = await listen(api.app);
+    try {
+      const login = await request(server, "POST", "/api/login", {
+        headers: { "X-App-Name": "ventas", "X-Client-Version": "1.4.1", "X-App-Version": "2.3.0" },
+        body: { username: "admin", password: "1234", options: { empresa: 1 } },
+      });
+      assert.equal(login.status, 200);
+      assert.deepEqual(login.body.data.options, { empresa: 1, client: { appName: "ventas", version: "1.4.1", appVersion: "2.3.0" } });
+      const updated = await request(server, "GET", "/api/clientes", {
+        token: login.body.data.token, headers: { "X-App-Version": "2.4.0" },
+      });
+      assert.equal(updated.status, 200);
+      const session = await request(server, "GET", "/api/session", { token: login.body.data.token });
+      assert.deepEqual(session.body.data.options, { empresa: 1, client: { appName: "ventas", version: "1.4.1", appVersion: "2.4.0" } });
+    } finally {
+      await api.close();
+      await close(server);
+    }
+  });
+  it("updates informational client metadata only when changed and preserves session options", async () => {
+    const writes = [];
+    const middleware = clientSessionMetadata({
+      async updateSession(id, values) {
+        writes.push({ id, ...values });
+        return { id, ...values };
+      },
+    });
+    const req = { headers: { "x-app-name": "ventas", "x-client-version": "2.3.0" },
+      session: { id: "session", options: { empresa: 1, client: { other: true } } } };
+    let nextCalls = 0;
+    const next = () => { nextCalls++; };
+    await middleware(req, {}, next);
+    assert.deepEqual(req.session.options, { empresa: 1, client: { other: true, appName: "ventas", version: "2.3.0" } });
+    await middleware(req, {}, next);
+    assert.equal(writes.length, 1);
+    req.headers = { "x-client-version": "2.4.0" };
+    await middleware(req, {}, next);
+    assert.equal(writes.length, 2);
+    assert.equal(req.session.options.client.appName, "ventas");
+    assert.equal(req.session.options.client.version, "2.4.0");
+    await middleware({ headers: {}, session: req.session }, {}, next);
+    await middleware({ headers: req.headers }, {}, next);
+    assert.equal(writes.length, 2);
+    assert.equal(nextCalls, 5);
+  });
+
+  it("does not reject requests when informational metadata cannot be saved", async () => {
+    const req = { headers: { "x-client-version": "1" }, session: { id: "session", options: {} } };
+    let continued = false;
+    await clientSessionMetadata({ async updateSession() { throw new Error("unavailable"); } })(req, {}, () => { continued = true; });
+    assert.equal(continued, true);
+    assert.deepEqual(req.session.options, {});
+  });
   it("does not provide a development secret when auth is enabled", () => {
     assert.throws(
       () => normalizeAuthBackendConfig({ required: true, secret: "" }),

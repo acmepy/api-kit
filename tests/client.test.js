@@ -1,9 +1,24 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createApiClient, BaseService, SchemaService, SessionService } from "../src/client/index.js";
+import { createApiClient, BaseService, SchemaService, SessionService, version } from "../src/client/index.js";
 import { createApiVue } from "../src/vue/index.js";
 
 describe("client public API", () => {
+  it("sends consumer name and version as informational headers", async () => {
+    const calls = [];
+    const client = createApiClient({
+      url: "http://server/api", appName: "ventas", appVersion: "2.3.0",
+      fetch: async (url, options) => { calls.push({ url, options }); return jsonResponse({ ok: true }); },
+      pingInterval: 60_000,
+    });
+    try {
+      await client.request("/example");
+      const call = calls.find(({ url }) => new URL(url).pathname === "/api/example");
+      assert.equal(call.options.headers["X-App-Name"], "ventas");
+      assert.equal(call.options.headers["X-Client-Version"], version);
+      assert.equal(call.options.headers["X-App-Version"], "2.3.0");
+    } finally { client.destroy(); }
+  });
   it("builds urls from the configured base url and query params", () => {
     const client = createApiClient({
       url: "http://server/api",

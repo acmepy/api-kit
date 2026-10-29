@@ -48,3 +48,4 @@ function numberQuery(query, key, max = Number.MAX_SAFE_INTEGER) {
   if (!/^\d+$/.test(value) || !Number.isSafeInteger(number) || number < 1 || number > max) throw new LogFileError(`Filtro ${key} no valido`, 400);
   return number;
 }
+export { version } from "../version.js";

@@ -69,3 +69,4 @@ export interface ApiForm<T> {
   clearErrors(): void;
 }
 export function useApiForm<T extends ServiceRecord = ServiceRecord>(name: string, options?: ApiFormOptions<T>): ApiForm<T>;
+export const version: string;

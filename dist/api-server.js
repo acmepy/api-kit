@@ -2662,6 +2662,33 @@ function jsonSafe(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function clientMetadata(req) {
+  const client = {};
+  for (const [header, key] of [["x-app-name", "appName"], ["x-client-version", "version"], ["x-app-version", "appVersion"]]) {
+    const value = req.headers?.[header];
+    if (typeof value === "string" && value.trim()) client[key] = value.trim();
+  }
+  return client;
+}
+
+function clientSessionMetadata(adapter) {
+  return async (req, _res, next) => {
+    const client = clientMetadata(req);
+    const session = req.session;
+    if (!session?.id || !Object.keys(client).length) return next();
+    const previous = session.options?.client || {};
+    if (Object.entries(client).every(([key, value]) => previous[key] === value)) return next();
+    try {
+      const options = { ...session.options, client: { ...previous, ...client } };
+      const updated = await adapter.updateSession(session.id, { options });
+      if (updated) session.options = updated.options;
+    } catch (error) {
+      log("error", "auth.client-metadata", error);
+    }
+    return next();
+  };
+}
+
 function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
   if (!auth) return null;
   const authContext = createAuthContext(config, auth);
@@ -2676,7 +2703,13 @@ function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
 
   const basePath = normalizeMountPath(config.basePath) || "/";
   const authRouter = express.Router();
-  authRouter.post(authContext.loginPath, authContext.middleware);
+  authRouter.post(authContext.loginPath, (req, _res, next) => {
+    const client = clientMetadata(req);
+    if (req.body && Object.keys(client).length) {
+      req.body = { ...req.body, options: { ...req.body.options, client: { ...req.body.options?.client, ...client } } };
+    }
+    next();
+  }, authContext.middleware);
   authRouter.get(authContext.sessionPath, authContext.middleware);
   authRouter.post(authContext.logoutPath, authContext.middleware);
   for (const [method, path, operation] of [
@@ -2715,6 +2748,7 @@ function createAuthorizer(resolveAuthContext) {
 
       return composeMiddlewares([
         authContext.middleware,
+        clientSessionMetadata(authContext.adapter),
         syncAuthContext,
         ...(permissions || []).filter(Boolean).map((permission) => can(permission)),
         syncAuthContext,
@@ -3455,6 +3489,8 @@ function viewerBrowser() {
   entries();
 }
 
+const version = "1.4.3";
+
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {
   const reader = createLogReader(options);
@@ -3524,5 +3560,5 @@ class InternalError extends AppError {
   }
 }
 
-export { AppError, AuthRequiredError, BaseModel, BaseModule, BaseRouter, BaseService, ConfigError, ConflictError, ForbiddenError, InternalError, NotFoundError, RouteRegistry, ValidationError, createApi, createLogViewer, defineResource, getContext, list, log, ok, parseLogLine, requestLogger, runWithContext, setLogging };
+export { AppError, AuthRequiredError, BaseModel, BaseModule, BaseRouter, BaseService, ConfigError, ConflictError, ForbiddenError, InternalError, NotFoundError, RouteRegistry, ValidationError, createApi, createLogViewer, defineResource, getContext, list, log, ok, parseLogLine, requestLogger, runWithContext, setLogging, version };
 //# sourceMappingURL=api-server.js.map

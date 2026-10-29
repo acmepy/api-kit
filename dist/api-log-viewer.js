@@ -405,6 +405,8 @@ function viewerBrowser() {
   entries();
 }
 
+const version = "1.4.3";
+
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {
   const reader = createLogReader(options);
@@ -449,5 +451,5 @@ function numberQuery(query, key, max = Number.MAX_SAFE_INTEGER) {
   return number;
 }
 
-export { createLogViewer, parseLogLine };
+export { createLogViewer, parseLogLine, version };
 //# sourceMappingURL=api-log-viewer.js.map

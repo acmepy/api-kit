@@ -5,6 +5,34 @@ import { auth as iamAuth, can as iamCan } from "iam/express";
 import { getContext } from "../context/request-context.js";
 import { joinPaths } from "../utils/paths.js";
 import { normalizeMountPath, toIamStrategies } from "../utils/normalize.js";
+import { log } from "../logger/index.js";
+
+function clientMetadata(req) {
+  const client = {};
+  for (const [header, key] of [["x-app-name", "appName"], ["x-client-version", "version"], ["x-app-version", "appVersion"]]) {
+    const value = req.headers?.[header];
+    if (typeof value === "string" && value.trim()) client[key] = value.trim();
+  }
+  return client;
+}
+
+export function clientSessionMetadata(adapter) {
+  return async (req, _res, next) => {
+    const client = clientMetadata(req);
+    const session = req.session;
+    if (!session?.id || !Object.keys(client).length) return next();
+    const previous = session.options?.client || {};
+    if (Object.entries(client).every(([key, value]) => previous[key] === value)) return next();
+    try {
+      const options = { ...session.options, client: { ...previous, ...client } };
+      const updated = await adapter.updateSession(session.id, { options });
+      if (updated) session.options = updated.options;
+    } catch (error) {
+      log("error", "auth.client-metadata", error);
+    }
+    return next();
+  };
+}
 
 export function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
   if (!auth) return null;
@@ -20,7 +48,13 @@ export function installAuthRoutes({ mainRouter, routeRegistry, config, auth }) {
 
   const basePath = normalizeMountPath(config.basePath) || "/";
   const authRouter = express.Router();
-  authRouter.post(authContext.loginPath, authContext.middleware);
+  authRouter.post(authContext.loginPath, (req, _res, next) => {
+    const client = clientMetadata(req);
+    if (req.body && Object.keys(client).length) {
+      req.body = { ...req.body, options: { ...req.body.options, client: { ...req.body.options?.client, ...client } } };
+    }
+    next();
+  }, authContext.middleware);
   authRouter.get(authContext.sessionPath, authContext.middleware);
   authRouter.post(authContext.logoutPath, authContext.middleware);
   for (const [method, path, operation] of [
@@ -59,6 +93,7 @@ export function createAuthorizer(resolveAuthContext) {
 
       return composeMiddlewares([
         authContext.middleware,
+        clientSessionMetadata(authContext.adapter),
         syncAuthContext,
         ...(permissions || []).filter(Boolean).map((permission) => iamCan(permission)),
         syncAuthContext,

@@ -1,4 +1,6 @@
-import { ref, readonly, provide, inject, onScopeDispose, computed, reactive, watch } from 'vue';
+import { ref, readonly, provide, inject, reactive, watch, onScopeDispose, computed } from 'vue';
+
+const version = "1.4.3";
 
 /** Injection key used by the ApiKit Vue plugin. */
 const ApiVueKey = Symbol("ApiKitVue");
@@ -311,5 +313,5 @@ function useApiForm(name, options = {}) {
   };
 }
 
-export { ApiVueKey, createApiVue, createVueApi, provideApi, useApi, useApiForm, useApiService };
+export { ApiVueKey, createApiVue, createVueApi, provideApi, useApi, useApiForm, useApiService, version };
 //# sourceMappingURL=api-vue.js.map

@@ -1,6 +1,8 @@
+const version = "1.4.3";
+
 async function runApiKitCli() {
   throw new Error("api/cli is not implemented yet");
 }
 
-export { runApiKitCli };
+export { runApiKitCli, version };
 //# sourceMappingURL=api-cli.js.map

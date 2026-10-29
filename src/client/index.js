@@ -5,3 +5,4 @@ export { SchemaService } from "./services/schema-service.js";
 export { SessionService } from "./services/session-service.js";
 export { ApiClientError } from "./errors.js";
 export { BaseAdapter, MapAdapter, LocalStorageAdapter, IndexedDbAdapter, createAdapter } from "./adapters/index.js";
+export { version } from "../version.js";

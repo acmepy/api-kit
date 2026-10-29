@@ -310,3 +310,4 @@ export function useApiForm(name, options = {}) {
     clearErrors: () => setErrors(),
   };
 }
+export { version } from "../version.js";
