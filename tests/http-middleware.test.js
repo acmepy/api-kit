@@ -655,16 +655,17 @@ describe("http middleware", () => {
 
       assert.equal(res.status, 200);
       assert.equal(infos.length, 1);
-      assert.equal(infos[0][0], "[api] [request]");
-      assert.equal(infos[0][1], "tx-123");
-      assert.equal(typeof infos[0][2], "string");
-      assert.equal(infos[0][3], "GET");
-      assert.equal(infos[0][4], "/api/openapi.json");
-      assert.equal(infos[0][5], 200);
-      assert.equal(typeof infos[0][6], "number");
-      assert.ok(infos[0][6] >= 0);
-      assert.equal(Number(infos[0][7]), Number(res.headers["content-length"] || 0));
-      assert.equal(infos[0][8], "api-test");
+      assert.equal(infos[0][0], "api");
+      assert.equal(infos[0][1], "[request]");
+      assert.equal(infos[0][2], "tx-123");
+      assert.equal(typeof infos[0][3], "string");
+      assert.equal(infos[0][4], "GET");
+      assert.equal(infos[0][5], "/api/openapi.json");
+      assert.equal(infos[0][6], 200);
+      assert.equal(typeof infos[0][7], "number");
+      assert.ok(infos[0][7] >= 0);
+      assert.equal(Number(infos[0][8]), Number(res.headers["content-length"] || 0));
+      assert.equal(infos[0][9], "api-test");
     } finally {
       await api.close();
       await close(server);
@@ -720,32 +721,35 @@ describe("http middleware", () => {
       assert.equal(errors.length, 0);
       assert.equal(warnings.length, 2);
 
-      assert.equal(warnings[0][0], "[api] [http.error]");
-      assert.match(warnings[0][1], /^\[[^\]]+\]$/);
-      assert.equal(warnings[0][2], "NotFoundError");
-      assert.equal(warnings[0][4], 404);
-      assert.equal(warnings[0][5], "NOT_FOUND");
-      assert.equal(warnings[0][6], "GET");
-      assert.equal(warnings[0][7], "/api/clientes/ruc/80000000-0");
-      assert.equal(warnings[0][9], false);
+      assert.equal(warnings[0][0], "api");
+      assert.equal(warnings[0][1], "[http.error]");
+      assert.match(warnings[0][2], /^\[[^\]]+\]$/);
+      assert.equal(warnings[0][3], "NotFoundError");
+      assert.equal(warnings[0][5], 404);
+      assert.equal(warnings[0][6], "NOT_FOUND");
+      assert.equal(warnings[0][7], "GET");
+      assert.equal(warnings[0][8], "/api/clientes/ruc/80000000-0");
+      assert.equal(warnings[0][10], false);
 
-      assert.equal(warnings[1][0], "[api] [http.error]");
-      assert.equal(warnings[1][4], 404);
-      assert.equal(warnings[1][6], "GET");
-      assert.equal(warnings[1][7], "/api/clientes/999");
+      assert.equal(warnings[1][0], "api");
+      assert.equal(warnings[1][1], "[http.error]");
+      assert.equal(warnings[1][5], 404);
+      assert.equal(warnings[1][7], "GET");
+      assert.equal(warnings[1][8], "/api/clientes/999");
       const res = await request(server, "GET", "/api/fail");
 
       assert.equal(res.status, 500);
       assert.equal(errors.length, 1);
-      assert.equal(errors[0][0], "[api] [http.error]");
-      assert.match(errors[0][1], /^\[[^\]]+\]$/);
-      assert.equal(errors[0][2], "Error");
-      assert.equal(errors[0][3], "Boom");
-      assert.equal(errors[0][4], 500);
-      assert.equal(errors[0][5], "INTERNAL_ERROR");
-      assert.equal(errors[0][6], "GET");
-      assert.equal(errors[0][7], "/api/fail");
-      assert.match(errors[0][9].stack, /Error: Boom/);
+      assert.equal(errors[0][0], "api");
+      assert.equal(errors[0][1], "[http.error]");
+      assert.match(errors[0][2], /^\[[^\]]+\]$/);
+      assert.equal(errors[0][3], "Error");
+      assert.equal(errors[0][4], "Boom");
+      assert.equal(errors[0][5], 500);
+      assert.equal(errors[0][6], "INTERNAL_ERROR");
+      assert.equal(errors[0][7], "GET");
+      assert.equal(errors[0][8], "/api/fail");
+      assert.match(errors[0][10].stack, /Error: Boom/);
     } finally {
       await api.close();
       await close(server);

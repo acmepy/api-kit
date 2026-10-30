@@ -10,7 +10,7 @@ export function log(level, path, ...args) {
   if (!_logging) return;
   if (_logging === true) return console[level]?.("[api] ["+path+"]", ...args);
   if (typeof _logging === "function") return _logging("[api] ["+path+"]", level, ...args);
-  if (typeof _logging === "object") return _logging[level]?.("[api] ["+path+"]", ...args);
+  if (typeof _logging === "object") return _logging[level]?.("api", "["+path+"]", ...args);
 }
 
 export function requestLogger(req, res, next) {

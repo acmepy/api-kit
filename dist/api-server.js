@@ -2197,7 +2197,7 @@ function log(level, path, ...args) {
   if (!_logging) return;
   if (_logging === true) return console[level]?.("[api] ["+path+"]", ...args);
   if (typeof _logging === "function") return _logging("[api] ["+path+"]", level, ...args);
-  if (typeof _logging === "object") return _logging[level]?.("[api] ["+path+"]", ...args);
+  if (typeof _logging === "object") return _logging[level]?.("api", "["+path+"]", ...args);
 }
 
 function requestLogger(req, res, next) {
@@ -3489,7 +3489,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.4.3";
+const version = "1.4.31";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {
