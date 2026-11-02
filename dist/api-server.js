@@ -116,8 +116,16 @@ const validationContext = Symbol("api-kit nested schema validation");
 const configuredModels = new WeakSet();
 const validationTransactions = new AsyncLocalStorage();
 
-function validateResourceSchema(schema, values, transaction, model) {
-  return validationTransactions.run(transaction, () => schema.validate(tenantValues(model, values)));
+async function validateResourceSchema(schema, values, transaction, model, nested = false) {
+  try {
+    return await validationTransactions.run(transaction, () => schema.validate(tenantValues(model, values)));
+  } catch (error) {
+    if (error.code === "VALIDATION_ERROR" && model?.modelName) {
+      error.details = { ...error.details, model: model.modelName };
+      if (nested && error.errors) error.errors = { [model.modelName]: error.errors };
+    }
+    throw error;
+  }
 }
 
 function schemaValidationTransaction() {
@@ -131,7 +139,7 @@ async function validateNestedCreate(values, options) {
     context.rootVisited = true;
     return;
   }
-  const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction, this);
+  const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction, this, true);
   for (const key of Object.keys(values)) {
     if (!Object.hasOwn(validated, key) && !context.foreignKeys.get(this)?.has(key) && key !== tenantAttribute(this)) delete values[key];
   }
@@ -2225,7 +2233,7 @@ function errorLogger(err, req, { txId, status, code, errors }) {
     code, 
     req.method, 
     req.originalUrl || req.url, 
-    errors, (status >= 500 && err.stack && { stack: err.stack })
+    errors, ...(err.details ? [{ details: err.details }] : []), (status >= 500 && err.stack && { stack: err.stack })
   );
 }
 
@@ -2936,7 +2944,7 @@ function errorHandler(err, req, res, _next) {
 
   errorLogger(err, req, { txId, status, code, message: err.message, errors, stack: status >= 500 ? err.stack : {} });
 
-  const body = { ok: false, code, message, errors, txId };
+  const body = { ok: false, code, message, errors, ...(err.details && { details: err.details }), txId };
   if (process.env.NODE_ENV === "development") body.stack = err.stack;
 
   res.status(status).json(body);
@@ -3489,7 +3497,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.4.6";
+const version = "1.4.7";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

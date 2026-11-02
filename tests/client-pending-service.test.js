@@ -60,7 +60,7 @@ it("pending.push identifies failures by resource, preserves rejected records and
     calls.push(path);
     if (path === "/facturas" && reject) {
       const error = new Error("Importe invalido");
-      error.errors = { importe: "Debe ser positivo" };
+      error.errors = { FacturaDetalle: { importe: "Debe ser positivo | Debe ser mayor o igual a 1" } };
       throw error;
     }
     return { ok: true, data: body };
@@ -75,8 +75,10 @@ it("pending.push identifies failures by resource, preserves rejected records and
   assert.equal(result.errors.length, 1);
   assert.equal(result.errors[0].service, "facturas");
   assert.equal(result.errors[0].id, 1);
-  assert.deepEqual(result.errors[0].errors, { importe: "Debe ser positivo" });
+  const expectedErrors = { FacturaDetalle: { importe: "Debe ser positivo | Debe ser mayor o igual a 1" } };
+  assert.deepEqual(result.errors[0].errors, expectedErrors);
   assert.equal((await facturas.get(1)).data.pending, true);
+  assert.deepEqual((await facturas.get(1)).data.errors, expectedErrors);
   reject = false;
   assert.equal((await pending.push()).ok, true);
   assert.deepEqual(calls, ["/facturas", "/recibos", "/facturas"]);

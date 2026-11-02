@@ -15,7 +15,7 @@ it("Vue and discovered client preserve nested details, server validation and nat
       attributes: {
         codigo: { type: "string", primaryKey: true, allowNull: false },
         articulo: { type: "string", primaryKey: true, allowNull: false },
-        cantidad: { type: "integer", allowNull: false, min: 1 },
+        cantidad: { type: "integer", allowNull: false, min: 1, positive: true },
       },
     }],
   }, {
@@ -61,8 +61,9 @@ it("Vue and discovered client preserve nested details, server validation and nat
     await resource.removeDetail("001", "items", "A1");
     assert.deepEqual(resource.records.value[0].items.map(row => row.articulo), ["A2"]);
     form.reset({ codigo: "002", items: [{ articulo: "A1", cantidad: 0 }] });
-    await assert.rejects(form.submit(), error => typeof error.errors?.cantidad === "string");
-    assert.equal(typeof form.errors.cantidad, "string");
+    await assert.rejects(form.submit(), error => typeof error.errors?.ListaItem?.cantidad === "string");
+    assert.equal(typeof form.errors.ListaItem.cantidad, "string");
+    assert.match(form.errors.ListaItem.cantidad, / \| /, "Vue preserves multiple Yep messages for the same detail field");
     assert.equal(await serverApi.services.get("listas").model.findByPk("002"), null);
     const edit = scope.run(() => app.runWithContext(() => useApiForm("listas", {
       operation: "update", initial: { codigo: "001", descripcion: "Editada" },
@@ -72,8 +73,8 @@ it("Vue and discovered client preserve nested details, server validation and nat
     await edit.submit();
     assert.equal((await service.get("001")).data.items[0].cantidad, 5);
     edit.reset({ codigo: "001", descripcion: "Invalida", items: [{ articulo: "A4", cantidad: 0 }] });
-    await assert.rejects(edit.submit(), error => typeof error.errors?.cantidad === "string");
-    assert.equal(typeof edit.errors.cantidad, "string");
+    await assert.rejects(edit.submit(), error => typeof error.errors?.ListaItem?.cantidad === "string");
+    assert.equal(typeof edit.errors.ListaItem.cantidad, "string");
     await resource.pull();
     assert.equal(resource.records.value[0].descripcion, "Reemplazada");
     assert.equal(resource.records.value[0].items[0].articulo, "A3");

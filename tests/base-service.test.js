@@ -524,7 +524,7 @@ describe("BaseService details", () => {
             items: [{ producto: "Teclado", cantidad: 2, desArticulo: "Display only" }, { producto: "Mouse", cantidad: 1, [field]: value }],
             cobros: [{ medio: "efectivo", monto: 100 }],
           },
-        }), (error) => error.code === "VALIDATION_ERROR" && typeof error.errors?.[field] === "string");
+        }), (error) => error.code === "VALIDATION_ERROR" && typeof error.errors?.VentaItem?.[field] === "string");
         assert.equal(await ventaResource.model.count(), existing ? 1 : 0);
         assert.equal(await itemResource.model.count(), existing ? 1 : 0);
         assert.equal(await cobroResource.model.count(), 0);
@@ -550,7 +550,7 @@ describe("BaseService details", () => {
   it("validates nested uniqueness using the active transaction", async () => {
     await assert.rejects(() => service.create({ body: {
       cliente: "Ana", cobros: [{ medio: "efectivo", monto: 1 }, { medio: "efectivo", monto: 2 }],
-    } }), (error) => error.code === "VALIDATION_ERROR" && typeof error.errors?.medio === "string");
+    } }), (error) => error.code === "VALIDATION_ERROR" && typeof error.errors?.VentaCobro?.medio === "string");
     assert.equal(await ventaResource.model.count(), 0);
     assert.equal(await cobroResource.model.count(), 0);
   });
@@ -580,7 +580,7 @@ describe("BaseService details", () => {
         }),
       (error) =>
         error.name === "ValidationError" &&
-        typeof error.errors?.cantidad === "string",
+        typeof error.errors?.VentaItem?.cantidad === "string",
     );
 
     assert.equal(await ventaResource.model.count(), 0);

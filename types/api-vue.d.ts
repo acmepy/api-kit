@@ -1,5 +1,5 @@
 import type { App, InjectionKey, Ref } from "vue";
-import type { ApiClient, BaseService, LoginOptions, ServiceRecord, ServiceId, ApiResponse } from "./api-client";
+import type { ApiClient, BaseService, LoginOptions, ServiceRecord, ServiceId, ApiResponse, ValidationErrors } from "./api-client";
 export interface ApiVue {
   client: ApiClient;
   connected: Readonly<Ref<boolean>>;
@@ -58,7 +58,7 @@ export interface ApiFormOptions<T> {
 export interface ApiForm<T> {
   name: string;
   data: Partial<T>;
-  errors: Readonly<Record<string, string>>;
+  errors: Readonly<ValidationErrors>;
   validating: Readonly<Ref<boolean>>;
   submitting: Readonly<Ref<boolean>>;
   valid: Readonly<Ref<boolean>>;

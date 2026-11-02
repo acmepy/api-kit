@@ -5,8 +5,16 @@ const validationContext = Symbol("api-kit nested schema validation");
 const configuredModels = new WeakSet();
 const validationTransactions = new AsyncLocalStorage();
 
-export function validateResourceSchema(schema, values, transaction, model) {
-  return validationTransactions.run(transaction, () => schema.validate(tenantValues(model, values)));
+export async function validateResourceSchema(schema, values, transaction, model, nested = false) {
+  try {
+    return await validationTransactions.run(transaction, () => schema.validate(tenantValues(model, values)));
+  } catch (error) {
+    if (error.code === "VALIDATION_ERROR" && model?.modelName) {
+      error.details = { ...error.details, model: model.modelName };
+      if (nested && error.errors) error.errors = { [model.modelName]: error.errors };
+    }
+    throw error;
+  }
 }
 
 export function schemaValidationTransaction() {
@@ -20,7 +28,7 @@ async function validateNestedCreate(values, options) {
     context.rootVisited = true;
     return;
   }
-  const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction, this);
+  const validated = await validateResourceSchema(this.resourceSchemas.create, values, options.transaction, this, true);
   for (const key of Object.keys(values)) {
     if (!Object.hasOwn(validated, key) && !context.foreignKeys.get(this)?.has(key) && key !== tenantAttribute(this)) delete values[key];
   }

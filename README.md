@@ -414,6 +414,8 @@ Tambien se generan endpoints de detalle:
 
 La creacion maestro/detalle valida cada registro anidado con el schema `create` del detalle, incluidas reglas como `min`, `regexp`, `unique` y validaciones personalizadas. Tambien se validan los detalles nuevos que reemplazan a los anteriores en una actualizacion anidada. La validacion ocurre despues de asignar la FK del maestro y dentro de la misma transaccion; sus valores normalizados se usan al insertar. Si un detalle es invalido, la respuesta es `400` y se revierte toda la operacion, sin conservar una cabecera ni detalles parciales. Las comprobaciones `unique` utilizan esa misma transaccion.
 
+Los errores de cabecera quedan directamente en `errors`, por ejemplo `errors.codMoneda`. En altas y actualizaciones maestro/detalle, los errores de los registros anidados se agrupan por su `modelName`, por ejemplo `errors.RecibosDet.codMoneda`. Yep puede concatenar varios mensajes del mismo campo con ` | `; client, Vue y los pendientes conservan ese mensaje y la agrupacion. La validacion se detiene en el primer registro invalido, sin reunir errores de todas las filas. Las operaciones sobre un detalle individual conservan los campos en la raiz de `errors`. La respuesta y el log HTTP tambien incluyen `details.model` con el modelo que fallo.
+
 ```http
 POST /api/ventas/1/items
 PUT /api/ventas/1/items/1

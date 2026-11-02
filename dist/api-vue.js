@@ -1,6 +1,6 @@
 import { ref, readonly, provide, inject, reactive, watch, onScopeDispose, computed } from 'vue';
 
-const version = "1.4.6";
+const version = "1.4.7";
 
 /** Injection key used by the ApiKit Vue plugin. */
 const ApiVueKey = Symbol("ApiKitVue");

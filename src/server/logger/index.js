@@ -38,6 +38,6 @@ export function errorLogger(err, req, { txId, status, code, errors }) {
     code, 
     req.method, 
     req.originalUrl || req.url, 
-    errors, (status >= 500 && err.stack && { stack: err.stack })
+    errors, ...(err.details ? [{ details: err.details }] : []), (status >= 500 && err.stack && { stack: err.stack })
   );
 }

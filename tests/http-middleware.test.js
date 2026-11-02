@@ -378,7 +378,7 @@ describe("http middleware", () => {
       });
       assert.equal(invalid.status, 400);
       assert.equal(invalid.body.code, "VALIDATION_ERROR");
-      assert.equal(typeof invalid.body.errors.cantidad, "string");
+      assert.equal(typeof invalid.body.errors.VentaItem.cantidad, "string");
       const list = await request(server, "GET", "/api/ventas");
       assert.equal(list.body.data.length, 1);
     } finally {

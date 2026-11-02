@@ -60,6 +60,10 @@ export interface CreateAdapterOptions extends IndexedDbAdapterOptions {
 }
 export function createAdapter<T = unknown>(options?: CreateAdapterOptions): StorageAdapter<T>;
 
+export interface ValidationErrors {
+  [field: string]: string | ValidationErrors;
+}
+
 export interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
@@ -67,6 +71,7 @@ export interface ApiResponse<T = unknown> {
   [key: string]: unknown;
 }
 export class ApiClientError extends Error {
+  errors: ValidationErrors | null;
   status?: number;
   response?: ApiResponse;
   constructor(message: string, options?: { status?: number; response?: ApiResponse; cause?: unknown });
@@ -167,7 +172,7 @@ export interface PushResult {
   service?: string;
   response?: ApiResponse;
   error?: string;
-  errors?: Record<string, string> | null;
+  errors?: ValidationErrors | null;
 }
 export interface PushResponse extends ApiResponse {
   ok: boolean;
