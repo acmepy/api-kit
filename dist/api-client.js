@@ -743,7 +743,7 @@ class PendingService extends BaseService {
     for (const service of this.client.services().values()) {
       if (service === this || ["session", "schema"].includes(service.name) || typeof service.pending !== "function") continue;
       const result = await service.pending();
-      pending.push(...(result.data || []));
+      pending.push(...(result.data || []).map(record => ({ ...record, service: service.name })));
     }
     return { ok: true, data: pending };
   }
@@ -931,7 +931,7 @@ class SessionService extends BaseService {
   }
 }
 
-const version = "1.4.5";
+const version = "1.4.6";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;

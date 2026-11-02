@@ -301,7 +301,7 @@ function viewerBrowser() {
     if (entry.scope) source.append(node("small", entry.scope, "d-block small text-secondary text-nowrap"));
     const tx = node("td");
     if (entry.txId) {
-      const button = node("button", entry.txId, "btn btn-link btn-sm p-0 text-start text-break font-monospace text-decoration-none");
+      const button = node("button", entry.txId, "btn btn-link btn-sm p-0 text-start text-nowrap font-monospace text-decoration-none");
       button.title = entry.txId + " - " + "Ver todas las entradas de esta transacción";
       button.addEventListener("click", () => filterTransaction(entry.txId));
       tx.append(button);
@@ -405,7 +405,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.4.5";
+const version = "1.4.6";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

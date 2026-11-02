@@ -212,6 +212,7 @@ export class BaseService<T extends ServiceRecord = ServiceRecord> {
   clear(): Promise<void>;
 }
 export class PendingService<T extends ServiceRecord = ServiceRecord> extends BaseService<T> {
+  list(): Promise<ApiResponse<Array<T & { service: string }>>>;
   push(): Promise<PushResponse>;
 }
 export class SchemaService<T extends ServiceRecord = ServiceRecord> extends BaseService<T> {}

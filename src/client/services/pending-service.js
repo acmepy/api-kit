@@ -12,7 +12,7 @@ export class PendingService extends BaseService {
     for (const service of this.client.services().values()) {
       if (service === this || ["session", "schema"].includes(service.name) || typeof service.pending !== "function") continue;
       const result = await service.pending();
-      pending.push(...(result.data || []));
+      pending.push(...(result.data || []).map(record => ({ ...record, service: service.name })));
     }
     return { ok: true, data: pending };
   }

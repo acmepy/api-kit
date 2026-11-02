@@ -34,7 +34,11 @@ it("pending.push sends every resource and does not resend successful creates, up
   await recibos.adapter.add([{ numero: 1, sucursal: "001", importe: 100 }, { numero: 1, sucursal: "002", importe: 200 }]);
   await recibos.update({ numero: 1, sucursal: "001" }, { importe: 150 });
   await recibos.remove({ numero: 1, sucursal: "002" });
-  assert.equal((await pending.list()).data.length, 3);
+  const listed = (await pending.list()).data;
+  assert.deepEqual(listed.map(({ service, operation }) => [service, operation]), [
+    ["facturas", "create"], ["recibos", "update"], ["recibos", "remove"],
+  ]);
+  assert.equal(Object.hasOwn((await facturas.get(1)).data, "service"), false);
   const result = await pending.push();
   assert.equal(result.ok, true);
   assert.deepEqual(result.errors, []);

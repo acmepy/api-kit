@@ -130,7 +130,7 @@ export function viewerBrowser() {
     if (entry.scope) source.append(node("small", entry.scope, "d-block small text-secondary text-nowrap"));
     const tx = node("td");
     if (entry.txId) {
-      const button = node("button", entry.txId, "btn btn-link btn-sm p-0 text-start text-break font-monospace text-decoration-none");
+      const button = node("button", entry.txId, "btn btn-link btn-sm p-0 text-start text-nowrap font-monospace text-decoration-none");
       button.title = entry.txId + " - " + "Ver todas las entradas de esta transacción";
       button.addEventListener("click", () => filterTransaction(entry.txId));
       tx.append(button);
