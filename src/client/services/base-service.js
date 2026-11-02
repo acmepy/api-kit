@@ -95,7 +95,7 @@ export class BaseService {
   async create(data = {}, options = {}) {
     this.#assertPendingTenant(data);
     const record = { ...await this.validate({ ...data, ...this.#tenantScope() }, "create"), ...this.#tenantScope() };
-    const pending = options.pending ?? !this.client.connected?.();
+    const pending = options.pending ?? true;
     let networkFailed = false;
     if (!pending) {
       try {
@@ -120,7 +120,7 @@ export class BaseService {
     this.#assertPendingTenant(current);
     const creating = current?.pending && current.operation === "create";
     const record = await this.validate({...current, ...data, ...this.#keyValues(id)}, creating ? "create" : "update");
-    const pending = options.pending ?? !this.client.connected?.();
+    const pending = options.pending ?? true;
     let networkFailed = false;
     if(!pending && !creating) {
       try {
@@ -149,7 +149,7 @@ export class BaseService {
       this.#notify();
       return { ok: true, data: current };
     }
-    const pending = options.pending ?? !this.client.connected?.();
+    const pending = options.pending ?? true;
     let networkFailed = false;
     if (!pending) {
       try {

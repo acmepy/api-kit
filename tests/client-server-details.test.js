@@ -45,7 +45,8 @@ it("Vue and discovered client preserve nested details, server validation and nat
     const form = scope.run(() => app.runWithContext(() => useApiForm("listas", {
       initial: { codigo: "001", descripcion: "Primera", items: [{ articulo: "A1", cantidad: "2" }] },
     })));
-    const created = await form.submit();
+    const saved = await form.submit();
+    const created = await service.get(saved.data.codigo);
     assert.equal(created.data.codigo, "001");
     assert.equal(created.data.items[0].cantidad, 2);
     assert.equal(created.data.items[0].codigo, "001");
@@ -60,7 +61,7 @@ it("Vue and discovered client preserve nested details, server validation and nat
     await resource.removeDetail("001", "items", "A1");
     assert.deepEqual(resource.records.value[0].items.map(row => row.articulo), ["A2"]);
     form.reset({ codigo: "002", items: [{ articulo: "A1", cantidad: 0 }] });
-    await assert.rejects(form.submit(), error => error.status === 400);
+    await assert.rejects(form.submit(), error => typeof error.errors?.cantidad === "string");
     assert.equal(typeof form.errors.cantidad, "string");
     assert.equal(await serverApi.services.get("listas").model.findByPk("002"), null);
     const edit = scope.run(() => app.runWithContext(() => useApiForm("listas", {
@@ -68,9 +69,10 @@ it("Vue and discovered client preserve nested details, server validation and nat
     })));
     assert.equal((await edit.submit()).data.descripcion, "Editada");
     edit.reset({ codigo: "001", descripcion: "Reemplazada", items: [{ articulo: "A3", cantidad: "5" }] });
-    assert.equal((await edit.submit()).data.items[0].cantidad, 5);
+    await edit.submit();
+    assert.equal((await service.get("001")).data.items[0].cantidad, 5);
     edit.reset({ codigo: "001", descripcion: "Invalida", items: [{ articulo: "A4", cantidad: 0 }] });
-    await assert.rejects(edit.submit(), error => error.status === 400);
+    await assert.rejects(edit.submit(), error => typeof error.errors?.cantidad === "string");
     assert.equal(typeof edit.errors.cantidad, "string");
     await resource.pull();
     assert.equal(resource.records.value[0].descripcion, "Reemplazada");

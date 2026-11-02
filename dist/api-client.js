@@ -397,7 +397,7 @@ class BaseService {
   async create(data = {}, options = {}) {
     this.#assertPendingTenant(data);
     const record = { ...await this.validate({ ...data, ...this.#tenantScope() }, "create"), ...this.#tenantScope() };
-    const pending = options.pending ?? !this.client.connected?.();
+    const pending = options.pending ?? true;
     let networkFailed = false;
     if (!pending) {
       try {
@@ -422,7 +422,7 @@ class BaseService {
     this.#assertPendingTenant(current);
     const creating = current?.pending && current.operation === "create";
     const record = await this.validate({...current, ...data, ...this.#keyValues(id)}, creating ? "create" : "update");
-    const pending = options.pending ?? !this.client.connected?.();
+    const pending = options.pending ?? true;
     let networkFailed = false;
     if(!pending && !creating) {
       try {
@@ -451,7 +451,7 @@ class BaseService {
       this.#notify();
       return { ok: true, data: current };
     }
-    const pending = options.pending ?? !this.client.connected?.();
+    const pending = options.pending ?? true;
     let networkFailed = false;
     if (!pending) {
       try {
@@ -931,7 +931,7 @@ class SessionService extends BaseService {
   }
 }
 
-const version = "1.4.31";
+const version = "1.4.5";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;

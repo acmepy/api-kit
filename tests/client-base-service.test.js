@@ -3,6 +3,26 @@ import assert from "node:assert/strict";
 import { BaseService } from "../src/client/services/base-service.js";
 
 describe("Client BaseService", () => {
+  for (const operation of ["create", "update", "remove"]) {
+    it(`keeps an online ${operation} in cache by default after HTTP 500`, async () => {
+      const records = operation === "create" ? [] : [{ id: 42, name: "Ana" }];
+      const service = new BaseService({
+        name: "clientes", createAdapter: () => memoryAdapter(records),
+        operations: { [operation]: { path: "/clientes", method: "POST" } },
+        client: { connected: () => true, async request() {
+          assert.equal(records[0].pending, true);
+          throw Object.assign(new Error("Internal Server Error"), { status: 500 });
+        } },
+      });
+      const save = () => operation === "create" ? service.save({ id: 42, name: "Ana" })
+        : operation === "update" ? service.save({ id: 42, name: "Editada" }) : service.remove(42);
+      await assert.rejects(save(), /Internal Server Error/);
+      assert.equal(records[0].pending, true);
+      assert.equal(records[0].operation, operation);
+      assert.equal(records[0].status, "error");
+    });
+  }
+
   it("save creates new records with or without a key and updates cached records", async () => {
     const records = [];
     const calls = [];
@@ -224,7 +244,7 @@ describe("Client BaseService", () => {
       createAdapter: () => memoryAdapter(records),
     });
 
-    const result = await service.remove(1);
+    const result = await service.remove(1, { pending: false });
 
     assert.deepEqual(result, { ok: true, data: { id: 1 } });
     assert.deepEqual(calls, [

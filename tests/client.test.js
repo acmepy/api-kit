@@ -112,12 +112,18 @@ describe("client public API", () => {
           await assert.rejects(() => service.pull(), (error) => error.code === "NETWORK_ERROR");
           assert.equal(client.connected(), false);
         }
-        const result = operation === "update" ? await service.update(42, { nombre: "Editado" })
-          : operation === "remove" ? await service.remove(42)
-          : await service.create({ nombre: "Nuevo" });
+        const write = () => operation === "update" ? service.update(42, { nombre: "Editado" })
+          : operation === "remove" ? service.remove(42)
+          : service.create({ nombre: "Nuevo" });
+        let result;
+        if (operation === "pull then create") result = await write();
+        else {
+          await assert.rejects(write(), /Failed to fetch/);
+          result = { ok: true, data: (await service.pending()).data[0] };
+        }
         assert.equal(result.ok, true);
         assert.equal(result.data.pending, true);
-        assert.equal(result.data.status, "pending");
+        assert.equal(result.data.status, operation === "pull then create" ? "pending" : "error");
         assert.equal(result.data.operation, operation === "pull then create" ? "create" : operation);
         assert.deepEqual((await service.get(result.data.id)).data, result.data);
         assert.equal(client.connected(), false);
@@ -133,7 +139,7 @@ describe("client public API", () => {
   }
 
   for (const failure of [400, 401, 500, "forced direct", "abort"]) {
-    it(`does not create offline pending records for ${failure}`, async () => {
+    it(`does not create pending records with pending:false for ${failure}`, async () => {
       const adapters = adapterRegistry();
       let fail = false;
       const client = createApiClient({
@@ -161,7 +167,7 @@ describe("client public API", () => {
         await client.login({ username: "admin" });
         const service = client.service("clientes");
         fail = true;
-        await assert.rejects(() => service.create({ nombre: "Nuevo" }, failure === "forced direct" ? { pending: false } : {}));
+        await assert.rejects(() => service.create({ nombre: "Nuevo" }, { pending: false }));
         assert.deepEqual((await service.pending()).data, []);
         if (failure === "abort") assert.equal(client.connected(), true);
       } finally {
