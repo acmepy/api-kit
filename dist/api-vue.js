@@ -1,6 +1,6 @@
 import { ref, readonly, provide, inject, reactive, watch, onScopeDispose, computed } from 'vue';
 
-const version = "1.4.7";
+const version = "1.4.8";
 
 /** Injection key used by the ApiKit Vue plugin. */
 const ApiVueKey = Symbol("ApiKitVue");
@@ -194,6 +194,8 @@ function useApiService(name) {
     createDetail: run("createDetail"),
     updateDetail: run("updateDetail"),
     removeDetail: run("removeDetail"),
+    validateDetail: (...args) => service().validateDetail(...args),
+    validateDetailAt: (...args) => service().validateDetailAt(...args),
   };
 }
 

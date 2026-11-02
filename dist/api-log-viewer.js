@@ -405,7 +405,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.4.7";
+const version = "1.4.8";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

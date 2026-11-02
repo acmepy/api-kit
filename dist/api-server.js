@@ -1265,6 +1265,18 @@ function buildSchemaDocument({ routes, modules, session } = {}) {
     if (jsonSchema) service.schemas[route.serviceMethod] = jsonSchema;
   }
 
+  for (const service of services.values()) {
+    for (const include of modules.get(service.name).model?.getAssociationIncludes?.() || []) {
+      const detail = service.details[include.as];
+      if (!detail) continue;
+      detail.schemas = {};
+      for (const operation of ["create", "update"]) {
+        const permitted = service.operations[operation] || service.operations[`${operation}Detail`] || (operation === "create" && service.operations.update);
+        const schema = include.model.resourceSchemas?.[operation];
+        if (permitted && typeof schema?.toJsonSchema === "function") detail.schemas[operation] = normalizeJsonSchema(schema.toJsonSchema());
+      }
+    }
+  }
   return { schema: "1.0.0", services: [...services.values()] };
 }
 
@@ -3497,7 +3509,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.4.7";
+const version = "1.4.8";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

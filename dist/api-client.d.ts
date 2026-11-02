@@ -160,7 +160,7 @@ export interface ServiceOptions {
   operations?: Record<string, unknown>;
   schemas?: Record<string, unknown>;
   primaryKeyAttributes?: string[];
-  details?: Record<string, { foreignKey: string; primaryKeyAttributes: string[]; tenant?: { attribute: string } }>;
+  details?: Record<string, { foreignKey: string; primaryKeyAttributes: string[]; tenant?: { attribute: string }; schemas?: Record<string, unknown> }>;
   tenant?: { attribute: string };
   prefix?: string;
   createAdapter?: (options?: CreateAdapterOptions) => StorageAdapter;
@@ -211,6 +211,8 @@ export class BaseService<T extends ServiceRecord = ServiceRecord> {
   pushOne(record: T): Promise<PushResult>;
   validate(data: Partial<T>, operation?: string): Promise<Partial<T>>;
   validateAt(field: string, data?: Partial<T>, operation?: string): Promise<unknown>;
+  validateDetail(detail: string, data?: Record<string, unknown>, operation?: string): Promise<Record<string, unknown>>;
+  validateDetailAt(detail: string, field: string, data?: Record<string, unknown>, operation?: string): Promise<unknown>;
   unique(field: string, value: unknown, data?: Partial<T>): Promise<Error | null>;
   permissions(operation: string): string[];
   request<R = unknown>(operation: string, options?: { params?: Record<string, unknown>; query?: Record<string, unknown>; body?: unknown }): Promise<ApiResponse<R>>;

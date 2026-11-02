@@ -674,6 +674,22 @@ El cliente descubre las claves primarias y los nombres de detalle desde `schema.
 
 La validacion de la cabecera conserva los detalles anidados al crear o actualizar, incluidos los pendientes locales. Las reglas de los detalles se ejecutan en el servidor al enviar; los errores de envio quedan disponibles en `useApiForm.errors` con los nombres de campo que devuelve el servidor.
 
+Para validar una linea localmente antes de agregarla al formulario, usa los schemas del detalle publicados en `schema.json`:
+
+```js
+const recibos = client.service("recibos");
+const detalle = await recibos.validateDetail("detalles", datos);
+const codMoneda = await recibos.validateDetailAt("detalles", "codMoneda", datos);
+await recibos.validateDetail("detalles", cambios, "update");
+
+// Vue delega en los mismos metodos del cliente.
+const servicio = useApiService("recibos");
+await servicio.validateDetail("detalles", datos);
+await servicio.validateDetailAt("detalles", "codMoneda", datos);
+```
+
+La operacion predeterminada es `create`; `update` permite validar cambios parciales. Devuelven valores normalizados y rechazan con los errores por campo de Yep, sin agruparlos por modelo porque se valida un detalle individual. No requieren conexion si el schema ya esta disponible. La FK asignada por el servidor no se exige en una linea nueva. Las reglas `unique` consultan los detalles de las cabeceras en cache, no otras lineas que aun no se hayan guardado. Estos metodos son explicitos: `validate()` y `validateAt()` mantienen su comportamiento sobre la cabecera. Si un servidor anterior no publica los schemas de detalle, no se aplican reglas locales para esos detalles.
+
 Las operaciones individuales de detalle envian directamente al servidor y requieren conexion. Por ejemplo: `await listas.createDetail("001", "items", { articulo: "A2", cantidad: 4 })`, `await listas.updateDetail("001", "items", "A2", { cantidad: 5 })` y `await listas.removeDetail("001", "items", "A2")`. Actualizan los detalles de una cabecera ya cargada en cache. En Vue se usan los mismos metodos sobre `useApiService("listas")`.
 
 Las reglas `unique` se comprueban en el cliente contra su cache local. Son una validación de experiencia de usuario; el servidor y la restricción de base de datos siguen siendo la autoridad final.

@@ -14,7 +14,7 @@ it("Vue and discovered client preserve nested details, server validation and nat
     details: [{ name: "items", modelName: "ListaItem", foreignKey: "codigo", timestamps: false,
       attributes: {
         codigo: { type: "string", primaryKey: true, allowNull: false },
-        articulo: { type: "string", primaryKey: true, allowNull: false },
+        articulo: { type: "string", primaryKey: true, allowNull: false, regexp: /^[A-Z0-9]+$/ },
         cantidad: { type: "integer", allowNull: false, min: 1, positive: true },
       },
     }],
@@ -42,6 +42,37 @@ it("Vue and discovered client preserve nested details, server validation and nat
     const service = client.service("listas");
     assert.deepEqual(service.primaryKeyAttributes, ["codigo"]);
     assert.deepEqual(service.details.items.primaryKeyAttributes, ["codigo", "articulo"]);
+    assert.ok(service.details.items.schemas.create);
+    const invalidDetail = { articulo: "A!" }; // Missing required quantity and invalid article format.
+    const checkDetailErrors = error => {
+      assert.equal(error.code, "VALIDATION_ERROR");
+      assert.deepEqual(Object.keys(error.errors).sort(), ["articulo", "cantidad"]);
+      assert.match(error.errors.cantidad, /requerido/);
+      assert.match(error.errors.articulo, /formato/);
+      return true;
+    };
+    await assert.rejects(() => service.validateDetail("items", invalidDetail), checkDetailErrors);
+    await assert.rejects(() => service.validateDetailAt("items", "cantidad", invalidDetail), error => {
+      assert.deepEqual(Object.keys(error.errors), ["cantidad"]);
+      assert.match(error.errors.cantidad, /requerido/);
+      return true;
+    });
+    await assert.rejects(() => service.validateDetailAt("items", "articulo", invalidDetail), error => {
+      assert.deepEqual(Object.keys(error.errors), ["articulo"]);
+      assert.match(error.errors.articulo, /formato/);
+      return true;
+    });
+    await assert.rejects(() => client.request("/listas", { method: "POST", body: { codigo: "ERR", items: [invalidDetail] } }), error => {
+      assert.equal(error.status, 400);
+      assert.deepEqual(Object.keys(error.errors), ["ListaItem"]);
+      return checkDetailErrors({ code: error.code, errors: error.errors.ListaItem });
+    });
+    assert.equal(await serverApi.services.get("listas").model.findByPk("ERR"), null, "Invalid detail rolls back its master");
+    assert.deepEqual(await service.validateDetail("items", { articulo: "VALID", cantidad: "2" }), { articulo: "VALID", cantidad: 2 });
+    assert.equal(await service.validateDetailAt("items", "cantidad", { cantidad: "3" }), 3);
+    await assert.rejects(() => service.validateDetail("items", { articulo: "INVALID", cantidad: 0 }),
+      error => typeof error.errors.cantidad === "string");
+    assert.deepEqual(await service.validateDetail("items", {}, "update"), {});
     const form = scope.run(() => app.runWithContext(() => useApiForm("listas", {
       initial: { codigo: "001", descripcion: "Primera", items: [{ articulo: "A1", cantidad: "2" }] },
     })));
@@ -53,6 +84,19 @@ it("Vue and discovered client preserve nested details, server validation and nat
     assert.equal(created.data.id, undefined);
     assert.equal((await service.get("001")).data.codigo, "001");
     const resource = scope.run(() => app.runWithContext(() => useApiService("listas")));
+    await assert.rejects(() => resource.validateDetail("items", invalidDetail), checkDetailErrors);
+    await assert.rejects(() => resource.validateDetailAt("items", "articulo", invalidDetail), error => {
+      assert.match(error.errors.articulo, /formato/);
+      return true;
+    });
+    await assert.rejects(() => resource.validateDetailAt("items", "cantidad", invalidDetail), error => {
+      assert.match(error.errors.cantidad, /requerido/);
+      return true;
+    });
+    assert.equal(await resource.validateDetailAt("items", "cantidad", { cantidad: "4" }), 4);
+    assert.equal((await resource.validateDetail("items", { articulo: "A2", cantidad: "5" })).cantidad, 5);
+    await assert.rejects(() => resource.validateDetailAt("items", "cantidad", { cantidad: 0 }),
+      error => typeof error.errors.cantidad === "string");
     await resource.pull();
     await resource.updateDetail("001", "items", "A1", { cantidad: 3 });
     assert.equal(resource.records.value[0].items[0].cantidad, 3);

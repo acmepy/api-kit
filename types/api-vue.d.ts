@@ -47,6 +47,8 @@ export interface ApiVueService<T extends ServiceRecord = ServiceRecord> {
   createDetail: BaseService<T>["createDetail"];
   updateDetail: BaseService<T>["updateDetail"];
   removeDetail: BaseService<T>["removeDetail"];
+  validateDetail: BaseService<T>["validateDetail"];
+  validateDetailAt: BaseService<T>["validateDetailAt"];
 }
 export function useApiService<T extends ServiceRecord = ServiceRecord>(name: string): ApiVueService<T>;
 export interface ApiFormOptions<T> {

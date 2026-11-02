@@ -192,6 +192,8 @@ export function useApiService(name) {
     createDetail: run("createDetail"),
     updateDetail: run("updateDetail"),
     removeDetail: run("removeDetail"),
+    validateDetail: (...args) => service().validateDetail(...args),
+    validateDetailAt: (...args) => service().validateDetailAt(...args),
   };
 }
 

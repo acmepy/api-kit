@@ -275,6 +275,35 @@ export class BaseService {
     return schema.validateAt(attribute, data);
   }
 
+  async validateDetail(detail, data = {}, operation = "create") {
+    const schema = this.#detailSchema(detail, operation);
+    return schema ? schema.validate(data) : data;
+  }
+
+  async validateDetailAt(detail, attribute, data = {}, operation = "create") {
+    const schema = this.#detailSchema(detail, operation);
+    return schema ? schema.validateAt(attribute, data) : data?.[attribute];
+  }
+
+  #detailSchema(detail, operation) {
+    const descriptor = this.details[detail];
+    if (!descriptor) throw new Error(`Detalle "${detail}" no disponible en "${this.name}"`);
+    const jsonSchema = descriptor.schemas?.[operation];
+    if (!jsonSchema) return null;
+    const schema = yep.fromJsonSchema({ ...jsonSchema,
+      required: jsonSchema.required?.filter(field => ![descriptor.foreignKey].flat().includes(field)),
+    });
+    this.#applyUniqueRules(schema, jsonSchema, async (field, value, data) => {
+      if (value === undefined || value === null) return null;
+      const rows = (await this.list()).data.flatMap(record => record[detail] || []);
+      const keys = descriptor.primaryKeyAttributes || ["id"];
+      const duplicate = rows.some(row => row[field] === value && !keys.every(key =>
+        data[key] !== undefined && String(row[key]) === String(data[key])));
+      return duplicate ? new Error("Ya existe un registro con este valor") : null;
+    });
+    return schema;
+  }
+
   async unique(field, value, data = {}) {
     if (value === undefined || value === null) return null;
     const currentId = this.keyOf(data);
@@ -374,10 +403,10 @@ export class BaseService {
     return schema;
   }
 
-  #applyUniqueRules(schema, jsonSchema) {
+  #applyUniqueRules(schema, jsonSchema, unique = (field, value, data) => this.unique(field, value, data)) {
     for (const [field, property] of Object.entries(jsonSchema?.properties || {})) {
       if (property?.unique !== true || typeof schema.shapeDefinition?.[field]?.unique !== "function") continue;
-      schema.shapeDefinition[field].unique((value, attribute, data) => this.unique(attribute, value, data));
+      schema.shapeDefinition[field].unique((value, attribute, data) => unique(attribute, value, data));
     }
   }
 

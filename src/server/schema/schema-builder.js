@@ -1,4 +1,5 @@
 import { jsonSchemaForRoute, normalizeDocumentConfig, routesForSession } from "./document-utils.js";
+import { normalizeJsonSchema } from "../utils/normalize.js";
 
 export function normalizeSchemaDocumentConfig(schema) {
   return normalizeDocumentConfig(schema, { permission: "schema.list" });
@@ -33,5 +34,17 @@ export function buildSchemaDocument({ routes, modules, session } = {}) {
     if (jsonSchema) service.schemas[route.serviceMethod] = jsonSchema;
   }
 
+  for (const service of services.values()) {
+    for (const include of modules.get(service.name).model?.getAssociationIncludes?.() || []) {
+      const detail = service.details[include.as];
+      if (!detail) continue;
+      detail.schemas = {};
+      for (const operation of ["create", "update"]) {
+        const permitted = service.operations[operation] || service.operations[`${operation}Detail`] || (operation === "create" && service.operations.update);
+        const schema = include.model.resourceSchemas?.[operation];
+        if (permitted && typeof schema?.toJsonSchema === "function") detail.schemas[operation] = normalizeJsonSchema(schema.toJsonSchema());
+      }
+    }
+  }
   return { schema: "1.0.0", services: [...services.values()] };
 }
