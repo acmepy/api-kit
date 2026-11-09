@@ -1,7 +1,7 @@
 import { open, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline";
-import { extractTxId, parseLogLine } from "./parser.js";
+import { extractTxId, extractDurationMs, parseLogLine } from "./parser.js";
 
 export class LogFileError extends Error {
   constructor(message, status) { super(message); this.status = status; }
@@ -57,6 +57,7 @@ export function createLogReader({ directory, parseLine = parseLogLine } = {}) {
       const consume = () => {
         if (!current) return;
         current.txId ||= extractTxId(current.raw);
+        current.durationMs ??= extractDurationMs(current.message, current.scope);
         total++;
         levels.add(current.level);
         sources.add(current.source);

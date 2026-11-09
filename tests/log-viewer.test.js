@@ -45,6 +45,20 @@ async function server(t, directory, options = {}) {
 }
 
 describe("log viewer", () => {
+  it("retains SQL timings in damaged JSON and multiline log entries", async t => {
+    const damaged = `${prefix} [TRACE] [SEQ] ${TX} {"type":"sql","sql":"SELECT "id" FROM "recibos"","params":[1],"sqlDurationMs":2.4}`;
+    assert.equal(parseLogLine(damaged).durationMs, 2.4);
+    const tiny = damaged.replace('"sqlDurationMs":2.4', '"sqlDurationMs":2.4e-7');
+    assert.equal(parseLogLine(tiny).durationMs, 2.4e-7);
+    const unrelated = `${prefix} [TRACE] [SEQ] {"params":[{"sqlDurationMs":999}],"type":"sql"}`;
+    assert.equal(parseLogLine(unrelated).durationMs, null, "Parameters are not operation metadata");
+    const multiline = `${prefix} [TRACE] [SEQ] ${TX} {\n  "type":"sql",\n  "sql":"SELECT 1",\n  "sqlDurationMs":0\n}`;
+    const { directory } = await fixture(t);
+    await writeFile(path.join(directory, "sql.log"), [damaged, multiline].join("\n"));
+    const result = await createLogReader({ directory }).entries("sql.log");
+    assert.deepEqual(result.entries.map(entry => entry.durationMs), [0, 2.4]);
+    assert.deepEqual(result.entries.map(entry => entry.txId), [TX, TX]);
+  });
   it("extracts HTTP, SQL and model durations, preserves zero and leaves missing durations empty", async t => {
     const lines = [
       `${prefix} [INFO] [API] ${TX} {"type":"request","durationMs":2.4}`,

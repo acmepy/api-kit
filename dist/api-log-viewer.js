@@ -17,6 +17,21 @@ function metadata(text) {
   return null;
 }
 
+function extractDurationMs(text, scope, structured = metadata(text)) {
+  let duration = structured?.sqlDurationMs ?? structured?.operationDurationMs ?? structured?.durationMs;
+  if (!structured) {
+    // Some loggers remove JSON escapes from quoted SQL. Read the trailing timing field anyway.
+    const fields = [...text.matchAll(/"(?:sqlDurationMs|operationDurationMs|durationMs)"\s*:\s*(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*[,}])/g)];
+    if (fields.length) duration = Number(fields.at(-1)[1]);
+  }
+  if (typeof duration === "number" && Number.isFinite(duration) && duration >= 0) return duration;
+  if (scope === "request") {
+    const legacy = /^\S+\s+(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD|CONNECT|TRACE)\s+\S+\s+\d{3}\s+(\d+(?:\.\d+)?)\s+\d+(?:\s|$)/.exec(text);
+    if (legacy) return Number(legacy[1]);
+  }
+  return null;
+}
+
 function extractTxId(text) {
   const json = JSON_TX.exec(text);
   if (json) {
@@ -45,12 +60,7 @@ function parseLogLine(line) {
   else if (txId && message.startsWith(`${txId} `)) message = message.slice(txId.length + 1);
   const structured = metadata(message);
   scope ||= structured?.type || null;
-  const duration = structured?.sqlDurationMs ?? structured?.operationDurationMs ?? structured?.durationMs;
-  let durationMs = typeof duration === "number" && Number.isFinite(duration) && duration >= 0 ? duration : null;
-  if (durationMs === null && scope === "request") {
-    const legacy = /^\S+\s+(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD|CONNECT|TRACE)\s+\S+\s+\d{3}\s+(\d+(?:\.\d+)?)\s+\d+(?:\s|$)/.exec(message);
-    if (legacy) durationMs = Number(legacy[1]);
-  }
+  const durationMs = extractDurationMs(message, scope, structured);
   return { timestamp, level: level.toUpperCase(), source: source || "Sin origen", scope, txId, message, durationMs };
 }
 
@@ -108,6 +118,7 @@ function createLogReader({ directory, parseLine = parseLogLine } = {}) {
       const consume = () => {
         if (!current) return;
         current.txId ||= extractTxId(current.raw);
+        current.durationMs ??= extractDurationMs(current.message, current.scope);
         total++;
         levels.add(current.level);
         sources.add(current.source);
@@ -424,7 +435,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.4.9";
+const version = "1.4.91";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

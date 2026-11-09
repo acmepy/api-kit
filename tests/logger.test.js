@@ -5,6 +5,18 @@ import { log, setLogging } from "../src/server/logger/index.js";
 import { runWithContext } from "../src/server/context/request-context.js";
 import { parseLogLine } from "../src/log-viewer/parser.js";
 
+test("log viewer reads SQL duration from actual logger-js output with quoted identifiers", t => {
+  const output = [];
+  t.mock.method(console, "log", (...args) => output.push(args));
+  createLogger({ name: false, displayConsole: true, level: LEVELS.TRACE });
+  const txId = "11111111-1111-4111-8111-111111111111";
+  logger.trace("[SEQ]", txId, { type: "sql", sql: 'SELECT "id" FROM "recibos" WHERE "id" = ?', params: [1], sqlDurationMs: 2.4 });
+  assert.equal(output.length, 1);
+  const line = `[2026-11-09 10:00:00] [TRACE] ${output[0].slice(2).join(" ")}`;
+  assert.equal(parseLogLine(line).txId, txId);
+  assert.equal(parseLogLine(line).durationMs, 2.4);
+});
+
 test("logger-js receives API, txId and one JSON string without nested brackets", (t) => {
   const output = [];
   t.mock.method(console, "log", (...args) => output.push(args));
