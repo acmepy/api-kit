@@ -170,20 +170,33 @@ export class BaseService {
   }
 
   async pull(query = {}) {
-    const records = [];
-    let nextQuery = { ...query };
+    const sync = this.client.beginSync?.(this.name, "download");
+    try {
+      const records = [];
+      let total = null;
+      let nextQuery = { ...query };
 
-    while (nextQuery) {
-      const response = await this.#send("list", { query: nextQuery });
-      const data = Array.isArray(response.data) ? response.data : [];
-      records.push(...data);
-      nextQuery = this.#nextPageQuery(response, nextQuery);
+      sync?.update({ status: "downloading" });
+      while (nextQuery) {
+        const response = await this.#send("list", { query: nextQuery });
+        const data = Array.isArray(response.data) ? response.data : [];
+        records.push(...data);
+        const pagination = response.pagination || response.meta?.pagination || response.meta || {};
+        const reportedTotal = Number(pagination.total);
+        if (pagination.total != null && Number.isFinite(reportedTotal) && reportedTotal >= 0) total = reportedTotal;
+        sync?.update({ count: records.length, total });
+        nextQuery = this.#nextPageQuery(response, nextQuery);
+      }
+
+      if (records.length > 0) await this.adapter.add(records);
+      await this.client.markServiceCacheUpdated?.(this.name);
+      this.#notify();
+      sync?.complete({ count: records.length, total: total ?? records.length, succeeded: records.length });
+      return { ok: true, data: records };
+    } catch (error) {
+      sync?.fail(error);
+      throw error;
     }
-
-    if (records.length > 0) await this.adapter.add(records);
-    await this.client.markServiceCacheUpdated?.(this.name);
-    this.#notify();
-    return { ok: true, data: records };
   }
 
   async pullOne(id, query = {}) {
@@ -231,14 +244,41 @@ export class BaseService {
   }
 
   async push(id = null) {
-    const targets = id === null ? (await this.pending()).data : [await this.adapter.get(this.#cacheKey(id))].filter(Boolean);
-    const results = [];
-    for (const record of targets) results.push(await this.pushOne(record));
-    const errors = results.filter((result) => !result.ok);
-    return { ok: errors.length === 0, results, errors };
+    const sync = this.client.beginSync?.(this.name, "upload");
+    try {
+      const targets = id === null ? (await this.pending()).data : [await this.adapter.get(this.#cacheKey(id))].filter(Boolean);
+      const results = [];
+      let failed = 0;
+      sync?.update({ status: "uploading", total: targets.length });
+      for (const record of targets) {
+        const result = await this.#pushOne(record);
+        results.push(result);
+        if (!result.ok) failed++;
+        sync?.update({ count: results.length, succeeded: results.length - failed, failed });
+      }
+      const errors = results.filter((result) => !result.ok);
+      sync?.complete({ count: results.length, total: targets.length, succeeded: results.length - errors.length, failed: errors.length });
+      return { ok: errors.length === 0, results, errors };
+    } catch (error) {
+      sync?.fail(error);
+      throw error;
+    }
   }
 
   async pushOne(record) {
+    const sync = this.client.beginSync?.(this.name, "upload");
+    try {
+      sync?.update({ status: "uploading", total: 1 });
+      const result = await this.#pushOne(record);
+      sync?.complete({ count: 1, total: 1, succeeded: result.ok ? 1 : 0, failed: result.ok ? 0 : 1 });
+      return result;
+    } catch (error) {
+      sync?.fail(error);
+      throw error;
+    }
+  }
+
+  async #pushOne(record) {
     try {
       const response = await this.#sendPendingOperation(record);
       if (record.operation === "remove") {

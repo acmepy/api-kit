@@ -107,6 +107,18 @@ export interface ChangeEvent {
   [key: string]: unknown;
 }
 
+export interface SyncState {
+  service: string;
+  direction: "download" | "upload";
+  status: "starting" | "downloading" | "uploading" | "completed" | "error";
+  count: number;
+  total: number | null;
+  succeeded: number;
+  failed: number;
+  error?: { name: string; message: string; code?: string; status?: number };
+}
+export type SyncChangeEvent = (SyncState & { type: "sync" }) | { type: "sync"; source: "reset" };
+
 export interface LoginOptions { sync?: boolean; }
 export interface TenantInfo { id: string | number; name: string; }
 export interface ClientSession {
@@ -140,6 +152,7 @@ export class ApiClient {
   cachedRequest<T = unknown>(key: string, path: string, options?: RequestOptions & { force?: boolean }): Promise<T>;
   markServiceCacheUpdated(name: string): void;
   syncServices(force?: boolean): Promise<void>;
+  syncState(): SyncState[];
   connected(): boolean;
   lastReceivedAt(): number | null;
   destroy(): void;

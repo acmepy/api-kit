@@ -1,5 +1,5 @@
 import type { App, InjectionKey, Ref } from "vue";
-import type { ApiClient, BaseService, LoginOptions, ServiceRecord, ServiceId, ApiResponse, ValidationErrors } from "./api-client";
+import type { ApiClient, BaseService, LoginOptions, ServiceRecord, ServiceId, ApiResponse, ValidationErrors, SyncState } from "./api-client";
 export interface ApiVue {
   client: ApiClient;
   connected: Readonly<Ref<boolean>>;
@@ -9,6 +9,7 @@ export interface ApiVue {
   error: Readonly<Ref<unknown>>;
   ready: Readonly<Ref<boolean>>;
   tenantChanging: Readonly<Ref<boolean>>;
+  syncState: Readonly<Ref<readonly Readonly<SyncState>[]>>;
   initialized: Promise<void>;
   login(credentials?: Record<string, unknown>, options?: LoginOptions): Promise<unknown>;
   logout(): Promise<unknown>;

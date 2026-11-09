@@ -589,6 +589,37 @@ Metodos publicos principales:
 - `onChange(listener)` / `offChange(listener)`: eventos del cliente.
 - `changes(since?)`: consulta `/changes`.
 
+`client.syncState()` devuelve una copia del ultimo estado por servicio y direccion (`download` o `upload`), sin un historial acumulativo ni persistencia entre instancias. Se actualiza en las descargas `pull()` y las subidas de pendientes `push()`/`pushOne()`, incluidas las que realizan las precargas y `pending.push()`:
+
+```js
+const cancelar = client.onChange(event => {
+  if (event.type === "sync") console.log(client.syncState());
+});
+
+await client.syncServices(true);
+// Las descargas programadas siguen informando su progreso en segundo plano.
+await client.service("pending").push();
+
+client.syncState();
+// [{ service: "facturas", direction: "upload", status: "completed",
+//    count: 10, total: 10, succeeded: 8, failed: 2 }]
+```
+
+Cada cambio emite un evento `{ type: "sync", service, direction, status, count, total, succeeded, failed }`. Los estados son `starting`, `downloading` o `uploading`, `completed` y `error`. `count` cuenta registros recibidos o procesados, no bytes; `total` es `null` hasta conocerlo. Las descargas notifican el progreso por pagina y solo pasan a `completed` despues de guardar la cache. Las subidas notifican cada registro; `completed` puede incluir rechazos en `failed`, que permanecen pendientes para reintentar. Un fallo que impide completar el proceso usa `error` e incluye `{ name, message, code?, status? }` en la propiedad `error`. Un reintento reemplaza el estado anterior y reinicia los contadores.
+
+`syncServices(true)` y `api.sync(true)` mantienen su comportamiento de programar las descargas: su promesa no espera todas las precargas. El estado refleja el trabajo real a medida que ocurre; `serviceSyncDelay: false` desactiva esas precargas. Los envios directos con `pending: false`, `pullOne()` y los cambios recibidos por SSE no generan estos estados de sincronizacion.
+
+Vue expone el mismo array como un ref de solo lectura, inicializado con el estado actual y actualizado automaticamente:
+
+```js
+const api = useApi();
+const estados = api.syncState; // ref reactivo de solo lectura
+console.log(estados.value);
+await api.sync(true);
+```
+
+El estado se limpia al cerrar sesion, cambiar de usuario/tenant o destruir el cliente, notificando `{ type: "sync", source: "reset" }`. Las actualizaciones tardias de un proceso anterior no reemplazan el estado de uno nuevo.
+
 `changes` y `sse` estan activados por defecto. Configuralos como `false` para desactivar, respectivamente, la descarga automatica de cambios y la conexion SSE.
 
 `syncCacheTimeout` define por cuantos milisegundos se reutilizan el manifiesto de schemas y los datos locales sin consultar la red. Su valor por defecto es 5 minutos; al vencer, el cliente restaura la cache y la actualiza en segundo plano. Usa `syncServices(true)` para forzar una actualizacion inmediata.

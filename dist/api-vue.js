@@ -1,6 +1,6 @@
 import { ref, readonly, provide, inject, reactive, watch, onScopeDispose, computed } from 'vue';
 
-const version = "1.4.91";
+const version = "1.5.0";
 
 /** Injection key used by the ApiKit Vue plugin. */
 const ApiVueKey = Symbol("ApiKitVue");
@@ -23,6 +23,7 @@ function createApiVue(client) {
   const error = ref(null);
   const ready = ref(false);
   const tenantChanging = ref(Boolean(client.tenantChanging?.()));
+  const syncState = ref(client.syncState?.() || []);
 
   const refreshSession = async () => {
     try {
@@ -37,6 +38,7 @@ function createApiVue(client) {
     connected.value = Boolean(client.connected?.());
     lastReceivedAt.value = nextEvent?.lastReceivedAt || client.lastReceivedAt?.() || null;
     tenantChanging.value = Boolean(client.tenantChanging?.());
+    if (nextEvent?.type === "sync") syncState.value = client.syncState?.() || [];
     if (nextEvent?.error) error.value = nextEvent.error;
     if (["login", "logout", "auth-expired", "session-updated", "tenant-changed", "tenant-change-finished"].includes(nextEvent?.source)) refreshSession();
   });
@@ -54,6 +56,7 @@ function createApiVue(client) {
     error: readonly(error),
     ready: readonly(ready),
     tenantChanging: readonly(tenantChanging),
+    syncState: readonly(syncState),
     initialized,
     async login(credentials, options) {
       error.value = null;
@@ -164,7 +167,8 @@ function useApiService(name) {
     }
   };
 
-  const unsubscribe = api.client.onChange(() => {
+  const unsubscribe = api.client.onChange(event => {
+    if (event?.type === "sync") return;
     refresh().catch(() => {});
   });
   refresh().catch(() => {});

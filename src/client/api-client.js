@@ -48,6 +48,7 @@ export class ApiClient {
   #authExpired = false;
   #sessionSyncEnabled = true;
   #services = new Map();
+  #syncState = new Map();
   #listeners = new Set();
   #online = false;
   #lastReceivedAt = null;
@@ -148,6 +149,7 @@ export class ApiClient {
         && (previousSession?.tenantId !== response.data?.tenantId || previousSession?.user?.id !== response.data?.user?.id)) {
       return this.#startTenantChange(response.data?.tenantId, { supplied: response, sync });
     }
+    if (previousSession?.user?.id !== response.data?.user?.id) this.#clearSyncState();
     this.#sessionSyncEnabled = sync;
     this.#authExpired = false;
     this.#stopPing();
@@ -284,6 +286,7 @@ export class ApiClient {
         throw this.#tenantError("El tenant cambio en otra conexion y hay pendientes locales; restaure el tenant anterior para enviarlos", "TENANT_CHANGED_WITH_PENDING");
       }
       if (changed) {
+        this.#clearSyncState();
         for (const service of services.values()) await service.clear();
         await this.#adapter.clear();
         this.#services.clear();
@@ -391,6 +394,7 @@ export class ApiClient {
       const previousSession = (await this.sessionService().adapter.getAll())[0] || { id: "session" };
       await this.sessionService().create({ ...previousSession, token: null, authExpired: true });
     } else {
+      this.#clearSyncState();
       await this.#clearServices();
       await this.#adapter.clear();
       this.#services.clear();
@@ -658,7 +662,42 @@ export class ApiClient {
     return this.#lastReceivedAt;
   }
 
+  syncState() {
+    return [...this.#syncState.values()].map(({ state }) => ({ ...state,
+      ...(state.error && { error: { ...state.error } }),
+    }));
+  }
+
+  /** Internal lifecycle shared by service downloads and pending uploads. */
+  beginSync(service, direction) {
+    const key = `${direction}:${service}`;
+    const run = { state: { service, direction, status: "starting", count: 0, total: null, succeeded: 0, failed: 0 } };
+    const update = patch => {
+      if (this.#syncState.get(key) !== run) return;
+      run.state = { ...run.state, ...patch };
+      const event = { ...run.state, ...(run.state.error && { error: { ...run.state.error } }) };
+      this.#emitChange({ type: "sync", ...event });
+    };
+    this.#syncState.set(key, run);
+    update({});
+    return {
+      update,
+      complete: patch => update({ ...patch, status: "completed" }),
+      fail: error => update({ status: "error", error: {
+        name: error?.name || "Error", message: error?.message || String(error),
+        ...(error?.code !== undefined && { code: error.code }),
+        ...(error?.status !== undefined && { status: error.status }),
+      } }),
+    };
+  }
+
+  #clearSyncState() {
+    this.#syncState.clear();
+    this.#emitChange({ type: "sync", source: "reset" });
+  }
+
   destroy() {
+    this.#clearSyncState();
     this.#tenantChannel?.close();
     for (const controller of this.#requests) controller.abort();
     this.#stopPing();
