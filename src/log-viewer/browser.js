@@ -141,7 +141,10 @@ export function viewerBrowser() {
     const summary = node("summary", entry.message.split("\n")[0]);
     details.append(summary, node("pre", entry.raw, "text-wrap text-break border rounded p-2 mt-2 mb-0"));
     message.append(details);
-    tr.append(level, source, tx, message);
+    const duration = node("td", typeof entry.durationMs === "number" && Number.isFinite(entry.durationMs)
+      ? `${entry.durationMs.toLocaleString("es", { maximumFractionDigits: 3 })} ms` : "—",
+    "text-end text-nowrap font-monospace small");
+    tr.append(level, source, tx, duration, message);
     return tr;
   }
   async function entries() {

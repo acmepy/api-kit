@@ -119,17 +119,17 @@ describe("auth", () => {
     await auth.middleware(req, res, () => {});
 
     assert.equal(auth.logging, logger);
-    assert.ok(events.some(([prefix, scope, txId, message, details]) => (
-      prefix === "[IAM]" && scope === "[auth]" && txId === ""
-      && message === "Error de inicio de sesión" && details.status === 401
+    assert.ok(events.some(([prefix, txId, payload]) => (
+      prefix === "[IAM]" && txId === "" && payload.type === "auth"
+      && payload.message === "Error de inicio de sesión" && payload.status === 401
     )));
   });
 
   it("passes the request context to IAM logs without mixing concurrent transaction IDs", async () => {
     const seq = createTestSeq({ logging: false });
     const events = [];
-    const capture = (prefix, scope, txId, message, details) => {
-      if (prefix === "[IAM]") events.push({ ...details, scope, txId, message });
+    const capture = (prefix, txId, payload) => {
+      if (prefix === "[IAM]") events.push({ ...payload, txId });
     };
     const logger = { info: capture, trace: capture, warn: capture, error: capture };
     const api = await createApi({

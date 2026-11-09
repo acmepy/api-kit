@@ -34,14 +34,25 @@ it("correlates concurrent HTTP requests with SQL, model and log-viewer transacti
     })));
     assert.deepEqual(responses.map(response => response.status), [200, 200]);
     for (const nombre of ["Ana", "Luis"]) {
-      const sql = logs.filter(args => args[2]?.startsWith("SELECT") && args[3]?.includes(`"${nombre}"`));
+      const sql = logs.filter(args => args[2]?.type === "sql" && args[2].sql.startsWith("SELECT") && args[2].params.includes(nombre));
       assert.ok(sql.length > 0, `expected SQL for ${nombre}`);
-      for (const args of sql) assert.equal(args[1], txIds[nombre]);
-      assert.ok(logs.some(args => args[2] === "Persona.findAll" && args[1] === txIds[nombre]));
+      for (const args of sql) {
+        assert.equal(args[0], "[SEQ]");
+        assert.equal(args[1], txIds[nombre]);
+        assert.equal(args.length, 3);
+        assert.ok(Number.isFinite(args[2].sqlDurationMs));
+      }
+      assert.ok(logs.some(args => args[2]?.type === "model-operation" && args[2].model === "Persona"
+        && args[2].operation === "findAll" && args[1] === txIds[nombre]));
     }
     assert.ok(logs.every(args => Object.values(txIds).includes(args[1])));
-    const line = `[2026-10-21 10:00:00] [TRACE] ${logs[0].join(" ")}`;
-    assert.equal(parseLogLine(line).txId, logs[0][1]);
+    for (const [origin, txId, payload] of logs) {
+      const line = `[2026-10-21 10:00:00] [TRACE] ${origin} ${txId} ${JSON.stringify(payload)}`;
+      const parsed = parseLogLine(line);
+      assert.equal(parsed.txId, txId);
+      assert.equal(parsed.scope, payload.type);
+      assert.equal(parsed.durationMs, payload.sqlDurationMs ?? payload.operationDurationMs);
+    }
     logs.length = 0;
     assert.equal((await fetch(base)).status, 200);
     const generated = logs.map(args => args[1]);
@@ -50,7 +61,7 @@ it("correlates concurrent HTTP requests with SQL, model and log-viewer transacti
     logs.length = 0;
     await Persona.findAll();
     assert.ok(logs.length > 0);
-    assert.ok(logs.every(args => !/^[0-9a-f-]{36}$/i.test(args[1])));
+    assert.ok(logs.every(args => args.length === 2 && args[0] === "[SEQ]" && typeof args[1] === "object"));
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     await api.close();

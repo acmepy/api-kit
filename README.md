@@ -299,6 +299,8 @@ await api.setSessionTenant(2);
 
 Verificado con SQLite real, peticiones HTTP concurrentes, detalles y claves compuestas, auditoria/SSE y pruebas del cliente sobre pendientes, respuestas tardias y conexiones compartidas.
 
+La columna `TIEMPO` del visor muestra milisegundos a partir de `durationMs` en peticiones HTTP, `sqlDurationMs` en SQL y `operationDurationMs` en operaciones de modelo. Tambien reconoce la duracion de los logs HTTP anteriores. Cuando la entrada no incluye una duracion, muestra `—`.
+
 ## Logger
 
 `logging` puede ser `false`, `true`, una funcion o un objeto tipo logger. Cuando `auth` esta habilitado, el mismo logger se reenvia a `iam`; se puede sobrescribir solo para autenticacion con `auth.logging`. `api-kit` tambien pasa `getContext` a IAM para que sus logs incluyan el `txId` de la peticion, sin modificar el logger.
@@ -318,6 +320,21 @@ const api = await createApi({
 ```
 
 Con `true`, `api` usa `console`. Con objeto, llama `logger.info`, `logger.warn` y `logger.error` cuando existan.
+
+Los eventos de api-kit se entregan como `logger.info("[API]", txId, json)`: origen, identificador de transaccion y una unica cadena JSON. Sin contexto de peticion, se omite el argumento `txId`. Una funcion de logging recibe `(origen, nivel, ...datos)` con esos mismos datos. Los campos `type` y `txId` tambien permiten filtrar el JSON en el visor. Por ejemplo:
+
+```text
+[API] ee05ffeb-433b-4671-8fd7-4b5486e54670 {"type":"request","txId":"ee05ffeb-433b-4671-8fd7-4b5486e54670","ip":"127.0.0.1","method":"GET","path":"/api/recibos","status":200,"durationMs":2.4,"contentLength":100,"userAgent":"api-client"}
+```
+
+`request` incluye metodo, ruta, estado HTTP, duracion en milisegundos, IP, cantidad de bytes informada por `Content-Length` y user-agent. `http.error` incluye metodo, ruta, estado y `error` con `name`, `message`, `code`, `errors` y `details` cuando existen; los errores HTTP 500 o superiores tambien incluyen `stack`. Los mensajes y stacks se serializan con sus saltos de linea escapados. Los eventos SSE utilizan `type: "audit.sse"` y campos con nombre, incluido `sessionId` al abrir la conexion. El visor sigue admitiendo los logs anteriores.
+
+Para registrar un evento propio con el mismo formato:
+
+```js
+import { log } from "api/server";
+log("info", "recibos.procesado", { reciboId: 123 });
+```
 
 ## Modulos
 

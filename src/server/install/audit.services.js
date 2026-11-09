@@ -189,7 +189,8 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
 
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
-      log("info", "audit.sse", session, ip, req.method, req.originalUrl, res.statusCode, 0, res.getHeader("content-length") || 0, userAgent);
+      log("info", "audit.sse", { sessionId: session, ip, method: req.method, path: req.originalUrl,
+        status: res.statusCode, durationMs: 0, contentLength: Number(res.getHeader("content-length") || 0), userAgent });
 
       if (expiresAt) {
         const timeout = Math.max(expiresAt - Date.now(), 0);

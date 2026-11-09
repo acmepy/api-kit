@@ -4,6 +4,13 @@ const BARE_TX = new RegExp(`^(?:\\[(${UUID})\\]|(${UUID}))(?:\\s|$)`, "i");
 const JSON_TX = /"txId"\s*:\s*"((?:\\.|[^"\\])*)"/;
 const ANSI = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 
+function metadata(text) {
+  for (let start = text.indexOf("{"); start !== -1; start = text.indexOf("{", start + 1)) {
+    try { return JSON.parse(text.slice(start)); } catch { /* Look for trailing JSON metadata. */ }
+  }
+  return null;
+}
+
 export function extractTxId(text) {
   const json = JSON_TX.exec(text);
   if (json) {
@@ -29,5 +36,14 @@ export function parseLogLine(line) {
   const txId = extractTxId(message);
   const leading = BARE_TX.exec(message);
   if (leading) message = message.slice(leading[0].length);
-  return { timestamp, level: level.toUpperCase(), source: source || "Sin origen", scope, txId, message };
+  else if (txId && message.startsWith(`${txId} `)) message = message.slice(txId.length + 1);
+  const structured = metadata(message);
+  scope ||= structured?.type || null;
+  const duration = structured?.sqlDurationMs ?? structured?.operationDurationMs ?? structured?.durationMs;
+  let durationMs = typeof duration === "number" && Number.isFinite(duration) && duration >= 0 ? duration : null;
+  if (durationMs === null && scope === "request") {
+    const legacy = /^\S+\s+(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD|CONNECT|TRACE)\s+\S+\s+\d{3}\s+(\d+(?:\.\d+)?)\s+\d+(?:\s|$)/.exec(message);
+    if (legacy) durationMs = Number(legacy[1]);
+  }
+  return { timestamp, level: level.toUpperCase(), source: source || "Sin origen", scope, txId, message, durationMs };
 }

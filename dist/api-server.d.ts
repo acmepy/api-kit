@@ -25,9 +25,12 @@ export interface ApiInstance { app: unknown; router: unknown; errorHandler: (...
 export function createApi(options?: CreateApiOptions): Promise<ApiInstance>;
 export function getContext(): RequestContext | undefined;
 export function runWithContext<T>(context: RequestContext, callback: () => T): T;
-export function log(...args: unknown[]): void;
+export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
+export type Logging = boolean | ((source: string, level: LogLevel, ...data: unknown[]) => unknown)
+  | Partial<Record<LogLevel, false | ((source: string, ...data: unknown[]) => unknown)>>;
+export function log(level: LogLevel, type: string, ...data: unknown[]): void;
 export function requestLogger(...args: unknown[]): unknown;
-export function setLogging(options?: Record<string, unknown>): void;
+export function setLogging(options?: Logging): void;
 export function ok<T>(data: T, options?: Record<string, unknown>): ApiResponse<T>;
 export function list<T>(data: T[], options?: Record<string, unknown>): ListResponse<T>;
 export const version: string;

@@ -8,9 +8,25 @@ export function setLogging(logging) {
 
 export function log(level, path, ...args) {
   if (!_logging) return;
-  if (_logging === true) return console[level]?.("[api] ["+path+"]", ...args);
-  if (typeof _logging === "function") return _logging("[api] ["+path+"]", level, ...args);
-  if (typeof _logging === "object") return _logging[level]?.("api", "["+path+"]", ...args);
+  const data = args.length === 1 && args[0] instanceof Error ? { error: args[0] }
+    : args.length === 1 && args[0] && typeof args[0] === "object" && !Array.isArray(args[0]) ? args[0]
+      : args.length ? { data: args } : {};
+  const txId = data.txId || getContext()?.txId;
+  const seen = new WeakSet();
+  const payload = JSON.stringify({ type: path, ...data, ...(txId && { txId }) }, (_key, value) => {
+    if (typeof value === "bigint") return String(value);
+    if (value && typeof value === "object") {
+      if (seen.has(value)) return "[Circular]";
+      seen.add(value);
+    }
+    if (value instanceof Error) return { name: value.name, message: value.message, code: value.code,
+      errors: value.errors, details: value.details, stack: value.stack };
+    return value;
+  });
+  const output = [...(txId ? [txId] : []), payload];
+  if (_logging === true) return console[level]?.("[API]", ...output);
+  if (typeof _logging === "function") return _logging("[API]", level, ...output);
+  if (typeof _logging === "object" && typeof _logging[level] === "function") return _logging[level]("[API]", ...output);
 }
 
 export function requestLogger(req, res, next) {
@@ -22,22 +38,18 @@ export function requestLogger(req, res, next) {
     const ctx = getContext();
     const txId = ctx?.txId || req.headers["x-transaction-id"] || "";
     const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
-    log("info", "request", txId, ip, req.method, req.originalUrl, res.statusCode, Number(durationMs.toFixed(2)), res.getHeader("content-length") || 0, userAgent);
+    log("info", "request", { txId, ip, method: req.method, path: req.originalUrl,
+      status: res.statusCode, durationMs: Number(durationMs.toFixed(2)),
+      contentLength: Number(res.getHeader("content-length") || 0), userAgent });
   });
 
   next();
 }
 
 export function errorLogger(err, req, { txId, status, code, errors }) {
-  log(
-    status >= 500 ? "error" : "warn", "http.error", 
-    "["+txId+"]",  
-    err.name || err.constructor?.name || "Error", 
-    err.message, 
-    status, 
-    code, 
-    req.method, 
-    req.originalUrl || req.url, 
-    errors, ...(err.details ? [{ details: err.details }] : []), (status >= 500 && err.stack && { stack: err.stack })
-  );
+  log(status >= 500 ? "error" : "warn", "http.error", {
+    txId, status, method: req.method, path: req.originalUrl || req.url,
+    error: { name: err.name || err.constructor?.name || "Error", message: err.message, code,
+      errors, ...(err.details && { details: err.details }), ...(status >= 500 && err.stack && { stack: err.stack }) },
+  });
 }

@@ -7,6 +7,8 @@ export interface ParsedLogLine {
   scope: string | null;
   txId: string | null;
   message: string;
+  /** Operation duration in milliseconds; null when unavailable. */
+  durationMs?: number | null;
 }
 export interface LogViewerOptions {
   /** Directory containing .log files. Only direct children are listed. */

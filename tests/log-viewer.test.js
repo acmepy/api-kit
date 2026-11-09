@@ -45,10 +45,42 @@ async function server(t, directory, options = {}) {
 }
 
 describe("log viewer", () => {
+  it("extracts HTTP, SQL and model durations, preserves zero and leaves missing durations empty", async t => {
+    const lines = [
+      `${prefix} [INFO] [API] ${TX} {"type":"request","durationMs":2.4}`,
+      `${prefix} [TRACE] [SEQ] ${TX} {"type":"sql","sql":"SELECT ...","params":[1],"sqlDurationMs":0}`,
+      `${prefix} [TRACE] [SEQ] ${TX} Recibos.create {"type":"model-operation","operationDurationMs":5.0831}`,
+      `${prefix} [INFO] [api] [request] ${TX} ::1 POST /api/recibos 200 12.45 100 api-test`,
+      `${prefix} [ERROR] [API] ${TX} {"type":"http.error","error":{"message":"Failed"}}`,
+      `${prefix} [TRACE] [SEQ] ${TX} SELECT '{}' [1] {"type":"sql","sqlDurationMs":1.2}`,
+    ];
+    assert.deepEqual(lines.map(line => parseLogLine(line).durationMs), [2.4, 0, 5.0831, 12.45, null, 1.2]);
+    for (const durationMs of [-1, "2.4", null]) {
+      assert.equal(parseLogLine(`${prefix} [INFO] [API] ${JSON.stringify({ type: "request", durationMs })}`).durationMs, null);
+    }
+    const { directory } = await fixture(t);
+    await writeFile(path.join(directory, "durations.log"), lines.join("\n"));
+    const result = await createLogReader({ directory }).entries("durations.log");
+    assert.deepEqual(result.entries.map(entry => entry.durationMs), [1.2, null, 12.45, 5.0831, 0, 2.4]);
+  });
+  it("filters structured API logs by type and custom transaction ID alongside legacy entries", async t => {
+    const { directory } = await fixture(t);
+    await writeFile(path.join(directory, "structured.log"), [
+      `${prefix} [INFO] [API] custom-tx {"type":"request","txId":"custom-tx","method":"POST","path":"/api/recibos","status":400}`,
+      `${prefix} [WARN] [API] custom-tx {"type":"http.error","txId":"custom-tx","error":{"errors":{"RecibosDet":{"codMoneda":"Requerido"}}}}`,
+      `${prefix} [INFO] [api] [request] ${OTHER} GET /api/ping 200`,
+    ].join("\n"));
+    const result = await createLogReader({ directory }).entries("structured.log", { txId: "custom-tx", source: "API" });
+    assert.equal(result.entries.length, 2);
+    assert.deepEqual(result.entries.map(entry => entry.scope), ["http.error", "request"]);
+    assert.ok(result.entries.every(entry => entry.txId === "custom-tx"));
+    assert.equal(JSON.parse(result.entries[0].message).error.errors.RecibosDet.codMoneda, "Requerido");
+  });
   it("serves compact metric cards and persistent desktop controls", async t => {
     const { directory } = await fixture(t);
     const { base } = await server(t, directory);
     const html = await (await fetch(`${base}/view?file=reparto.log`)).text();
+    assert.match(html, />TIEMPO<\/th>/);
     assert.equal((html.match(/class="card h-100 log-metric"/g) || []).length, 4);
     assert.match(html, /col-xl-3 log-transactions/);
     assert.doesNotMatch(html, /vh-100/);

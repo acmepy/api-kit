@@ -30,7 +30,7 @@ it("keeps master errors flat and groups nested detail errors by model", async t 
     assert.equal(typeof fields.codMoneda, "string");
     if (nested) assert.equal(result.body.errors.codMoneda, undefined);
     assert.deepEqual(result.body.details, { model });
-    assert.ok(messages.at(-1).some(value => value?.details?.model === model), "HTTP log includes the failing model");
+    assert.equal(JSON.parse(messages.at(-1)[2]).error.details.model, model, "HTTP log includes the failing model");
   };
   check(await request("POST", "/recibos", { detalles: [{ codMoneda: 1 }] }), "RecibosCab");
   check(await request("POST", "/recibos", { codMoneda: 1, detalles: [{}] }), "RecibosDet", true);

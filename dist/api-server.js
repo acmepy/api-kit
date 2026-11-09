@@ -2215,9 +2215,25 @@ function setLogging(logging) {
 
 function log(level, path, ...args) {
   if (!_logging) return;
-  if (_logging === true) return console[level]?.("[api] ["+path+"]", ...args);
-  if (typeof _logging === "function") return _logging("[api] ["+path+"]", level, ...args);
-  if (typeof _logging === "object") return _logging[level]?.("api", "["+path+"]", ...args);
+  const data = args.length === 1 && args[0] instanceof Error ? { error: args[0] }
+    : args.length === 1 && args[0] && typeof args[0] === "object" && !Array.isArray(args[0]) ? args[0]
+      : args.length ? { data: args } : {};
+  const txId = data.txId || getContext()?.txId;
+  const seen = new WeakSet();
+  const payload = JSON.stringify({ type: path, ...data, ...(txId && { txId }) }, (_key, value) => {
+    if (typeof value === "bigint") return String(value);
+    if (value && typeof value === "object") {
+      if (seen.has(value)) return "[Circular]";
+      seen.add(value);
+    }
+    if (value instanceof Error) return { name: value.name, message: value.message, code: value.code,
+      errors: value.errors, details: value.details, stack: value.stack };
+    return value;
+  });
+  const output = [...(txId ? [txId] : []), payload];
+  if (_logging === true) return console[level]?.("[API]", ...output);
+  if (typeof _logging === "function") return _logging("[API]", level, ...output);
+  if (typeof _logging === "object" && typeof _logging[level] === "function") return _logging[level]("[API]", ...output);
 }
 
 function requestLogger(req, res, next) {
@@ -2229,24 +2245,20 @@ function requestLogger(req, res, next) {
     const ctx = getContext();
     const txId = ctx?.txId || req.headers["x-transaction-id"] || "";
     const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
-    log("info", "request", txId, ip, req.method, req.originalUrl, res.statusCode, Number(durationMs.toFixed(2)), res.getHeader("content-length") || 0, userAgent);
+    log("info", "request", { txId, ip, method: req.method, path: req.originalUrl,
+      status: res.statusCode, durationMs: Number(durationMs.toFixed(2)),
+      contentLength: Number(res.getHeader("content-length") || 0), userAgent });
   });
 
   next();
 }
 
 function errorLogger(err, req, { txId, status, code, errors }) {
-  log(
-    status >= 500 ? "error" : "warn", "http.error", 
-    "["+txId+"]",  
-    err.name || err.constructor?.name || "Error", 
-    err.message, 
-    status, 
-    code, 
-    req.method, 
-    req.originalUrl || req.url, 
-    errors, ...(err.details ? [{ details: err.details }] : []), (status >= 500 && err.stack && { stack: err.stack })
-  );
+  log(status >= 500 ? "error" : "warn", "http.error", {
+    txId, status, method: req.method, path: req.originalUrl || req.url,
+    error: { name: err.name || err.constructor?.name || "Error", message: err.message, code,
+      errors, ...(err.details && { details: err.details }), ...(status >= 500 && err.stack && { stack: err.stack }) },
+  });
 }
 
 function createAuditResource(tenant = false) {
@@ -2430,7 +2442,8 @@ function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, conf
 
       res.writeHead(200, {"Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive"});
       res.write(": connected\n\n");
-      log("info", "audit.sse", session, ip, req.method, req.originalUrl, res.statusCode, 0, res.getHeader("content-length") || 0, userAgent);
+      log("info", "audit.sse", { sessionId: session, ip, method: req.method, path: req.originalUrl,
+        status: res.statusCode, durationMs: 0, contentLength: Number(res.getHeader("content-length") || 0), userAgent });
 
       if (expiresAt) {
         const timeout = Math.max(expiresAt - Date.now(), 0);
@@ -3114,6 +3127,13 @@ const BARE_TX = new RegExp(`^(?:\\[(${UUID})\\]|(${UUID}))(?:\\s|$)`, "i");
 const JSON_TX = /"txId"\s*:\s*"((?:\\.|[^"\\])*)"/;
 const ANSI = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 
+function metadata(text) {
+  for (let start = text.indexOf("{"); start !== -1; start = text.indexOf("{", start + 1)) {
+    try { return JSON.parse(text.slice(start)); } catch { /* Look for trailing JSON metadata. */ }
+  }
+  return null;
+}
+
 function extractTxId(text) {
   const json = JSON_TX.exec(text);
   if (json) {
@@ -3139,7 +3159,16 @@ function parseLogLine(line) {
   const txId = extractTxId(message);
   const leading = BARE_TX.exec(message);
   if (leading) message = message.slice(leading[0].length);
-  return { timestamp, level: level.toUpperCase(), source: source || "Sin origen", scope, txId, message };
+  else if (txId && message.startsWith(`${txId} `)) message = message.slice(txId.length + 1);
+  const structured = metadata(message);
+  scope ||= structured?.type || null;
+  const duration = structured?.sqlDurationMs ?? structured?.operationDurationMs ?? structured?.durationMs;
+  let durationMs = typeof duration === "number" && Number.isFinite(duration) && duration >= 0 ? duration : null;
+  if (durationMs === null && scope === "request") {
+    const legacy = /^\S+\s+(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD|CONNECT|TRACE)\s+\S+\s+\d{3}\s+(\d+(?:\.\d+)?)\s+\d+(?:\s|$)/.exec(message);
+    if (legacy) durationMs = Number(legacy[1]);
+  }
+  return { timestamp, level: level.toUpperCase(), source: source || "Sin origen", scope, txId, message, durationMs };
 }
 
 class LogFileError extends Error {
@@ -3416,7 +3445,10 @@ function viewerBrowser() {
     const summary = node("summary", entry.message.split("\n")[0]);
     details.append(summary, node("pre", entry.raw, "text-wrap text-break border rounded p-2 mt-2 mb-0"));
     message.append(details);
-    tr.append(level, source, tx, message);
+    const duration = node("td", typeof entry.durationMs === "number" && Number.isFinite(entry.durationMs)
+      ? `${entry.durationMs.toLocaleString("es", { maximumFractionDigits: 3 })} ms` : "—",
+    "text-end text-nowrap font-monospace small");
+    tr.append(level, source, tx, duration, message);
     return tr;
   }
   async function entries() {
@@ -3509,7 +3541,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.4.8";
+const version = "1.4.9";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {
