@@ -127,6 +127,8 @@ it("Vue and discovered client preserve nested details, server validation and nat
     for (const sucursal of ["001", "002"]) await composite.create({ id: 1, sucursal, valor: sucursal }, { pending: false });
     assert.equal((await composite.list()).data.length, 2);
     const key = { id: 1, sucursal: "001" };
+    assert.equal(composite.keyOf(key), "1|001");
+    assert.equal((await composite.get("1|001")).data.sucursal, "001");
     assert.equal((await composite.pullOne(key)).data.valor, "001");
     await composite.update(key, { valor: "nuevo" }, { pending: false });
     assert.equal((await composite.get(key)).data.valor, "nuevo");
@@ -134,6 +136,8 @@ it("Vue and discovered client preserve nested details, server validation and nat
       operation: "update", initial: { ...key, valor: "Vue" },
     })));
     assert.equal((await compositeForm.submit()).data.valor, "Vue");
+    assert.equal(composite.keyOf(compositeForm.data), "1|001");
+    await assert.rejects(() => composite.pullOne("1|001"), /componentes/);
     await assert.rejects(composite.pullOne({ id: 1 }), /componentes/);
     await composite.remove(key, { pending: false });
     assert.equal((await composite.list()).data.length, 1);

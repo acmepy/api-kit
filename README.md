@@ -720,6 +720,8 @@ Usa una sola base de datos por `prefix` (`api` por defecto), con un almacen por 
 
 El cliente descubre las claves primarias y los nombres de detalle desde `schema.json`. La cache conserva los campos originales, sin agregar un `id` a recursos que usan otra clave. Para una clave compuesta, `get`, `pullOne`, `update`, `remove` y `push` reciben un objeto con todos sus componentes. `useApiForm` puede obtener esa clave de los datos iniciales al editar.
 
+`service.keyOf(record)` une los valores de una clave compuesta con `|`, en el orden de `primaryKeyAttributes`; por ejemplo, `FCR|R11-005|15513|1`. Los componentes no pueden contener `|`. Es una identificacion local de cache; `get()` tambien permite consultarla directamente. Para peticiones al servidor se siguen proporcionando los atributos originales como objeto: `await service.pullOne({ tipComprobante: "FCR", serComprobante: "R11-005", nroComprobante: 15513, nroCuota: 1 })`. Client envia esos atributos y el servidor construye su filtro con las claves nativas, sin interpretar la cadena concatenada. Vue delega en la misma funcionalidad del cliente. No se migran las claves de cache de versiones anteriores.
+
 La validacion de la cabecera conserva los detalles anidados al crear o actualizar, incluidos los pendientes locales. Las reglas de los detalles se ejecutan en el servidor al enviar; los errores de envio quedan disponibles en `useApiForm.errors` con los nombres de campo que devuelve el servidor.
 
 Para validar una linea localmente antes de agregarla al formulario, usa los schemas del detalle publicados en `schema.json`:

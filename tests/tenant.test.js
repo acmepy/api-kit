@@ -204,7 +204,7 @@ it("offline creates and saves support tenant as part of the composite primary ke
   const created = await service.save({ codigo: "001", nombre: "Local" });
   assert.equal(created.data.codEmpresa, 1);
   assert.equal(created.data.pendingTenantId, 1);
-  assert.equal(service.keyOf(created.data), '[1,"001"]');
+  assert.equal(service.keyOf(created.data), "1|001");
   await service.save({ codEmpresa: 1, codigo: "001", nombre: "Editado" });
   assert.equal((await service.pending()).data[0].operation, "create");
   offline = false;

@@ -29,7 +29,10 @@ export class BaseService {
     if (!record) return undefined;
     const values = this.primaryKeyAttributes.map((key) => record[key]);
     if (values.some((value) => value === undefined || value === null)) return undefined;
-    return values.length === 1 ? values[0] : JSON.stringify(values);
+    if (values.length === 1) return values[0];
+    const invalid = values.findIndex(value => String(value).includes("|"));
+    if (invalid !== -1) throw new Error(`La clave compuesta no admite "|" en "${this.primaryKeyAttributes[invalid]}"`);
+    return values.join("|");
   }
 
   #cacheKey(id) {
@@ -368,7 +371,7 @@ export class BaseService {
     const attribute = (params.detail ? this.details[params.detail]?.tenant : this.tenant)?.attribute;
     const tenantId = this.client.tenantId?.();
     if (attribute && tenantId !== undefined) query = { ...query, [attribute]: tenantId };
-    if (params.id && typeof params.id === "object") {
+    if ((params.id && typeof params.id === "object") || (params.id !== undefined && this.primaryKeyAttributes.length > 1)) {
       const key = this.#keyValues(params.id);
       query = { ...query, ...key };
       params = { ...params, id: key[this.primaryKeyAttributes[0]] };

@@ -29,6 +29,8 @@ for (const type of ["memory", "localStorage", "indexedDB"]) {
     await service.save({ lista: "002", articulo: "A1", precio: 20 });
     assert.equal((await service.list()).data.length, 2);
     const key = { lista: "001", articulo: "A1" };
+    assert.equal(service.keyOf(key), "001|A1");
+    assert.equal((await service.get("001|A1")).data.lista, "001");
     assert.equal((await service.get(key)).data.id, undefined);
     online = true;
     await service.push(key);
@@ -64,5 +66,20 @@ for (const type of ["memory", "localStorage", "indexedDB"]) {
     await service.remove(other);
     assert.deepEqual((await service.list()).data, []);
     assert.equal(calls.length, 4);
+    await assert.rejects(() => service.create({ lista: "001|002", articulo: "A1" }), /no admite/);
+    await assert.rejects(() => service.request("update", { params: { id: "001|A1" }, body: { precio: 99 } }), /componentes/);
+    assert.equal(calls.length, 4, "A generated cache key is never sent as the server's primary key");
   });
 }
+
+it("composite cache keys follow attribute order and preserve zero and leading zeros", () => {
+  const service = new BaseService({ client: {}, name: "cuotas",
+    primaryKeyAttributes: ["tipComprobante", "serComprobante", "nroComprobante", "nroCuota"],
+  });
+  assert.equal(service.keyOf({ nroCuota: 1, nroComprobante: 15513, serComprobante: "R11-005", tipComprobante: "FCR" }), "FCR|R11-005|15513|1");
+  assert.equal(service.keyOf({ tipComprobante: "FCR", serComprobante: "001", nroComprobante: 0, nroCuota: 0 }), "FCR|001|0|0");
+  assert.equal(service.keyOf({ tipComprobante: "FCR" }), undefined);
+  const single = new BaseService({ client: {}, name: "simple", primaryKeyAttributes: ["codigo"] });
+  assert.equal(single.keyOf({ codigo: 0 }), 0);
+  assert.equal(single.keyOf({ codigo: "001|A" }), "001|A");
+});
