@@ -14,6 +14,7 @@ export function buildSchemaDocument({ routes, modules, session } = {}) {
 
     if (!services.has(route.module)) services.set(route.module, {
       name: route.module,
+      tableName: module.model?.tableName,
       primaryKeyAttributes: module.model?.primaryKeyAttributes || ["id"],
       ...(module.model?.options.tenant && { tenant: module.model.options.tenant }),
       details: Object.fromEntries((module.model?.getAssociationIncludes?.() || [])

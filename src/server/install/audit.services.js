@@ -296,12 +296,12 @@ function canViewAuditChange(change, { req, modules, authContext }) {
 }
 
 function moduleForAuditChange(change, modules) {
-  const tableName = String(change?.tableName || "").toLowerCase();
+  const tableName = change?.tableName;
   if (!tableName) return null;
 
   for (const mod of modules.values()) {
-    const names = [mod.config?.name, mod.config?.resource?.options?.tableName, mod.model?.tableName, mod.model?.modelName, mod.model?.name, ].filter(Boolean).map((name) => String(name).toLowerCase());
-    if (names.includes(tableName)) return mod;
+    const models = [mod.model, ...(mod.config?.detailResources || []).map(resource => resource.model)];
+    if (models.some(model => model?.tableName === tableName)) return mod;
   }
 
   return null;
@@ -430,7 +430,7 @@ function rowIdFromWhere(where = {}) {
 }
 
 function tableNameFor(moduleConfig) {
-  return moduleConfig?.resource?.options?.tableName || moduleConfig?.name || "";
+  return moduleConfig?.resource?.model?.tableName || "";
 }
 
 function isAuditModule(moduleConfig) {

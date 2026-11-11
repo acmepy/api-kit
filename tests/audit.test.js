@@ -4,6 +4,8 @@ import http from "node:http";
 import express from "express";
 import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi } from "../src/server/index.js";
+import { Seq, SQLiteAdapter } from "seq";
+import { createApiClient } from "../src/client/index.js";
 
 const modules = [
   {
@@ -29,6 +31,49 @@ const modules = [
 ];
 
 describe("audit", () => {
+  it("uses resolved model tables for audit, permissions, schema discovery and client changes", async t => {
+    const seq = new Seq({ adapter: new SQLiteAdapter({ database: ":memory:", naming: { prefix: "rep_", tables: "snake_case" } }), logging: false });
+    const api = await createApi({ seq, basePath: "/api", audit: true, schema: { auth: true },
+      auth: { secret: "resolved-tables-test" }, modules: [{
+        name: "clientes", modelName: "ClienteCab", timestamps: false,
+        attributes: { id: { type: "integer", primaryKey: true, autoIncrement: true }, nombre: { type: "string", allowNull: false } },
+        details: [{ name: "detalles", modelName: "ClienteDetalle", foreignKey: "clienteId", timestamps: false,
+          attributes: { id: { type: "integer", primaryKey: true, autoIncrement: true }, clienteId: { type: "integer", create: false, update: false }, descripcion: { type: "string" } } }],
+      }, { name: "secretos", modelName: "Secreto", tableName: "secretos_cab", timestamps: false,
+        attributes: { id: { type: "integer", primaryKey: true }, nombre: { type: "string" } },
+      }],
+    });
+    await seq.authenticate(); await seq.init(); await seq.sync({ force: true });
+    await seedAuditAuth(api.auth.models, { reader: ["clientes.list", "schema.list", "audit.changes"] });
+    const server = await listen(api.app);
+    const client = createApiClient({ url: `http://localhost:${server.address().port}/api`, changes: false, sse: false, serviceSyncDelay: false });
+    t.after(async () => { client.destroy(); await api.close(); server.closeAllConnections(); await close(server); await seq.close(); });
+    const since = new Date(Date.now() - 1000).toISOString();
+    const service = api.services.get("clientes");
+    const header = service.model;
+    const detail = header.getAssociationIncludes().find(include => include.as === "detalles").model;
+    assert.notEqual(header.tableName, "clientes", "The resolved table name differs from the module name");
+    assert.ok(header.tableName.startsWith("rep_"));
+    assert.equal(api.models.get("secretos").tableName, "secretos_cab", "Explicit table names follow Seq's contract");
+    const created = await service.create({ body: { nombre: "Ana", detalles: [{ descripcion: "Primero" }] } });
+    await api.services.get("secretos").create({ body: { id: 1, nombre: "Privado" } });
+    const rows = await api.models.get("audit").findAll();
+    assert.ok(rows.some(row => row.get("tableName") === header.tableName));
+    assert.ok(rows.some(row => row.get("tableName") === detail.tableName));
+    const nativeRow = await seq.adapter.dml.executeGet(`SELECT nombre FROM "${header.tableName}" WHERE id = ?`, [created.data.id]);
+    assert.equal(nativeRow.nombre, "Ana");
+    await client.login({ username: "reader", password: "1234" }, { sync: false });
+    const schema = await client.request("/schema.json");
+    assert.ok(schema.services?.some(service => service.name === "clientes"), JSON.stringify(schema));
+    await client.syncServices(true);
+    assert.equal(client.service("clientes").tableName, header.tableName);
+    const received = await client.changes(since);
+    assert.deepEqual(received.data.map(change => change.tableName).sort(), [header.tableName, detail.tableName].sort());
+    assert.equal((await client.service("clientes").get(created.data.id)).data.nombre, "Ana");
+    await service.update({ params: { id: created.data.id }, body: { nombre: "Ana editada" } });
+    await client.changes(since);
+    assert.equal((await client.service("clientes").get(created.data.id)).data.nombre, "Ana editada");
+  });
   it("registers its internal model and documents only audit routes in Postman", async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({ seq, basePath: "/api", audit: true, postman: true, modules });
@@ -300,7 +345,7 @@ describe("audit", () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       const Audit = api.models.get("audit");
-      const sessionTableName = tableNameForModel(api.auth.models.sessions);
+      const sessionTableName = api.auth.models.sessions.tableName;
       const rows = await Audit.findAll({ order: [["id", "ASC"]] });
       const sessionRows = rows.map((row) => row.toJSON()).filter((row) => row.tableName === sessionTableName);
 
@@ -677,10 +722,6 @@ function request(server, method, path, options = {}) {
     if (body) req.write(body);
     req.end();
   });
-}
-
-function tableNameForModel(ModelClass) {
-  return ModelClass?._resolvedTableName || ModelClass?.tableName || ModelClass?.modelName || ModelClass?.name || "";
 }
 
 function detailAuditModules() {

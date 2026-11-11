@@ -488,6 +488,8 @@ GET /api/productos?precio__mayor=10
 
 Con `audit: true`, `api` registra cambios de recursos auditables en la tabla `audit`.
 
+El campo `tableName` de cada cambio usa directamente `Model.tableName`, resuelto por Seq. El documento `schema.json` publica ese nombre para cada servicio y el cliente lo utiliza para asociar los eventos de `/changes` y SSE con su cache, aunque el nombre del modulo sea distinto. Los permisos sobre cambios de tablas de detalle se comprueban contra su modulo maestro.
+
 Rutas generadas:
 
 - `GET /api/changes?since=ISO_DATE`

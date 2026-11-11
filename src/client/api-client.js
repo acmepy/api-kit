@@ -994,7 +994,8 @@ export class ApiClient {
     if (!data || typeof data !== "object") return;
     const serviceName = data.service || data.serviceName || data.tableName;
     if (!serviceName || serviceName === "audit") return;
-    const service = this.#services.get(serviceName);
+    const service = data.service || data.serviceName ? this.#services.get(serviceName)
+      : [...this.#services.values()].find(service => service.tableName === data.tableName) || this.#services.get(serviceName);
     if (!service) return;
     await service.applyData(data);
   }

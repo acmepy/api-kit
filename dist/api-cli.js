@@ -1,4 +1,4 @@
-const version = "1.5.1";
+const version = "1.5.2";
 
 async function runApiKitCli() {
   throw new Error("api/cli is not implemented yet");

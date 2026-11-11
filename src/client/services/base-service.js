@@ -6,9 +6,10 @@ import { ApiClientError } from "../errors.js";
 export class BaseService {
   #temporaryStorage = null;
 
-  constructor({ client, name, path, operations = {}, schemas = {}, primaryKeyAttributes = ["id"], details = {}, tenant, prefix = "api", createAdapter }) {
+  constructor({ client, name, tableName, path, operations = {}, schemas = {}, primaryKeyAttributes = ["id"], details = {}, tenant, prefix = "api", createAdapter }) {
     this.client = client;
     this.name = name;
+    this.tableName = tableName;
     this.path = path;
     this.operations = operations;
     this.primaryKeyAttributes = primaryKeyAttributes;

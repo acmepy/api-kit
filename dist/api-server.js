@@ -1245,6 +1245,7 @@ function buildSchemaDocument({ routes, modules, session } = {}) {
 
     if (!services.has(route.module)) services.set(route.module, {
       name: route.module,
+      tableName: module.model?.tableName,
       primaryKeyAttributes: module.model?.primaryKeyAttributes || ["id"],
       ...(module.model?.options.tenant && { tenant: module.model.options.tenant }),
       details: Object.fromEntries((module.model?.getAssociationIncludes?.() || [])
@@ -2549,12 +2550,12 @@ function canViewAuditChange(change, { req, modules, authContext }) {
 }
 
 function moduleForAuditChange(change, modules) {
-  const tableName = String(change?.tableName || "").toLowerCase();
+  const tableName = change?.tableName;
   if (!tableName) return null;
 
   for (const mod of modules.values()) {
-    const names = [mod.config?.name, mod.config?.resource?.options?.tableName, mod.model?.tableName, mod.model?.modelName, mod.model?.name, ].filter(Boolean).map((name) => String(name).toLowerCase());
-    if (names.includes(tableName)) return mod;
+    const models = [mod.model, ...(mod.config?.detailResources || []).map(resource => resource.model)];
+    if (models.some(model => model?.tableName === tableName)) return mod;
   }
 
   return null;
@@ -2683,7 +2684,7 @@ function rowIdFromWhere(where = {}) {
 }
 
 function tableNameFor(moduleConfig) {
-  return moduleConfig?.resource?.options?.tableName || moduleConfig?.name || "";
+  return moduleConfig?.resource?.model?.tableName || "";
 }
 
 function isAuditModule(moduleConfig) {
@@ -3552,7 +3553,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.5.1";
+const version = "1.5.2";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

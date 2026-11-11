@@ -169,6 +169,7 @@ export function createApiClient(options?: ApiClientOptions): ApiClient;
 export interface ServiceOptions {
   client: ApiClient;
   name: string;
+  tableName?: string;
   path?: string;
   operations?: Record<string, unknown>;
   schemas?: Record<string, unknown>;
@@ -198,6 +199,7 @@ export class BaseService<T extends ServiceRecord = ServiceRecord> {
   constructor(options: ServiceOptions);
   readonly client: ApiClient;
   readonly name: string;
+  readonly tableName?: string;
   readonly path: string;
   readonly operations: Record<string, unknown>;
   readonly schemas: Record<string, unknown> | null;

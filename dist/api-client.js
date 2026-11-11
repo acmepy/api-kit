@@ -308,9 +308,10 @@ class ApiClientError extends Error {
 class BaseService {
   #temporaryStorage = null;
 
-  constructor({ client, name, path, operations = {}, schemas = {}, primaryKeyAttributes = ["id"], details = {}, tenant, prefix = "api", createAdapter }) {
+  constructor({ client, name, tableName, path, operations = {}, schemas = {}, primaryKeyAttributes = ["id"], details = {}, tenant, prefix = "api", createAdapter }) {
     this.client = client;
     this.name = name;
+    this.tableName = tableName;
     this.path = path;
     this.operations = operations;
     this.primaryKeyAttributes = primaryKeyAttributes;
@@ -1003,7 +1004,7 @@ class SessionService extends BaseService {
   }
 }
 
-const version = "1.5.1";
+const version = "1.5.2";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
@@ -1990,7 +1991,8 @@ class ApiClient {
     if (!data || typeof data !== "object") return;
     const serviceName = data.service || data.serviceName || data.tableName;
     if (!serviceName || serviceName === "audit") return;
-    const service = this.#services.get(serviceName);
+    const service = data.service || data.serviceName ? this.#services.get(serviceName)
+      : [...this.#services.values()].find(service => service.tableName === data.tableName) || this.#services.get(serviceName);
     if (!service) return;
     await service.applyData(data);
   }
