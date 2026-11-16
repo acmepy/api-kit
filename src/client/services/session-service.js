@@ -6,8 +6,7 @@ export class SessionService extends BaseService {
   }
 
   async list() {
-    const session = await this.adapter.get("session")
-      || (await this.adapter.getAll()).find(record => record && (Object.hasOwn(record, "token") || record.authExpired));
+    const session = await this.adapter.get("session");
     return { ok: true, data: session };
   }
 
@@ -21,7 +20,7 @@ export class SessionService extends BaseService {
 
   async create(data) {
     await this.adapter.clear();
-    if (data) await this.adapter.put("session", data);
+    if (data) await this.adapter.add(data);
     return { ok: true, data };
   }
 

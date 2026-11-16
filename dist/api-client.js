@@ -945,8 +945,7 @@ class SessionService extends BaseService {
   }
 
   async list() {
-    const session = await this.adapter.get("session")
-      || (await this.adapter.getAll()).find(record => record && (Object.hasOwn(record, "token") || record.authExpired));
+    const session = await this.adapter.get("session");
     return { ok: true, data: session };
   }
 
@@ -960,7 +959,7 @@ class SessionService extends BaseService {
 
   async create(data) {
     await this.adapter.clear();
-    if (data) await this.adapter.put("session", data);
+    if (data) await this.adapter.add(data);
     return { ok: true, data };
   }
 
@@ -1136,7 +1135,7 @@ class ApiClient {
   async login(credentials = {}, { sync = true } = {}) {
     const response = await this.request(this.#paths.login, { method: "POST", body: credentials, auth: false });
     if (this.#expireSessionPromise) await this.#expireSessionPromise;
-    const previousSession = (await this.sessionService().list()).data;
+    const previousSession = (await this.sessionService().adapter.getAll())[0];
     if (previousSession?.authExpired && previousSession.user?.id != null && previousSession.user.id !== response.data?.user?.id) {
       throw new ApiClientError("Debe reconectar con el mismo usuario para conservar los datos locales", {
         status: 409,
@@ -1186,7 +1185,7 @@ class ApiClient {
 
   async refreshSession() {
     if (this.#tenantChanging) throw this.#tenantError("Cambio de tenant en curso", "TENANT_CHANGE_IN_PROGRESS");
-    const previous = this.#session || (await this.sessionService().list()).data;
+    const previous = this.#session || (await this.sessionService().adapter.getAll())[0];
     const response = await this.request(this.#paths.session, { token: previous?.token, requireToken: true, tenantChange: true });
     if ((previous?.tenantId !== undefined || response.data?.tenantId !== undefined)
         && (previous?.tenantId !== response.data?.tenantId || previous?.user?.id !== response.data?.user?.id)) {
@@ -1211,7 +1210,7 @@ class ApiClient {
 
   async #updateUser(path, body) {
     const response = await this.request(path, { method: "PATCH", body });
-    const session = (await this.sessionService().list()).data;
+    const session = (await this.sessionService().adapter.getAll())[0];
     await this.sessionService().create({ ...session, user: response.data });
     this.#session = { ...session, user: response.data };
     this.#emitChange({ type: "session", source: "session-updated" });
@@ -1220,7 +1219,7 @@ class ApiClient {
 
   async updateSessionOptions(options) {
     const response = await this.request("/session/options", { method: "PATCH", body: { options } });
-    const session = (await this.sessionService().list()).data;
+    const session = (await this.sessionService().adapter.getAll())[0];
     this.#session = { ...session, ...response.data };
     await this.sessionService().create(this.#session);
     this.#emitChange({ type: "session", source: "session-updated" });
@@ -1245,7 +1244,7 @@ class ApiClient {
 
   async #changeTenant(tenantId, { supplied, external = false, sync = true } = {}) {
     this.#tenantChanging = true;
-    const previous = this.#session || (await this.sessionService().list()).data;
+    const previous = this.#session || (await this.sessionService().adapter.getAll())[0];
     const wasSyncEnabled = this.#sessionSyncEnabled;
     let changed = false;
     let committed = false;
@@ -1271,7 +1270,7 @@ class ApiClient {
       if (!external && (tenantId !== previous?.tenantId || supplied && supplied.data?.user?.id !== previous?.user?.id) && await hasPending()) {
         throw this.#tenantError("Envie o elimine los pendientes antes de cambiar de tenant", "TENANT_PENDING_OPERATIONS");
       }
-      const stored = (await this.sessionService().list()).data;
+      const stored = (await this.sessionService().adapter.getAll())[0];
       mutationSent = !external && !supplied;
       const response = supplied || await this.request(external ? this.#paths.session : "/session/tenant", {
         method: external ? "GET" : "PATCH", body: external ? undefined : { tenantId },
@@ -1348,7 +1347,7 @@ class ApiClient {
 
   async #checkStoredTenant() {
     if (this.#tenantChanging) return;
-    const stored = (await this.sessionService().list()).data;
+    const stored = (await this.sessionService().adapter.getAll())[0];
     if (!this.#session) { this.#session = stored || null; return; }
     if (stored && (stored.tenantId !== this.#session.tenantId || stored.user?.id !== this.#session.user?.id)) {
       this.#adoptExternalTenant();
@@ -1389,7 +1388,7 @@ class ApiClient {
     if (source === "auth-expired") {
       this.#authExpired = true;
       this.#sessionSyncEnabled = false;
-      const previousSession = (await this.sessionService().list()).data || { id: "session" };
+      const previousSession = (await this.sessionService().adapter.getAll())[0] || { id: "session" };
       await this.sessionService().create({ ...previousSession, token: null, authExpired: true });
     } else {
       this.#clearSyncState();
@@ -1410,7 +1409,7 @@ class ApiClient {
     return this.service("session")
   }
   async session() {
-    const session = (await this.sessionService().list()).data || {};
+    const session = (await this.sessionService().adapter.getAll()).find(record => record && (Object.hasOwn(record, "token") || record.authExpired)) || {};
     if (session.authExpired) {
       this.#authExpired = true;
       this.#sessionSyncEnabled = false;
@@ -1865,7 +1864,7 @@ class ApiClient {
 
   async #pingRequest(signal) {
     const response = await this.request(this.#paths.ping, { method: "GET", auth: false, signal });
-    const localSession = (await this.sessionService().list()).data;
+    const localSession = (await this.sessionService().adapter.getAll())[0];
     if (localSession?.authExpired) {
       this.#authExpired = true;
       this.#sessionSyncEnabled = false;

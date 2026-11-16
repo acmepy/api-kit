@@ -452,9 +452,6 @@ describe("client public API", () => {
       },
     });
 
-    await new Promise(resolve => {
-      const off = client.onChange(event => { if (event.type === "online") { off(); resolve(); } });
-    });
     await client.syncServices();
     assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }] });
 
@@ -498,8 +495,6 @@ describe("client public API", () => {
     const calls = [];
     let releaseSchema;
     const schemaPending = new Promise((resolve) => { releaseSchema = resolve; });
-    let startedSchema;
-    const schemaStarted = new Promise(resolve => { startedSchema = resolve; });
     await adapters.forService("schema").put("document", schema);
     await adapters.forService("schema").put("metadata", { id: "metadata", lastUpdateAt: "2020-01-01T00:00:00.000Z" });
     await adapters.forService("schema").put("clientes", { id: "clientes", create: { type: "object" } });
@@ -515,7 +510,6 @@ describe("client public API", () => {
         const pathname = new URL(String(url)).pathname;
         calls.push(pathname);
         if (pathname === "/api/schema.json") {
-          startedSchema();
           await schemaPending;
           return jsonResponse(schema);
         }
@@ -523,15 +517,12 @@ describe("client public API", () => {
       },
     });
 
-    await new Promise(resolve => {
-      const off = client.onChange(event => { if (event.type === "online") { off(); resolve(); } });
-    });
+    await wait(5);
     calls.length = 0;
     await client.syncServices();
 
     assert.ok(client.service("clientes") instanceof BaseService);
     assert.deepEqual(await client.service("clientes").list(), { ok: true, data: [{ id: 1, nombre: "Ana" }] });
-    await schemaStarted;
     assert.equal(calls.includes("/api/schema.json"), true);
 
     releaseSchema();

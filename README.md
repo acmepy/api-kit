@@ -576,7 +576,7 @@ Metodos publicos principales:
 
 - `login(credentials, { sync = true } = {})`: login server y guarda sesion. Por defecto sincroniza servicios, trae changes y abre SSE. Con `{ sync: false }` solo autentica y guarda la sesion: no descarga schemas ni datos, no trae changes, no abre SSE y detiene el ping y las precargas programadas. Leer `session()` o `token()` tampoco inicia una sincronizacion en ese modo.
 - `logout()`: llama `POST /logout`; tanto ante una respuesta exitosa como ante `401`, limpia sesion, token, caches y pending locales, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, y reinicia el ping. Ante `401` devuelve `{ ok: true, data: null }`, porque el cierre local se completo; otros errores del servidor o de red se propagan.
-- `session()`: carga la sesion local desde la clave de almacenamiento `session`, conservando el `id` recibido del servidor. Para sesiones guardadas con versiones anteriores reconoce registros con `token` o `authExpired`; no confunde metadatos de cache con la sesion aunque compartan el mismo almacen.
+- `session()`: carga sesion local.
 - `clearSession()`: limpia solo sesion local.
 - `discover()`: descubre servicios desde `schema.json`.
 - `logging: true` (o un objeto con `log()`): muestra en consola el uso y la actualizacion de cache de `schema.json`.
