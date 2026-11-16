@@ -120,7 +120,7 @@ describe("auth", () => {
 
     assert.equal(auth.logging, logger);
     assert.ok(events.some(([prefix, txId, payload]) => (
-      prefix === "[IAM]" && txId === "" && payload.type === "auth"
+      prefix === "[IAM]" && txId === "" && payload.type === "auth-operation" && payload.operation === "auth"
       && payload.message === "Error de inicio de sesión" && payload.status === 401
     )));
   });
