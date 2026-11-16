@@ -192,13 +192,8 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
       log("info", "audit.sse", { sessionId: session, ip, method: req.method, path: req.originalUrl,
         status: res.statusCode, durationMs: 0, contentLength: Number(res.getHeader("content-length") || 0), userAgent });
 
-      if (expiresAt) {
-        const timeout = Math.max(expiresAt - Date.now(), 0);
-        client.expirationTimer = setTimeout(() => closeClient("auth-expired"), timeout);
-        client.expirationTimer.unref?.();
-      }
-
       client.heartbeat = setInterval(() => {
+        if (expiresAt && Date.now() >= expiresAt) { closeClient("auth-expired"); return; }
         Promise.resolve(validateClientSession())
           .then((active) => {if (active && !client.closed) res.write(": heartbeat\n\n")})
           .catch((error) => log("error", "audit.sse", error));
@@ -229,10 +224,6 @@ function cleanupSseClient(clients, client, config) {
   if (client.heartbeat) {
     clearInterval(client.heartbeat);
     client.heartbeat = null;
-  }
-  if (client.expirationTimer) {
-    clearTimeout(client.expirationTimer);
-    client.expirationTimer = null;
   }
   if (client.sendChange) config.audit.events.off("change", client.sendChange);
   if (client.tenantChanged) config.audit.events.off("session-tenant-changed", client.tenantChanged);

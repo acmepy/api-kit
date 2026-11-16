@@ -529,13 +529,14 @@ describe("audit", () => {
     }
   });
 
-  it("closes authenticated sse streams when the bearer token expires", async () => {
+  for (const tokenExpiresIn of ["1s", "365d"]) {
+  it(`checks SSE expiration in heartbeat with a ${tokenExpiresIn} bearer token`, async () => {
     const seq = createTestSeq({ logging: false });
     const api = await createApi({
       seq,
       basePath: "/api",
       audit: { heartbeatTimeout: 50 },
-      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn: "1s" },
+      auth: { adapter: createIamAdapter(seq), required: true, secret: "test-secret", tokenExpiresIn },
       modules,
     });
 
@@ -560,9 +561,18 @@ describe("audit", () => {
       const stream = openSse(server, "/api/sse", { token: login.body.data.token });
       try {
         await stream.connected;
-        const event = await timeoutAfter(stream.nextEvent, 1500, "SSE auth-expired event not received");
-        assert.equal(event.event, "auth-expired");
-        await timeoutAfter(stream.closed, 500, "SSE did not close after token expiration");
+        if (tokenExpiresIn === "1s") {
+          const event = await timeoutAfter(stream.nextEvent, 1500, "SSE auth-expired event not received");
+          assert.equal(event.event, "auth-expired");
+          await timeoutAfter(stream.closed, 500, "SSE did not close after token expiration");
+        } else {
+          const result = await timeoutAfter(Promise.race([
+            stream.nextHeartbeat.then(() => "heartbeat"),
+            stream.nextEvent.then(event => event.event),
+            stream.closed.then(() => "closed"),
+          ]), 1000, "Long-lived SSE token did not receive a heartbeat");
+          assert.equal(result, "heartbeat");
+        }
       } finally {
         stream.close();
       }
@@ -571,6 +581,7 @@ describe("audit", () => {
       await close(server);
     }
   });
+  }
 
   it("streams authenticated audit changes created inside service transactions", async () => {
     const seq = createTestSeq({ logging: false });
