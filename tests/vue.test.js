@@ -53,11 +53,11 @@ describe("Vue client layer", () => {
     assert.equal(resource.records.value[1].nombre, "Beto editado");
 
     records.push({ id: 3, nombre: "Cora" });
-    for (const listener of listeners) listener({ type: "sse", lastReceivedAt: "2026-01-01T00:00:00.000Z" });
+    for (const listener of listeners) listener({ type: "sse", lastReceivedAt: "2026-01-01_00.00.00.000-0300" });
     await nextTick();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(resource.records.value.length, 3);
-    assert.equal(api.lastReceivedAt.value, "2026-01-01T00:00:00.000Z");
+    assert.equal(api.lastReceivedAt.value, "2026-01-01_00.00.00.000-0300");
 
     scope.stop();
     api.dispose();

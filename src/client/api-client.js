@@ -1061,7 +1061,7 @@ export class ApiClient {
   }
 
   #now() {
-    return new Date().toISOString();
+    return dayjs().format("YYYY-MM-DD_HH.mm.ss.SSSZZ");
   }
 
   #normalizeDateTime(value) {

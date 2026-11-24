@@ -1005,7 +1005,7 @@ class SessionService extends BaseService {
   }
 }
 
-const version = "1.5.7";
+const version = "1.5.8";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
@@ -2058,7 +2058,7 @@ class ApiClient {
   }
 
   #now() {
-    return new Date().toISOString();
+    return dayjs().format("YYYY-MM-DD_HH.mm.ss.SSSZZ");
   }
 
   #normalizeDateTime(value) {

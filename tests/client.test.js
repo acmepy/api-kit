@@ -22,6 +22,10 @@ describe("client public API", () => {
       }
       await client.changes();
       assert.match(new URL(urls.filter(url => new URL(url).pathname === "/api/changes").at(-1)).searchParams.get("since"), /^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}\.\d{3}[+-]\d{4}$/);
+      const receivedAt = client.lastReceivedAt();
+      assert.match(receivedAt, /^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}\.\d{3}[+-]\d{4}$/);
+      await client.changes();
+      assert.equal(new URL(urls.filter(url => new URL(url).pathname === "/api/changes").at(-1)).searchParams.get("since"), receivedAt);
     } finally { client.destroy(); }
   });
   it("sends consumer name and version as informational headers", async () => {
