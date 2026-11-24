@@ -1,4 +1,5 @@
 import { BaseService } from "./services/base-service.js";
+import dayjs from "dayjs";
 import { defaultAdapter } from "./adapters/index.js";
 import { ApiClientError } from "./errors.js";
 import { encodeBody } from "./http.js";
@@ -741,7 +742,7 @@ export class ApiClient {
   async #requestChanges(since) {
     const controller = new AbortController();
     this.#changesAbort = controller;
-    const requestedSince = since ? this.#normalizeDateTime(since) : this.#lastReceivedAt || this.#now();
+    const requestedSince = this.#normalizeDateTime(since || this.#lastReceivedAt || this.#now());
     const query = { since: requestedSince };
     let response;
     try {
@@ -1064,7 +1065,9 @@ export class ApiClient {
   }
 
   #normalizeDateTime(value) {
-    return value instanceof Date ? value.toISOString() : value;
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}\.\d{3}[+-]\d{4}$/.test(value)) return value;
+    const date = dayjs(value);
+    return date.isValid() ? date.format("YYYY-MM-DD_HH.mm.ss.SSSZZ") : value;
   }
 
   #clearScheduledServiceSyncs() {

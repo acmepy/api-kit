@@ -1,5 +1,6 @@
 import yep from 'yep';
 import * as idbKeyval from 'idb-keyval';
+import dayjs from 'dayjs';
 
 function fillPath(path, params = {}) {
   return path.replace(/\{([^}]+)\}/g, (_, key) => encodeURIComponent(params[key]));
@@ -1004,7 +1005,7 @@ class SessionService extends BaseService {
   }
 }
 
-const version = "1.5.6";
+const version = "1.5.7";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
@@ -1738,7 +1739,7 @@ class ApiClient {
   async #requestChanges(since) {
     const controller = new AbortController();
     this.#changesAbort = controller;
-    const requestedSince = since ? this.#normalizeDateTime(since) : this.#lastReceivedAt || this.#now();
+    const requestedSince = this.#normalizeDateTime(since || this.#lastReceivedAt || this.#now());
     const query = { since: requestedSince };
     let response;
     try {
@@ -2061,7 +2062,9 @@ class ApiClient {
   }
 
   #normalizeDateTime(value) {
-    return value instanceof Date ? value.toISOString() : value;
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}\.\d{3}[+-]\d{4}$/.test(value)) return value;
+    const date = dayjs(value);
+    return date.isValid() ? date.format("YYYY-MM-DD_HH.mm.ss.SSSZZ") : value;
   }
 
   #clearScheduledServiceSyncs() {

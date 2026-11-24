@@ -492,10 +492,10 @@ El campo `tableName` de cada cambio usa directamente `Model.tableName`, resuelto
 
 Rutas generadas:
 
-- `GET /api/changes?since=ISO_DATE`
+- `GET /api/changes?since=2026-11-24_10.35.45.455-0300`
 - `GET /api/sse`
 
-`changes` devuelve cambios desde una fecha. `sse` mantiene una conexion `text/event-stream` y envia eventos en vivo:
+`changes` devuelve cambios desde una fecha. El cliente envia `since` con formato `YYYY-MM-DD_HH.mm.ss.SSSZZ`, usando la hora local y su offset, sin perder milisegundos. El servidor tambien acepta fechas ISO con zona. `sse` mantiene una conexion `text/event-stream` y envia eventos en vivo:
 
 ```txt
 event: audit

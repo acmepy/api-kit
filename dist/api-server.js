@@ -2562,7 +2562,8 @@ function findAuditModel(modules, models) {
 
 function parseSince(value) {
   if (!value) throw new ValidationError("Parametro since requerido", { errors: { since: "Requerido" } });
-  const date = new Date(String(value));
+  const text = String(value).replace(/^(\d{4}-\d{2}-\d{2})_(\d{2})\.(\d{2})\.(\d{2})\.(\d{3})([+-]\d{2})(\d{2})$/, "$1T$2:$3:$4.$5$6:$7");
+  const date = new Date(text);
   if (Number.isNaN(date.getTime())) throw new ValidationError("Parametro since invalido", { errors: { since: "Fecha invalida" } });
   return date;
 }
@@ -3550,7 +3551,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.5.6";
+const version = "1.5.7";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

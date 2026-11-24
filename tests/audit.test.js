@@ -277,6 +277,13 @@ describe("audit", () => {
       assert.equal(res.body.data[0].tableName, "clientes");
       assert.equal(res.body.data[0].new.nombre, "Ana");
 
+      const localSince = "2000-01-01_10.35.45.455-0300";
+      const friendly = await request(server, "GET", `/api/changes?since=${localSince}`);
+      assert.equal(friendly.status, 200);
+      assert.equal(friendly.body.data.length, 1);
+      const future = await request(server, "GET", "/api/changes?since=2099-01-01_10.35.45.455-0300");
+      assert.equal(future.body.data.length, 0);
+
       const invalid = await request(server, "GET", "/api/changes");
       assert.equal(invalid.status, 400);
       assert.equal(invalid.body.errors.since, "Requerido");

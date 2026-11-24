@@ -4,6 +4,26 @@ import { createApiClient, BaseService, SchemaService, SessionService, version } 
 import { createApiVue } from "../src/vue/index.js";
 
 describe("client public API", () => {
+  it("sends changes dates in a readable local format with milliseconds and offset", async () => {
+    const urls = [];
+    const client = createApiClient({ url: "http://server/api", changes: false, sse: false,
+      fetch: async url => { urls.push(String(url)); return jsonResponse({ ok: true, data: [] }); },
+      pingInterval: 60_000,
+    });
+    try {
+      const date = new Date(2026, 10, 24, 10, 35, 45, 455);
+      const offset = -date.getTimezoneOffset();
+      const zone = `${offset >= 0 ? "+" : "-"}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0")}${String(Math.abs(offset) % 60).padStart(2, "0")}`;
+      for (const value of [date, date.toISOString(), `2026-11-24_10.35.45.455${zone}`]) {
+        await client.changes(value);
+        const url = urls.filter(url => new URL(url).pathname === "/api/changes").at(-1);
+        assert.equal(new URL(url).searchParams.get("since"), `2026-11-24_10.35.45.455${zone}`);
+        assert.equal(url.includes("%3A"), false);
+      }
+      await client.changes();
+      assert.match(new URL(urls.filter(url => new URL(url).pathname === "/api/changes").at(-1)).searchParams.get("since"), /^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}\.\d{3}[+-]\d{4}$/);
+    } finally { client.destroy(); }
+  });
   it("sends consumer name and version as informational headers", async () => {
     const calls = [];
     const client = createApiClient({
