@@ -151,10 +151,11 @@ export class ApiClient {
   services(): Map<string, BaseService>;
   cachedRequest<T = unknown>(key: string, path: string, options?: RequestOptions & { force?: boolean }): Promise<T>;
   markServiceCacheUpdated(name: string): void;
+  markDataReceived(lastUpdateAt: string): Promise<void>;
   syncServices(force?: boolean): Promise<void>;
   syncState(): SyncState[];
   connected(): boolean;
-  lastReceivedAt(): number | null;
+  lastReceivedAt(): string | null;
   destroy(): void;
   disconnect(): void;
   onChange(listener: (event: ChangeEvent) => void): () => void;

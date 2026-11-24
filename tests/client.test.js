@@ -4,6 +4,84 @@ import { createApiClient, BaseService, SchemaService, SessionService, version } 
 import { createApiVue } from "../src/vue/index.js";
 
 describe("client public API", () => {
+  it("restores the server cursor after restart and keeps it on empty or failed changes", async () => {
+    const adapters = adapterRegistry();
+    await adapters.forService("schema").put("document", schemaDocument());
+    await adapters.forService("schema").put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+    const saved = "2026-11-24T14:47:12.668-03:00";
+    const newer = "2026-11-24T14:51:00.020-03:00";
+    const queries = [];
+    let data = [];
+    const create = () => createApiClient({ url: "http://server/api", adapter: adapters.root,
+      createAdapter: adapters.createAdapter, changes: false, sse: false,
+      serviceSyncDelay: false, pingInterval: 60_000,
+      fetch: async url => {
+        const parsed = new URL(url);
+        if (parsed.pathname === "/api/changes") {
+          queries.push(parsed.searchParams.get("since"));
+          return jsonResponse({ ok: true, data, lastUpdateAt: newer });
+        }
+        return jsonResponse({ ok: true, data: [{ id: 1, nombre: "Ana" }], lastUpdateAt: saved });
+      },
+    });
+    let client = create();
+    try {
+      await client.syncServices();
+      await client.service("clientes").pull();
+      assert.equal((await adapters.root.get("changes:metadata")).lastUpdateAt, saved);
+      client.destroy();
+      client = create();
+      await client.syncServices();
+      await client.changes();
+      const expected = queries[0];
+      const isoSince = expected.replace(/^(.*)_(\d{2})\.(\d{2})\.(\d{2})\.(\d{3})([+-]\d{2})(\d{2})$/, "$1T$2:$3:$4.$5$6:$7");
+      assert.equal(Date.parse(isoSince), Date.parse(saved), "Restart uses the exact saved server instant");
+      const restored = client.lastReceivedAt();
+      assert.equal((await adapters.root.get("changes:metadata")).lastUpdateAt, saved);
+      await client.changes();
+      assert.equal(queries.at(-1), expected);
+      assert.equal(client.lastReceivedAt(), restored);
+      data = [{ service: "clientes", action: "update", new: { id: 1, nombre: "Editada" } }];
+      const apply = client.service("clientes").applyData.bind(client.service("clientes"));
+      client.service("clientes").applyData = async () => { throw new Error("storage failed"); };
+      await assert.rejects(client.changes(), /storage failed/);
+      assert.equal((await adapters.root.get("changes:metadata")).lastUpdateAt, saved);
+      client.service("clientes").applyData = apply;
+      await client.changes();
+      assert.equal((await adapters.root.get("changes:metadata")).lastUpdateAt, newer);
+      assert.equal((await client.service("clientes").get(1)).data.nombre, "Editada");
+    } finally { client.destroy(); }
+  });
+  it("persists SSE server time after applying an event and ignores heartbeats", async () => {
+    const adapters = adapterRegistry();
+    await adapters.forService("schema").put("document", schemaDocument());
+    await adapters.forService("schema").put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+    let stream;
+    const timestamp = "2026-11-24T14:47:12.668-03:00";
+    const client = createApiClient({ url: "http://server/api", adapter: adapters.root,
+      createAdapter: adapters.createAdapter, changes: false, serviceSyncDelay: false, pingInterval: 60_000,
+      fetch: async url => {
+        const path = new URL(url).pathname;
+        if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "token" } });
+        if (path === "/api/sse") return new Response(new ReadableStream({ start(controller) { stream = controller; } }));
+        return jsonResponse({ ok: true, data: [] });
+      },
+    });
+    try {
+      const applied = new Promise(resolve => client.onChange(event => { if (event.type === "sse") resolve(); }));
+      await client.login({ username: "admin", password: "1234" });
+      stream.enqueue(new TextEncoder().encode(`event: audit\ndata: ${JSON.stringify({ service: "clientes", action: "create", new: { id: 1, nombre: "Ana" }, lastUpdateAt: timestamp })}\n\n`));
+      await applied;
+      assert.equal((await adapters.root.get("changes:metadata")).lastUpdateAt, timestamp);
+      assert.equal((await client.service("clientes").get(1)).data.nombre, "Ana");
+      const receivedAt = client.lastReceivedAt();
+      const heartbeat = new Promise(resolve => client.onChange(event => { if (event.type === "online" && event.source === "sse") resolve(); }));
+      stream.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
+      await heartbeat;
+      assert.equal(client.lastReceivedAt(), receivedAt);
+      assert.equal((await adapters.root.get("changes:metadata")).lastUpdateAt, timestamp);
+    } finally { client.destroy(); }
+  });
   it("stores cache timestamps with a local offset and reuses fresh cache metadata", async () => {
     const adapters = adapterRegistry();
     let requests = 0;
@@ -45,9 +123,9 @@ describe("client public API", () => {
       await client.changes();
       assert.match(new URL(urls.filter(url => new URL(url).pathname === "/api/changes").at(-1)).searchParams.get("since"), /^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}\.\d{3}[+-]\d{4}$/);
       const receivedAt = client.lastReceivedAt();
-      assert.match(receivedAt, /^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}\.\d{3}[+-]\d{4}$/);
+      assert.equal(receivedAt, null, "Empty responses must not advance the cursor");
       await client.changes();
-      assert.equal(new URL(urls.filter(url => new URL(url).pathname === "/api/changes").at(-1)).searchParams.get("since"), receivedAt);
+      assert.equal(client.lastReceivedAt(), null);
     } finally { client.destroy(); }
   });
   it("sends consumer name and version as informational headers", async () => {

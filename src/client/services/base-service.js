@@ -178,11 +178,15 @@ export class BaseService {
     try {
       const records = [];
       let total = null;
+      let lastUpdateAt;
+      let firstPage = true;
       let nextQuery = { ...query };
 
       sync?.update({ status: "downloading" });
       while (nextQuery) {
         const response = await this.#send("list", { query: nextQuery });
+        if (firstPage) lastUpdateAt = response.lastUpdateAt;
+        firstPage = false;
         const data = Array.isArray(response.data) ? response.data : [];
         records.push(...data);
         const pagination = response.pagination || response.meta?.pagination || response.meta || {};
@@ -193,6 +197,7 @@ export class BaseService {
       }
 
       if (records.length > 0) await this.adapter.add(records);
+      if (records.length > 0 && lastUpdateAt) await this.client.markDataReceived?.(lastUpdateAt);
       await this.client.markServiceCacheUpdated?.(this.name);
       this.#notify();
       sync?.complete({ count: records.length, total: total ?? records.length, succeeded: records.length });

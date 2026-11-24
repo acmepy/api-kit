@@ -161,12 +161,17 @@ describe("Client BaseService", () => {
     const records = [];
     const adapter = memoryAdapter(records);
     const calls = [];
+    const received = [];
     const service = new BaseService({
       client: {
+        async markDataReceived(value) {
+          assert.equal(records.length, 2, "Save the cursor after all pages are stored");
+          received.push(value);
+        },
         async request(path, options) {
           calls.push({ path, options });
-          if (options.query.page === 2) return { ok: true, data: [{ id: 2, name: "Beto" }] };
-          return { ok: true, data: [{ id: 1, name: "Ana" }], meta: { hasNextPage: true, page: 1 } };
+          if (options.query.page === 2) return { ok: true, data: [{ id: 2, name: "Beto" }], lastUpdateAt: "2026-11-24T15:00:00-03:00" };
+          return { ok: true, data: [{ id: 1, name: "Ana" }], meta: { hasNextPage: true, page: 1 }, lastUpdateAt: "2026-11-24T14:00:00-03:00" };
         },
       },
       name: "clientes",
@@ -177,6 +182,7 @@ describe("Client BaseService", () => {
     });
 
     const result = await service.pull();
+    assert.deepEqual(received, ["2026-11-24T14:00:00-03:00"]);
 
     assert.deepEqual(result, {
       ok: true,

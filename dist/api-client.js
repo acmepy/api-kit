@@ -481,11 +481,15 @@ class BaseService {
     try {
       const records = [];
       let total = null;
+      let lastUpdateAt;
+      let firstPage = true;
       let nextQuery = { ...query };
 
       sync?.update({ status: "downloading" });
       while (nextQuery) {
         const response = await this.#send("list", { query: nextQuery });
+        if (firstPage) lastUpdateAt = response.lastUpdateAt;
+        firstPage = false;
         const data = Array.isArray(response.data) ? response.data : [];
         records.push(...data);
         const pagination = response.pagination || response.meta?.pagination || response.meta || {};
@@ -496,6 +500,7 @@ class BaseService {
       }
 
       if (records.length > 0) await this.adapter.add(records);
+      if (records.length > 0 && lastUpdateAt) await this.client.markDataReceived?.(lastUpdateAt);
       await this.client.markServiceCacheUpdated?.(this.name);
       this.#notify();
       sync?.complete({ count: records.length, total: total ?? records.length, succeeded: records.length });
@@ -1005,7 +1010,7 @@ class SessionService extends BaseService {
   }
 }
 
-const version = "1.5.12";
+const version = "1.5.15";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
@@ -1050,6 +1055,7 @@ class ApiClient {
   #listeners = new Set();
   #online = false;
   #lastReceivedAt = null;
+  #receivedAtWrite = Promise.resolve();
   #syncServicesPromise = null;
   #backgroundSyncPromise = null;
   #backgroundServiceSyncs = new Map();
@@ -1302,7 +1308,6 @@ class ApiClient {
       this.#onLine("tenant-changed", session);
       if (!external) this.#tenantChannel?.postMessage({ sessionId: previous?.id });
       if (sync) {
-        const since = this.#now();
         await this.syncServices(changed);
         if (changed) {
           this.#clearScheduledServiceSyncs();
@@ -1310,7 +1315,7 @@ class ApiClient {
           const failure = pulls.find(result => result.status === "rejected");
           if (failure) throw failure.reason;
         }
-        if (this.#changesEnabled) await this.changes(since);
+        if (this.#changesEnabled) await this.changes();
         if (this.#sseEnabled) await this.#openSse();
       }
       return response;
@@ -1743,7 +1748,8 @@ class ApiClient {
   async #requestChanges(since) {
     const controller = new AbortController();
     this.#changesAbort = controller;
-    const requestedSince = this.#normalizeDateTime(since || this.#lastReceivedAt || this.#now());
+    await this.#restoreLastReceivedAt();
+    const requestedSince = this.#normalizeDateTime(since || this.#lastReceivedAt || new Date(0));
     const query = { since: requestedSince };
     let response;
     try {
@@ -1752,8 +1758,9 @@ class ApiClient {
     } finally {
       if (this.#changesAbort === controller) this.#changesAbort = null;
     }
-    const receivedAt = this.#touchLastReceivedAt();
-    await this.#applyChangesData(response.data);
+    const applied = await this.#applyChangesData(response.data);
+    if (applied) await this.markDataReceived(response.lastUpdateAt);
+    const receivedAt = this.#lastReceivedAt;
     this.#onLine("changes", response.data, { lastReceivedAt: receivedAt });
     this.#emitChange({ type: "changes", data: response.data, lastReceivedAt: receivedAt });
     return response;
@@ -1975,8 +1982,7 @@ class ApiClient {
       }), sessionVersion);
       return;
     }
-    const receivedAt = this.#touchLastReceivedAt();
-    this.#onLine("sse", undefined, { lastReceivedAt: receivedAt });
+    this.#onLine("sse");
     this.#resetWatchdog();
     const lines = raw.split(/\r?\n/);
     const dataLines = lines.filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart());
@@ -1988,7 +1994,8 @@ class ApiClient {
     } catch (error) {
       console.error("[api] [sse]", error);
     }
-    await this.#applyServiceData(data);
+    if (await this.#applyServiceData(data)) await this.markDataReceived(data?.lastUpdateAt);
+    const receivedAt = this.#lastReceivedAt;
     this.#emitChange({ type: "sse", data, lastReceivedAt: receivedAt });
   }
 
@@ -2000,11 +2007,14 @@ class ApiClient {
       : [...this.#services.values()].find(service => service.tableName === data.tableName) || this.#services.get(serviceName);
     if (!service) return;
     await service.applyData(data);
+    return true;
   }
 
   async #applyChangesData(data) {
-    if (!Array.isArray(data)) return;
-    for (const change of data) await this.#applyServiceData(change);
+    if (!Array.isArray(data)) return 0;
+    let applied = 0;
+    for (const change of data) if (await this.#applyServiceData(change)) applied++;
+    return applied;
   }
 
   #resetWatchdog() {
@@ -2056,13 +2066,24 @@ class ApiClient {
     for (const listener of this.#listeners) listener(event);
   }
 
-  #touchLastReceivedAt() {
-    this.#lastReceivedAt = this.#now();
-    return this.#lastReceivedAt;
+  async #restoreLastReceivedAt() {
+    if (this.#lastReceivedAt) return;
+    const saved = await this.#adapter.get("changes:metadata");
+    if (saved?.lastUpdateAt) this.#lastReceivedAt = this.#normalizeDateTime(saved.lastUpdateAt);
   }
 
-  #now() {
-    return dayjs().format("YYYY-MM-DD_HH.mm.ss.SSSZZ");
+  async markDataReceived(lastUpdateAt) {
+    if (!Number.isFinite(Date.parse(lastUpdateAt))) return;
+    const version = this.#sessionVersion;
+    const write = this.#receivedAtWrite.then(async () => {
+      const saved = await this.#adapter.get("changes:metadata");
+      if (version !== this.#sessionVersion) return;
+      const value = Date.parse(saved?.lastUpdateAt) > Date.parse(lastUpdateAt) ? saved.lastUpdateAt : lastUpdateAt;
+      await this.#adapter.put("changes:metadata", { id: "changes:metadata", lastUpdateAt: value });
+      this.#lastReceivedAt = this.#normalizeDateTime(value);
+    });
+    this.#receivedAtWrite = write.catch(() => {});
+    return write;
   }
 
   #normalizeDateTime(value) {

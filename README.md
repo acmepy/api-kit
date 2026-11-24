@@ -587,7 +587,7 @@ Metodos publicos principales:
 - `connected()`: estado online.
 - `getSession()`: sesion en memoria.
 - `token()`: Bearer token actual.
-- `lastReceivedAt()`: ultimo timestamp recibido por `changes` o SSE.
+- `lastReceivedAt()`: marca del servidor guardada despues de aplicar datos de `list`, `changes` o SSE. Se persiste en `changes:metadata` y se recupera para la siguiente consulta de cambios al recargar. Las respuestas vacias y los heartbeats no la modifican. Una descarga paginada conserva la marca de su primera pagina y la guarda al terminar. Si no hay marca guardada ni `since` explicito, se consulta desde el inicio de Unix, sin usar el reloj del dispositivo. Los metadatos locales de vigencia de cache siguen separados.
 - `onChange(listener)` / `offChange(listener)`: eventos del cliente.
 - `changes(since?)`: consulta `/changes`.
 
