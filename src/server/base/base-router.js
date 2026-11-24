@@ -1,5 +1,5 @@
 import express from "express";
-import { ok, list } from "../http/response.js";
+import { ok, list, lastUpdateAt } from "../http/response.js";
 import { getContext } from "../context/request-context.js";
 import { AppError } from "../errors/app-error.js";
 
@@ -84,9 +84,11 @@ export class BaseRouter {
         const {params, query, body} = req;
         const args = { params, query, body};
 
+        const timestamp = serviceMethod === "list" ? lastUpdateAt() : null;
         const result = await this.#service[serviceMethod](args);
-        if (result.pagination)  return res.json(list(result.data, result.pagination));
-        return res.json(ok(result.data));
+        const response = result.pagination ? list(result.data, result.pagination) : ok(result.data);
+        if (timestamp) response.lastUpdateAt = timestamp;
+        return res.json(response);
       } catch (err) {
         next(err);
       }

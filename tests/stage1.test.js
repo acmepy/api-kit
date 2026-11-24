@@ -456,6 +456,7 @@ describe("Etapa 1 - Nucleo", () => {
       assert.equal(res.body.pagination.offset, 0);
       assert.equal(res.body.pagination.total, 0);
       assert.equal(res.body.pagination.pages, 0);
+      assert.match(res.body.lastUpdateAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
       assert.deepEqual(res.body.pagination.links, {
         self: `http://localhost:3001/api/clientes?email=${encodeURIComponent(email)}&page=1&limit=100`,
         next: false,

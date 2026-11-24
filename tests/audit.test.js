@@ -276,6 +276,7 @@ describe("audit", () => {
       assert.equal(res.body.data[0].action, "create");
       assert.equal(res.body.data[0].tableName, "clientes");
       assert.equal(res.body.data[0].new.nombre, "Ana");
+      assert.match(res.body.lastUpdateAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
       for (const field of ["createdAt", "updatedAt"]) {
         assert.match(res.body.data[0][field], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
       }
@@ -286,6 +287,7 @@ describe("audit", () => {
       assert.equal(friendly.body.data.length, 1);
       const future = await request(server, "GET", "/api/changes?since=2099-01-01_10.35.45.455-0300");
       assert.equal(future.body.data.length, 0);
+      assert.ok(Number.isFinite(Date.parse(future.body.lastUpdateAt)));
 
       const invalid = await request(server, "GET", "/api/changes");
       assert.equal(invalid.status, 400);
@@ -416,6 +418,7 @@ describe("audit", () => {
       const event = await stream.nextEvent;
       assert.equal(event.event, "audit");
       assert.equal(event.data.action, "create");
+      assert.match(event.data.lastUpdateAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
       for (const field of ["createdAt", "updatedAt"]) {
         assert.match(event.data[field], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
       }

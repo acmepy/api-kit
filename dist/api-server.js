@@ -7,10 +7,10 @@ import yep from 'yep';
 import { Model, DataTypes, Op } from 'seq';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import crypto from 'node:crypto';
+import dayjs from 'dayjs';
 import fs, { readFileSync } from 'node:fs';
 import os from 'node:os';
 import AdmZip from 'adm-zip';
-import dayjs from 'dayjs';
 import { verifyJwt, auth, can } from 'iam/express';
 import { RBAC } from 'iam';
 import { SeqAdapter } from 'iam/adapters';
@@ -1432,6 +1432,9 @@ function ok(data, meta = null) {
 function list(data, pagination) {
   return { ok: true, data, pagination };
 }
+function lastUpdateAt() {
+  return dayjs().format("YYYY-MM-DDTHH:mm:ss.SSSZ");
+}
 
 class BaseRouter {
   #service;
@@ -1514,9 +1517,11 @@ class BaseRouter {
         const {params, query, body} = req;
         const args = { params, query, body};
 
+        const timestamp = serviceMethod === "list" ? lastUpdateAt() : null;
         const result = await this.#service[serviceMethod](args);
-        if (result.pagination)  return res.json(list(result.data, result.pagination));
-        return res.json(ok(result.data));
+        const response = result.pagination ? list(result.data, result.pagination) : ok(result.data);
+        if (timestamp) response.lastUpdateAt = timestamp;
+        return res.json(response);
       } catch (err) {
         next(err);
       }
@@ -2363,6 +2368,7 @@ function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, 
     serviceMethod: "changes",
     summary: "Cambios desde una fecha",
     handler: ({ AuditModel, modules, authContext }) => async (req, res) => {
+      const timestamp = lastUpdateAt();
       const since = parseSince(req.query?.since);
       const sinceField = auditSinceField(modules);
       const rows = await AuditModel.findAll({where: { [sinceField]: { [Op.gte]: since } }, order: [["id", "ASC"]],});
@@ -2371,7 +2377,7 @@ function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, 
         const change = auditChange(row, AuditModel);
         if (await canViewAuditChange(change, { req, modules, authContext })) visible.push(change);
       }
-      res.json(ok(visible));
+      res.json({ ...ok(visible), lastUpdateAt: timestamp });
     },
   });
 }
@@ -2429,7 +2435,7 @@ function installAuditSseRoute({ mainRouter, routeRegistry, modules, models, conf
           .then((allowed) => {
             if (!allowed || client.closed) return;
             try {
-              res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`);
+              res.write(`event: audit\ndata: ${JSON.stringify({ ...change, lastUpdateAt: lastUpdateAt() })}\n\n`);
             } catch (error) {
               log("error", "audit.sse", error);
             }
@@ -3559,7 +3565,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.5.11";
+const version = "1.5.12";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

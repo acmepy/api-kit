@@ -3,7 +3,7 @@ import dayjs from "dayjs";
 import { verifyJwt } from "iam/express";
 import { getContext } from "../context/request-context.js";
 import { ValidationError } from "../errors/validation-error.js";
-import { ok } from "../http/response.js";
+import { ok, lastUpdateAt } from "../http/response.js";
 import { log } from "../logger/index.js";
 import { joinPaths } from "../utils/paths.js";
 import { defineResource } from "../config/config-resource.js";
@@ -109,6 +109,7 @@ export function installAuditChangesRoute({ mainRouter, routeRegistry, modules, m
     serviceMethod: "changes",
     summary: "Cambios desde una fecha",
     handler: ({ AuditModel, modules, authContext }) => async (req, res) => {
+      const timestamp = lastUpdateAt();
       const since = parseSince(req.query?.since);
       const sinceField = auditSinceField(modules);
       const rows = await AuditModel.findAll({where: { [sinceField]: { [Op.gte]: since } }, order: [["id", "ASC"]],});
@@ -117,7 +118,7 @@ export function installAuditChangesRoute({ mainRouter, routeRegistry, modules, m
         const change = auditChange(row, AuditModel);
         if (await canViewAuditChange(change, { req, modules, authContext })) visible.push(change);
       }
-      res.json(ok(visible));
+      res.json({ ...ok(visible), lastUpdateAt: timestamp });
     },
   });
 }
@@ -175,7 +176,7 @@ export function installAuditSseRoute({ mainRouter, routeRegistry, modules, model
           .then((allowed) => {
             if (!allowed || client.closed) return;
             try {
-              res.write(`event: audit\ndata: ${JSON.stringify(change)}\n\n`);
+              res.write(`event: audit\ndata: ${JSON.stringify({ ...change, lastUpdateAt: lastUpdateAt() })}\n\n`);
             } catch (error) {
               log("error", "audit.sse", error);
             }
