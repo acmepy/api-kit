@@ -16,7 +16,7 @@ export function createAuditResource(tenant = false) {
     timestamps: true,
     ...(tenant && { tenant: { attribute: tenant.attribute } }),
     indexes: [
-      { name: "idx_audit_created_at", columns: ["createdAt"] },
+      { columns: ["createdAt"] },
     ],
     attributes: {
       ...(tenant && { [tenant.attribute]: { type: tenant.type, maxLength: tenant.maxLength, allowNull: false, create: false, update: false } }),

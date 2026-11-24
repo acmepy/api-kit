@@ -2270,7 +2270,7 @@ function createAuditResource(tenant = false) {
     timestamps: true,
     ...(tenant && { tenant: { attribute: tenant.attribute } }),
     indexes: [
-      { name: "idx_audit_created_at", columns: ["createdAt"] },
+      { columns: ["createdAt"] },
     ],
     attributes: {
       ...(tenant && { [tenant.attribute]: { type: tenant.type, maxLength: tenant.maxLength, allowNull: false, create: false, update: false } }),
@@ -3053,6 +3053,7 @@ async function createApi(conf = {}) {
     if (model.options?.tenant === true && config.tenant) model.options.tenant = { attribute: config.tenant.attribute };
   }
   registerSeqModels(config.seq, modelsMap.values());
+  if (auditResource) auditResource.model.options.indexes[0].name = `idx_${auditResource.model.tableName}_created_at`;
 
   const routeRegistry = new RouteRegistry();
   const modules = new Map();
@@ -3549,7 +3550,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.5.5";
+const version = "1.5.6";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

@@ -105,6 +105,7 @@ export async function createApi(conf = {}) {
     if (model.options?.tenant === true && config.tenant) model.options.tenant = { attribute: config.tenant.attribute };
   }
   registerSeqModels(config.seq, modelsMap.values());
+  if (auditResource) auditResource.model.options.indexes[0].name = `idx_${auditResource.model.tableName}_created_at`;
 
   const routeRegistry = new RouteRegistry();
   const modules = new Map();

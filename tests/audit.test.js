@@ -69,6 +69,11 @@ describe("audit", () => {
     const detail = header.getAssociationIncludes().find(include => include.as === "detalles").model;
     assert.notEqual(header.tableName, "clientes", "The resolved table name differs from the module name");
     assert.ok(header.tableName.startsWith("rep_"));
+    const auditModel = api.models.get("audit");
+    const auditIndexName = `idx_${auditModel.tableName}_created_at`;
+    assert.equal(auditModel.options.indexes[0].name, auditIndexName);
+    const auditIndex = await seq.adapter.dml.executeGet("SELECT name, tbl_name FROM sqlite_master WHERE type = 'index' AND name = ?", [auditIndexName]);
+    assert.equal(auditIndex.tbl_name, auditModel.tableName);
     assert.equal(api.models.get("secretos").tableName, "secretos_cab", "Explicit table names follow Seq's contract");
     const created = await service.create({ body: { nombre: "Ana", detalles: [{ descripcion: "Primero" }] } });
     await api.services.get("secretos").create({ body: { id: 1, nombre: "Privado" } });
