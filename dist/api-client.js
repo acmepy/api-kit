@@ -1004,7 +1004,7 @@ class SessionService extends BaseService {
   }
 }
 
-const version = "1.5.4";
+const version = "1.5.5";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;

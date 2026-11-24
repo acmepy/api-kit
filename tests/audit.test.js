@@ -6,6 +6,7 @@ import { createIamAdapter, createTestSeq } from "./helpers/seq.js";
 import { createApi } from "../src/server/index.js";
 import { Seq, SQLiteAdapter } from "seq";
 import { createApiClient } from "../src/client/index.js";
+import { installAuditHooks } from "../src/server/install/audit.services.js";
 
 const modules = [
   {
@@ -31,6 +32,20 @@ const modules = [
 ];
 
 describe("audit", () => {
+  it("formats Date row IDs with seconds and timezone offset in model and fallback hooks", async () => {
+    const rows = [];
+    const resource = { model: { tableName: "movimientos" }, options: {}, definition: { fecha: { primaryKey: true } } };
+    const Audit = { async create(values) { rows.push(values); return { toJSON: () => values }; } };
+    installAuditHooks([{ name: "movimientos", resource }], {}, Audit);
+    const date = new Date(2026, 10, 24, 14, 5, 6, 789);
+    const offset = -date.getTimezoneOffset();
+    const zone = `${offset >= 0 ? "+" : "-"}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0")}:${String(Math.abs(offset) % 60).padStart(2, "0")}`;
+    const expected = `2026-11-24T14:05:06${zone}`;
+    await resource.options.hooks.afterCreate[0]({ get: () => date, toJSON: () => ({ fecha: date }) });
+    await resource.options.hooks.afterDestroy[0](null, { where: { fecha: date, numero: 7 } });
+    assert.equal(rows[0].rowId, expected);
+    assert.equal(rows[1].rowId, `${expected}_7`);
+  });
   it("uses resolved model tables for audit, permissions, schema discovery and client changes", async t => {
     const seq = new Seq({ adapter: new SQLiteAdapter({ database: ":memory:", naming: { prefix: "rep_", tables: "snake_case" } }), logging: false });
     const api = await createApi({ seq, basePath: "/api", audit: true, schema: { auth: true },
@@ -530,7 +545,8 @@ describe("audit", () => {
   });
 
   for (const tokenExpiresIn of ["1s", "365d"]) {
-  it(`checks SSE expiration in heartbeat with a ${tokenExpiresIn} bearer token`, async () => {
+  it(`checks SSE expiration in heartbeat with a ${tokenExpiresIn} bearer token`, async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: Date.UTC(2026, 10, 24, 12) });
     const seq = createTestSeq({ logging: false });
     const api = await createApi({
       seq,
@@ -562,6 +578,7 @@ describe("audit", () => {
       try {
         await stream.connected;
         if (tokenExpiresIn === "1s") {
+          t.mock.timers.tick(1000);
           const event = await timeoutAfter(stream.nextEvent, 1500, "SSE auth-expired event not received");
           assert.equal(event.event, "auth-expired");
           await timeoutAfter(stream.closed, 500, "SSE did not close after token expiration");

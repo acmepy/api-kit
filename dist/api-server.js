@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import fs, { readFileSync } from 'node:fs';
 import os from 'node:os';
 import AdmZip from 'adm-zip';
+import dayjs from 'dayjs';
 import { verifyJwt, auth, can } from 'iam/express';
 import { RBAC } from 'iam';
 import { SeqAdapter } from 'iam/adapters';
@@ -2633,7 +2634,7 @@ function rowId(model, moduleConfig) {
   if (!model || (typeof model.get !== "function" && typeof model.getDataValue !== "function")) return "";
   const pk = primaryKeyFor(moduleConfig);
   const value = typeof model.get === "function" ? model.get(pk) : model.getDataValue(pk);
-  if (value !== undefined && value !== null) return String(value);
+  if (value !== undefined && value !== null) return auditKeyValue(value);
   return "";
 }
 
@@ -2670,8 +2671,12 @@ function uniqueFieldSets(moduleConfig, ModelClass) {
 }
 
 function rowIdFromWhere(where = {}) {
-  if (where.id !== undefined && where.id !== null) return String(where.id);
-  return Object.values(where).filter((value) => value !== undefined && value !== null).join("_");
+  if (where.id !== undefined && where.id !== null) return auditKeyValue(where.id);
+  return Object.values(where).filter((value) => value !== undefined && value !== null).map(auditKeyValue).join("_");
+}
+
+function auditKeyValue(value) {
+  return value instanceof Date ? dayjs(value).format("YYYY-MM-DDTHH:mm:ssZ") : String(value);
 }
 
 function tableNameFor(moduleConfig) {
@@ -3544,7 +3549,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.5.4";
+const version = "1.5.5";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

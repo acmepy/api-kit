@@ -22,6 +22,7 @@ const external = (id) => (
     "adm-zip",
     "compression",
     "cors",
+    "dayjs",
     "express",
     "express-rate-limit",
     "helmet",

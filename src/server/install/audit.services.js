@@ -1,4 +1,5 @@
 import { Op } from "seq";
+import dayjs from "dayjs";
 import { verifyJwt } from "iam/express";
 import { getContext } from "../context/request-context.js";
 import { ValidationError } from "../errors/validation-error.js";
@@ -379,7 +380,7 @@ function rowId(model, moduleConfig) {
   if (!model || (typeof model.get !== "function" && typeof model.getDataValue !== "function")) return "";
   const pk = primaryKeyFor(moduleConfig);
   const value = typeof model.get === "function" ? model.get(pk) : model.getDataValue(pk);
-  if (value !== undefined && value !== null) return String(value);
+  if (value !== undefined && value !== null) return auditKeyValue(value);
   return "";
 }
 
@@ -416,8 +417,12 @@ function uniqueFieldSets(moduleConfig, ModelClass) {
 }
 
 function rowIdFromWhere(where = {}) {
-  if (where.id !== undefined && where.id !== null) return String(where.id);
-  return Object.values(where).filter((value) => value !== undefined && value !== null).join("_");
+  if (where.id !== undefined && where.id !== null) return auditKeyValue(where.id);
+  return Object.values(where).filter((value) => value !== undefined && value !== null).map(auditKeyValue).join("_");
+}
+
+function auditKeyValue(value) {
+  return value instanceof Date ? dayjs(value).format("YYYY-MM-DDTHH:mm:ssZ") : String(value);
 }
 
 function tableNameFor(moduleConfig) {
