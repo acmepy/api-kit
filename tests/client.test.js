@@ -4,6 +4,28 @@ import { createApiClient, BaseService, SchemaService, SessionService, version } 
 import { createApiVue } from "../src/vue/index.js";
 
 describe("client public API", () => {
+  it("stores cache timestamps with a local offset and reuses fresh cache metadata", async () => {
+    const adapters = adapterRegistry();
+    let requests = 0;
+    const client = createApiClient({ url: "http://server/api", adapter: adapters.root,
+      createAdapter: adapters.createAdapter, pingInterval: 60_000,
+      fetch: async () => { requests++; return jsonResponse({ ok: true, data: { total: 1 } }); },
+    });
+    try {
+      await client.markServiceCacheUpdated("clientes");
+      await client.cachedRequest("dashboard", "/dashboard");
+      for (const key of ["sync:clientes", "cache:dashboard"]) {
+        const { lastUpdateAt } = await adapters.root.get(key);
+        assert.match(lastUpdateAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
+        assert.ok(Number.isFinite(Date.parse(lastUpdateAt)));
+      }
+      const before = requests;
+      const cached = await client.cachedRequest("dashboard", "/dashboard");
+      assert.equal(cached.cached, true);
+      assert.equal(cached.refresh, undefined);
+      assert.equal(requests, before);
+    } finally { client.destroy(); }
+  });
   it("sends changes dates in a readable local format with milliseconds and offset", async () => {
     const urls = [];
     const client = createApiClient({ url: "http://server/api", changes: false, sse: false,
@@ -551,7 +573,7 @@ describe("client public API", () => {
 
     releaseSchema();
     await wait(5);
-    assert.equal(typeof (await adapters.forService("schema").get("metadata")).lastUpdateAt, "string");
+    assert.match((await adapters.forService("schema").get("metadata")).lastUpdateAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
     client.destroy();
   });
 

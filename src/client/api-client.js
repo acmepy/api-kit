@@ -464,7 +464,7 @@ export class ApiClient {
 
   async markServiceCacheUpdated(name) {
     const id = this.#serviceCacheKey(name);
-    await this.#adapter.put(id, { id, lastUpdateAt: new Date().toISOString() });
+    await this.#adapter.put(id, { id, lastUpdateAt: this.#lastUpdateAt() });
   }
 
   async syncServices(force = false) {
@@ -536,7 +536,7 @@ export class ApiClient {
 
     await this.#registerSchemaServices(schema, schemaService, { force });
     if (schema && schema !== fallbackSchema) {
-      await schemaService.adapter.put("metadata", { id: "metadata", lastUpdateAt: new Date().toISOString() });
+      await schemaService.adapter.put("metadata", { id: "metadata", lastUpdateAt: this.#lastUpdateAt() });
       this.#log("schema", "cache actualizado");
     }
   }
@@ -636,7 +636,7 @@ export class ApiClient {
     if (this.#cachedRequests.has(cacheKey)) return this.#cachedRequests.get(cacheKey);
     const refresh = this.request(path, options)
       .then(async (response) => {
-        await this.#adapter.put(cacheKey, { id: cacheKey, data: response.data, lastUpdateAt: new Date().toISOString() });
+        await this.#adapter.put(cacheKey, { id: cacheKey, data: response.data, lastUpdateAt: this.#lastUpdateAt() });
         return response;
       })
       .finally(() => this.#cachedRequests.delete(cacheKey));
@@ -653,6 +653,10 @@ export class ApiClient {
   #isSyncCacheFresh(metadata) {
     const updatedAt = Date.parse(metadata?.lastUpdateAt || "");
     return Number.isFinite(updatedAt) && Date.now() - updatedAt < this.#syncCacheTimeout;
+  }
+
+  #lastUpdateAt() {
+    return dayjs().format("YYYY-MM-DDTHH:mm:ss.SSSZ");
   }
 
   connected() {
