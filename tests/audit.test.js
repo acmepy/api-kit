@@ -276,6 +276,9 @@ describe("audit", () => {
       assert.equal(res.body.data[0].action, "create");
       assert.equal(res.body.data[0].tableName, "clientes");
       assert.equal(res.body.data[0].new.nombre, "Ana");
+      for (const field of ["createdAt", "updatedAt"]) {
+        assert.match(res.body.data[0][field], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
+      }
 
       const localSince = "2000-01-01_10.35.45.455-0300";
       const friendly = await request(server, "GET", `/api/changes?since=${localSince}`);
@@ -413,6 +416,9 @@ describe("audit", () => {
       const event = await stream.nextEvent;
       assert.equal(event.event, "audit");
       assert.equal(event.data.action, "create");
+      for (const field of ["createdAt", "updatedAt"]) {
+        assert.match(event.data[field], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
+      }
       assert.equal(event.data.tableName, "clientes");
       assert.equal(event.data.new.nombre, "Sofia");
     } finally {

@@ -2368,7 +2368,7 @@ function installAuditChangesRoute({ mainRouter, routeRegistry, modules, models, 
       const rows = await AuditModel.findAll({where: { [sinceField]: { [Op.gte]: since } }, order: [["id", "ASC"]],});
       const visible = [];
       for (const row of rows) {
-        const change = row.toJSON();
+        const change = auditChange(row, AuditModel);
         if (await canViewAuditChange(change, { req, modules, authContext })) visible.push(change);
       }
       res.json(ok(visible));
@@ -2604,7 +2604,7 @@ async function writeAudit(AuditModel, auditConfig, moduleConfig, action, model, 
     { hooks: false, ...(options.transaction && { transaction: options.transaction }) },
   );
   if (options.emit !== false) {
-    const change = auditRow.toJSON();
+    const change = auditChange(auditRow, AuditModel);
     const emit = () => auditConfig?.events?.emit("change", change);
     if (options.transaction) options.transaction.afterCommit(emit);
     else emit();
@@ -2686,6 +2686,14 @@ function tableNameFor(moduleConfig) {
 
 function isAuditModule(moduleConfig) {
   return [moduleConfig?.name, moduleConfig?.resource?.options?.tableName, moduleConfig?.resource?.options?.modelName].some(isAuditTableName);
+}
+
+function auditChange(row, AuditModel) {
+  const change = row.toJSON();
+  for (const field of [AuditModel.options?.createdAt || "createdAt", AuditModel.options?.updatedAt || "updatedAt"]) {
+    if (change[field] != null) change[field] = dayjs(change[field]).format("YYYY-MM-DDTHH:mm:ss.SSSZ");
+  }
+  return change;
 }
 
 function jsonSafe(value) {
@@ -3551,7 +3559,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.5.8";
+const version = "1.5.9";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {
