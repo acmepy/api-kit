@@ -6,6 +6,8 @@ import { getContext } from "../context/request-context.js";
 import { nestedSchemaValidationOptions, validateResourceSchema } from "./nested-schema-validation.js";
 import { tenantValues, tenantAttribute } from "../context/tenant-context.js";
 import { createExportPdfTemplate, exportValue } from "../export/pdf-template.js";
+import { parseCsv, encodeCsv } from "../import/csv.js";
+import { importRows } from "../import/importer.js";
 
 const FILTER_OPERATORS = { eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between };
 const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
@@ -81,6 +83,72 @@ export class BaseService {
     const methods = { json: "exportJson", csv: "exportCsv", pdf: "exportPdf" };
     if (!Object.hasOwn(methods, type)) throw new ValidationError(`Formato de exportacion "${type}" no soportado`, { errors: { type: "Use json, csv o pdf" } });
     return this[methods[type]](args);
+  }
+
+  async import(args = {}) {
+    const type = String(args.query?.type || "json").toLowerCase();
+    if (type === "json") return this.importJson(args);
+    if (type === "csv") return this.importCsv(args);
+    throw new ValidationError("Formato de importacion no soportado: use json o csv");
+  }
+
+  async importJson(args = {}) {
+    let data = Array.isArray(args.body) ? args.body : args.body?.data ?? args.body;
+    if (typeof data === "string") {
+      try { data = JSON.parse(data.replace(/^\uFEFF/, "")); }
+      catch { throw new ValidationError("JSON invalido"); }
+    }
+    return this.importRows(data, { ...args, query: { ...args.query, type: "json" } });
+  }
+
+  async importCsv(args = {}) {
+    return this.importRows(parseCsv(typeof args.body === "string" ? args.body : args.body?.data), { ...args, query: { ...args.query, type: "csv" } });
+  }
+
+  async importRows(rows, args = {}) {
+    return importRows(this, rows, args);
+  }
+
+  importColumns() {
+    const schema = this.#schemas.create.toJsonSchema();
+    const definitions = this.#config.resource?.definition || this.#model.resourceDefinition?.attributes || {};
+    return Object.entries(this.#model.rawAttributes)
+      .filter(([name, definition]) => !definition.autoIncrement && name !== tenantAttribute(this.#model) && definition.type.key !== "VIRTUAL" && Object.hasOwn(schema.properties || {}, name))
+      .map(([name, definition]) => ({ name, title: definitions[name]?.title || schema.properties[name]?.title || name,
+        type: definition.type.key, required: (schema.required || []).includes(name) || definition.primaryKey === true, schema: schema.properties[name] }));
+  }
+
+  importExamples() {
+    const columns = this.importColumns();
+    const required = columns.filter(column => column.required);
+    return [1, 2].map(index => Object.fromEntries((required.length ? required : columns).map(column => {
+      const schema = column.schema;
+      let value = schema.default !== undefined && typeof schema.default !== "function" ? schema.default : schema.oneOf?.[(index - 1) % schema.oneOf.length];
+      if (value === undefined) {
+        if (column.type === "BOOLEAN") value = index === 1;
+        else if (["INTEGER", "NUMBER", "DECIMAL"].includes(column.type)) value = Math.min(Math.max(index, schema.min ?? -Infinity), schema.max ?? Infinity);
+        else if (column.type === "DATE") value = "2026-01-01T12:00:00-03:00";
+        else if (["JSON", "OBJECT"].includes(column.type)) value = {};
+        else if (column.type === "ARRAY") value = [];
+        else {
+          const candidates = schema.format === "email" ? [`ejemplo${index}@example.com`] : [`Ejemplo ${index}`, `A${index}`, String(index).padStart(3, "0")];
+          const pattern = typeof schema.pattern === "string" ? new RegExp(schema.pattern) : null;
+          value = candidates.map(text => text.padEnd(schema.minLength || 0, "x").slice(0, schema.maxLength || undefined))
+            .find(text => !pattern || pattern.test(text)) ?? candidates[0];
+        }
+      }
+      return [column.name, value];
+    })));
+  }
+
+  async importTemplate({ query } = {}) {
+    const type = String(query?.type || "json").toLowerCase();
+    if (!["json", "csv"].includes(type)) throw new ValidationError("La plantilla admite json o csv");
+    const examples = await this.importExamples();
+    const names = Object.keys(examples[0] || {});
+    return { filename: `${this.#config.name || this.#model.modelName}-import.${type}`,
+      contentType: type === "csv" ? "text/csv; charset=utf-8" : "application/json; charset=utf-8",
+      body: type === "csv" ? encodeCsv(examples, names) : JSON.stringify(examples, null, 2) };
   }
 
   async exportData(args = {}) {

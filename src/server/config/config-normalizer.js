@@ -5,6 +5,9 @@ const ENDPOINT_DEFAULTS = {
   list: { enabled: true, method: "get", path: "/", summary: "Listar" },
   schema: { enabled: true, method: "get", path: "/schema", summary: "Schema" },
   export: { enabled: true, method: "get", path: "/export", summary: "Exportar" },
+  import: { enabled: true, method: "post", path: "/import", summary: "Importar" },
+  importTemplate: { enabled: true, method: "get", path: "/import/template", summary: "Plantilla de importacion" },
+  importPage: { enabled: true, method: "get", path: "/import", summary: "Importador", auth: false, permission: null },
   get: { enabled: true, method: "get", path: "/:id", summary: "Obtener por ID" },
   create: { enabled: true, method: "post", path: "/", summary: "Crear" },
   update: { enabled: true, method: "put", path: "/:id", summary: "Actualizar" },
@@ -52,7 +55,7 @@ export function normalizeModules(configs, options = {}) {
 
 function normalizeEndpoint(endpoint, moduleConfig, operation) {
   const auth = normalizeAuth(endpoint.auth === undefined ? moduleConfig.auth : endpoint.auth);
-  const permissionOperation = operation === "schema" ? "list" : operation;
+  const permissionOperation = operation === "schema" ? "list" : operation === "importTemplate" ? "import" : operation;
   const permission = endpoint.permission === undefined && auth.required ? `${moduleConfig.name}.${permissionOperation}` : endpoint.permission;
   return { ...endpoint, auth, permission };
 }

@@ -14,6 +14,7 @@ export class InternalError extends AppError {}
 export class BaseModel { static init(...args: unknown[]): unknown; }
 export interface ExportResult { body: string | Uint8Array; contentType: string; filename: string; }
 export interface ExportColumn { name: string; title?: string; type?: string; maxLength?: number; precision?: number; scale?: number; }
+export type { ImportColumn, ImportSummary, ImportResponse } from "./api-client";
 export function createExportPdfTemplate(options?: { title?: string; columns?: ExportColumn[]; data?: Record<string, unknown>[] }): Record<string, unknown>;
 export class BaseService<T = Record<string, unknown>> {
   constructor(options?: Record<string, unknown>);
@@ -29,6 +30,13 @@ export class BaseService<T = Record<string, unknown>> {
   exportData(args?: Record<string, unknown>): Promise<T[]>;
   exportColumns(): ExportColumn[];
   exportPdfTemplate(data: T[]): Record<string, unknown>;
+  import(args?: Record<string, unknown>): Promise<import("./api-client").ImportResponse>;
+  importJson(args?: Record<string, unknown>): Promise<import("./api-client").ImportResponse>;
+  importCsv(args?: Record<string, unknown>): Promise<import("./api-client").ImportResponse>;
+  importRows(rows: Record<string, unknown>[], args?: Record<string, unknown>): Promise<import("./api-client").ImportResponse>;
+  importColumns(): import("./api-client").ImportColumn[];
+  importExamples(): Record<string, unknown>[] | Promise<Record<string, unknown>[]>;
+  importTemplate(args?: Record<string, unknown>): Promise<ExportResult>;
 }
 export class BaseRouter { constructor(options?: Record<string, unknown>); }
 export class BaseModule { constructor(options?: Record<string, unknown>); }

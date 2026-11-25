@@ -640,6 +640,9 @@ const ENDPOINT_DEFAULTS = {
   list: { enabled: true, method: "get", path: "/", summary: "Listar" },
   schema: { enabled: true, method: "get", path: "/schema", summary: "Schema" },
   export: { enabled: true, method: "get", path: "/export", summary: "Exportar" },
+  import: { enabled: true, method: "post", path: "/import", summary: "Importar" },
+  importTemplate: { enabled: true, method: "get", path: "/import/template", summary: "Plantilla de importacion" },
+  importPage: { enabled: true, method: "get", path: "/import", summary: "Importador", auth: false, permission: null },
   get: { enabled: true, method: "get", path: "/:id", summary: "Obtener por ID" },
   create: { enabled: true, method: "post", path: "/", summary: "Crear" },
   update: { enabled: true, method: "put", path: "/:id", summary: "Actualizar" },
@@ -687,7 +690,7 @@ function normalizeModules(configs, options = {}) {
 
 function normalizeEndpoint(endpoint, moduleConfig, operation) {
   const auth = normalizeAuth(endpoint.auth === undefined ? moduleConfig.auth : endpoint.auth);
-  const permissionOperation = operation === "schema" ? "list" : operation;
+  const permissionOperation = operation === "schema" ? "list" : operation === "importTemplate" ? "import" : operation;
   const permission = endpoint.permission === undefined && auth.required ? `${moduleConfig.name}.${permissionOperation}` : endpoint.permission;
   return { ...endpoint, auth, permission };
 }
@@ -723,6 +726,7 @@ function routeRequestSchemaName(route) {
 }
 
 function jsonSchemaForRoute(modules, route, schemaName = route.serviceMethod) {
+  if (schemaName === "import") schemaName = "create";
   const schema = modules.get(route.module)?.schemas?.[schemaName];
   if (!schema || typeof schema.toJsonSchema !== "function") return null;
   return normalizeJsonSchema(schema.toJsonSchema());
@@ -853,6 +857,12 @@ function parametersFor(route) {
   }
 
   if (route.serviceMethod === "export") parameters.push({ name: "type", in: "query", required: false, schema: { type: "string", default: "json" }, description: "json, csv o pdf; el servicio puede agregar formatos" });
+  if (["import", "importTemplate"].includes(route.serviceMethod)) parameters.push({ name: "type", in: "query", schema: { type: "string", enum: ["json", "csv"], default: "json" } });
+  if (route.serviceMethod === "import") parameters.push(
+    { name: "atomic", in: "query", schema: { type: "boolean", default: true } },
+    { name: "preview", in: "query", schema: { type: "boolean", default: false } },
+    { name: "duplicates", in: "query", schema: { type: "string", enum: ["error", "skip"], default: "error" } },
+  );
 
   if (route.serviceMethod === "changes") parameters.push({name: "since", in: "query", required: true, schema: { type: "string", format: "date-time" }});
 
@@ -865,13 +875,26 @@ function responsesFor(route) {
     403: { description: "Forbidden" },
   } : {};
 
-  if (route.serviceMethod === "export") return {
+  if (["export", "importTemplate"].includes(route.serviceMethod)) return {
     200: { description: "Archivo exportado", headers: { "Content-Disposition": { schema: { type: "string" } } }, content: {
       "application/json": { schema: { type: "array", items: { type: "object" } } },
       "text/csv": { schema: { type: "string", format: "binary" } },
-      "application/pdf": { schema: { type: "string", format: "binary" } },
+      ...(route.serviceMethod === "export" && { "application/pdf": { schema: { type: "string", format: "binary" } } }),
     } },
     400: { description: "Formato o filtros invalidos" }, ...authResponses,
+  };
+
+  if (route.serviceMethod === "importPage") return { 200: { description: "Importador HTML", content: { "text/html": { schema: { type: "string" } } } } };
+
+  if (route.serviceMethod === "import") return {
+    200: { description: "Resumen de importacion o vista previa", content: { "application/json": { schema: { type: "object", properties: {
+      ok: { type: "boolean" }, data: { type: "object", properties: {
+        total: { type: "integer" }, created: { type: "integer" }, valid: { type: "integer" }, skipped: { type: "integer" }, failed: { type: "integer" },
+        rolledBack: { type: "boolean" }, preview: { type: "boolean" },
+        errors: { type: "array", items: { type: "object", properties: { row: { type: "integer", minimum: 1 }, errors: { type: "object" } } } },
+      } },
+    } } } } },
+    400: { description: "Archivo u opciones invalidas" }, ...authResponses,
   };
 
   if (route.serviceMethod === "sse") {
@@ -920,6 +943,13 @@ function responsesFor(route) {
 }
 
 function requestBodyFor(route, mod) {
+  if (route.serviceMethod === "import") return { required: true, content: {
+    "application/json": { schema: { oneOf: [
+      { type: "array", items: { type: "object" } },
+      { type: "object", required: ["data"], properties: { data: { oneOf: [{ type: "string" }, { type: "array", items: { type: "object" } }] }, mapping: { type: "object", additionalProperties: { type: "string" } } } },
+    ] } },
+    "text/csv": { schema: { type: "string" } },
+  } };
   if (route.operationId === "auth.login") {
     return {
       required: true,
@@ -1086,7 +1116,7 @@ function requestHeaders(route) {
 function acceptHeader(route) {
   if (route.serviceMethod === "sse") return "text/event-stream";
   if (route.serviceMethod === "installScript") return "application/javascript";
-  if (route.serviceMethod === "installList") return "text/html";
+  if (route.serviceMethod === "installList" || route.serviceMethod === "importPage") return "text/html";
   return "application/json";
 }
 
@@ -1097,6 +1127,7 @@ function requestBody(route, modules) {
 }
 
 function requestBodyExample(route, modules) {
+  if (route.serviceMethod === "import") return [];
   if (route.operationId === "auth.login") return { username: "admin", password: "1234" };
   if (route.operationId === "install.run") return { token: "" };
   if (!["create", "update"].includes(route.serviceMethod)) return null;
@@ -1156,6 +1187,8 @@ function postmanUrl(route) {
 }
 
 function queryParams(route) {
+  if (route.serviceMethod === "import") return [{ key: "type", value: "json" }, { key: "preview", value: "true" }, { key: "atomic", value: "true" }, { key: "duplicates", value: "error" }];
+  if (route.serviceMethod === "importTemplate") return [{ key: "type", value: "json" }];
   if (route.serviceMethod === "export") return [{ key: "type", value: "json" }, { key: "page", value: "1" }];
   if (route.serviceMethod === "list") return [{ key: "page", value: "1" }, { key: "limit", value: "20" }];
   if (route.serviceMethod === "changes") return [{ key: "since", value: new Date(0).toISOString() }];
@@ -1449,6 +1482,100 @@ function lastUpdateAt() {
   return dayjs().format("YYYY-MM-DDTHH:mm:ss.SSSZ");
 }
 
+const assets$1 = new URL("./assets/", import.meta.url);
+const page = readFileSync(new URL("import-page.html", assets$1), "utf8");
+const importStylesheet = readFileSync(new URL("import-page.css", assets$1), "utf8");
+const escape$1 = value => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+
+function renderImportPage(config) {
+  return page.replaceAll("{{title}}", () => escape$1(config.description || config.name))
+    .replaceAll("{{importUrl}}", () => escape$1(config.basePath + config.endpoints.import.path))
+    .replaceAll("{{templateUrl}}", () => escape$1(config.basePath + config.endpoints.importTemplate.path));
+}
+
+function importBrowser() {
+  const $ = id => document.getElementById(id);
+  const endpoint = document.body.dataset.importUrl;
+  let busy = false;
+  let revision = 0;
+  let approvedRevision = -1;
+  let columns = [];
+  const invalidate = () => { revision++; approvedRevision = -1; $("confirm").disabled = true; };
+  for (const id of ["file", "token", "atomic", "duplicates"]) $(id).addEventListener("change", invalidate);
+  $("file").addEventListener("change", () => { $("mapping").replaceChildren(); });
+  const headers = () => ({ "Content-Type": "application/json", ...($("token").value.trim() && { Authorization: `Bearer ${$("token").value.trim()}` }) });
+  const cell = (row, tag, text) => { const node = document.createElement(tag); node.textContent = text; row.append(node); return node; };
+  const mapping = () => Object.fromEntries([...$("mapping").querySelectorAll("select")].map(select => [select.dataset.source, select.value]));
+  const showMapping = (sources, previous) => {
+    $("mapping").replaceChildren();
+    for (const source of sources) {
+      const label = document.createElement("label"); label.textContent = source;
+      const select = document.createElement("select"); select.dataset.source = source;
+      select.add(new Option("Ignorar columna", ""));
+      for (const column of columns) select.add(new Option(`${column.title}${column.required ? " *" : ""} (${column.name})`, column.name));
+      select.value = previous[source] ?? (columns.some(column => column.name === source) ? source : "");
+      select.addEventListener("change", invalidate);
+      label.append(select); $("mapping").append(label);
+    }
+  };
+  async function submit(preview) {
+    if (busy || (!preview && approvedRevision !== revision)) return;
+    const file = $("file").files[0];
+    if (!file) { $("message").textContent = "Selecciona un archivo JSON o CSV."; return; }
+    busy = true; $("preview").disabled = true; $("confirm").disabled = true;
+    const currentRevision = revision;
+    try {
+      const previous = mapping();
+      const query = new URLSearchParams({ type: file.name.toLowerCase().endsWith(".csv") ? "csv" : "json", preview: String(preview), atomic: String($("atomic").checked), duplicates: $("duplicates").value });
+      const response = await fetch(`${endpoint}?${query}`, { method: "POST", headers: headers(), body: JSON.stringify({ data: await file.text(), mapping: previous }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "No se pudo procesar el archivo");
+      const data = result.data;
+      $("results").hidden = false;
+      $("summary").textContent = `Total: ${data.total} · Válidos: ${data.valid} · Creados: ${data.created} · Omitidos: ${data.skipped} · Errores: ${data.failed}${data.rolledBack ? " · Importación revertida" : ""}`;
+      $("table-head").replaceChildren(); $("table-body").replaceChildren();
+      if (preview) {
+        columns = data.columns;
+        showMapping(data.headers, previous);
+        const header = document.createElement("tr");
+        for (const title of ["Registro", "Estado", ...columns.map(column => column.title), "Errores"]) cell(header, "th", title);
+        $("table-head").append(header);
+        for (const row of data.rows) {
+          const tr = document.createElement("tr");
+          cell(tr, "td", row.row); cell(tr, "td", row.status).className = row.status;
+          for (const column of columns) {
+            const value = row.data?.[column.name];
+            cell(tr, "td", value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value));
+          }
+          cell(tr, "td", Object.entries(row.errors || {}).map(([field, error]) => `${field}: ${typeof error === "object" ? JSON.stringify(error) : error}`).join("\n")).className = "error";
+          $("table-body").append(tr);
+        }
+        approvedRevision = currentRevision;
+        $("confirm").disabled = revision !== currentRevision || data.valid === 0 || ($("atomic").checked && data.failed > 0);
+      } else {
+        approvedRevision = -1;
+        for (const error of data.errors) {
+          const tr = document.createElement("tr"); cell(tr, "td", error.row); cell(tr, "td", JSON.stringify(error.errors)); $("table-body").append(tr);
+        }
+      }
+      $("message").textContent = preview ? "Vista previa: no se guardaron registros." : data.rolledBack ? "No se guardaron registros: la importación se revirtió." : "Importación finalizada.";
+    } catch (error) { approvedRevision = -1; $("message").textContent = error.message; }
+    finally { busy = false; $("preview").disabled = false; }
+  }
+  $("preview").addEventListener("click", () => submit(true));
+  $("confirm").addEventListener("click", () => submit(false));
+  for (const button of document.querySelectorAll("[data-template]")) button.addEventListener("click", async () => {
+    try {
+      const type = button.dataset.template;
+      const response = await fetch(`${document.body.dataset.templateUrl}?type=${type}`, { headers: headers() });
+      if (!response.ok) throw new Error((await response.json()).message || "No se pudo descargar la plantilla");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a"); link.href = url; link.download = `plantilla.${type}`; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { $("message").textContent = error.message; }
+  });
+}
+
 class BaseRouter {
   #service;
   #config;
@@ -1524,15 +1651,24 @@ class BaseRouter {
 
     const handlers = [];
     if (this.authorize) handlers.push(this.authorize({ auth: auth || this.#config.auth, permissions: permission ? [permission] : [] }));
+    if (serviceMethod === "import") handlers.push(express.text({ type: ["text/csv", "application/csv"], limit: "1mb" }));
 
     handlers.push(async (req, res, next) => {
       try {
         const {params, query, body} = req;
         const args = { params, query, body};
 
+        if (serviceMethod === "importPage") {
+          res.set("Cache-Control", "no-store");
+          if (query.asset === "script") return res.type("js").send(`(${importBrowser.toString()})();`);
+          if (query.asset === "style") return res.type("css").send(importStylesheet);
+          return res.type("html").send(renderImportPage(this.#config));
+        }
+
         const timestamp = serviceMethod === "list" ? lastUpdateAt() : null;
         const result = await this.#service[serviceMethod](args);
-        if (serviceMethod === "export") {
+        if (serviceMethod === "import") return res.json(result);
+        if (serviceMethod === "export" || serviceMethod === "importTemplate") {
           res.append("Access-Control-Expose-Headers", "Content-Disposition");
           return res.attachment(result.filename).type(result.contentType).send(result.body);
         }
@@ -1621,6 +1757,173 @@ function exportValue(value) {
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
+function parseCsv(input) {
+  if (typeof input !== "string") throw new ValidationError("CSV requiere texto");
+  const text = input.replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [], value = "", quoted = false, closed = false;
+  const field = () => { row.push(value); value = ""; closed = false; };
+  const record = () => { const present = row.length > 0 || value !== "" || closed; field(); if (present) rows.push(row); row = []; };
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '"' && text[i + 1] === '"') { value += '"'; i++; }
+      else if (char === '"') { quoted = false; closed = true; }
+      else value += char;
+    } else if (char === ",") field();
+    else if (char === "\n" || char === "\r") { record(); if (char === "\r" && text[i + 1] === "\n") i++; }
+    else if (char === '"' && value === "" && !closed) quoted = true;
+    else if (closed || char === '"') throw new ValidationError("CSV invalido: comillas inesperadas");
+    else value += char;
+  }
+  if (quoted) throw new ValidationError("CSV invalido: comillas sin cerrar");
+  if (value !== "" || row.length || closed) record();
+  const headers = rows.shift()?.map(header => header.trim()) || [];
+  if (headers.some(header => !header) || new Set(headers).size !== headers.length) throw new ValidationError("CSV requiere encabezados no vacios y sin duplicados");
+  return rows.map((cells, index) => {
+    if (cells.length !== headers.length) throw new ValidationError(`CSV: cantidad de columnas incorrecta en el registro ${index + 1}`);
+    return Object.fromEntries(headers.map((header, i) => [header, cells[i]]));
+  });
+}
+
+function encodeCsv(rows, columns) {
+  const cell = value => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  return `\uFEFF${[columns.map(cell), ...rows.map(row => columns.map(name => cell(typeof row[name] === "object" && row[name] !== null ? JSON.stringify(row[name]) : row[name])))].map(row => row.join(",")).join("\r\n")}\r\n`;
+}
+
+function flag(value, fallback) {
+  if (value === undefined) return fallback;
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  throw new ValidationError("Las opciones atomic y preview deben ser true o false");
+}
+
+function uniqueSets(model) {
+  const schema = model.seq.adapter.schemas.get(model.tableName);
+  const sets = [];
+  if (!model.autoIncrementAttribute && model.primaryKeyAttributes.length) sets.push(model.primaryKeyAttributes);
+  for (const [name, definition] of Object.entries(model.rawAttributes)) if (definition.unique) sets.push([name]);
+  for (const unique of [...(schema?.uniqueConstraints || []), ...(schema?.indexes || []).filter(index => index.unique)]) {
+    sets.push(unique.columns.map(column => schema.columnToAttr[column] || column));
+  }
+  return [...new Map(sets.map(fields => [JSON.stringify(fields), fields])).values()];
+}
+
+function duplicateError(error) {
+  return error.details?.constraint?.type === "unique" || error.details?.constraint?.type === "primaryKey"
+    || ["SEQ_VALIDATION_DUPLICATE_PK", "SEQ_VALIDATION_UNIQUE"].includes(error.code)
+    || error.details?.sqliteCode === "SQLITE_CONSTRAINT_PRIMARYKEY";
+}
+
+async function importRows(service, rows, args = {}) {
+  if (!Array.isArray(rows)) throw new ValidationError("El JSON debe contener un array de registros");
+  const maximum = service.config.maxSize || 100;
+  if (rows.length > maximum) throw new ValidationError(`La importacion admite como maximo ${maximum} registros`);
+  const atomic = flag(args.query?.atomic, true);
+  const preview = flag(args.query?.preview, false);
+  const seq = service.seq || service.model.seq;
+  const duplicates = args.query?.duplicates || "error";
+  if (!["error", "skip"].includes(duplicates)) throw new ValidationError("duplicates debe ser error o skip");
+  const columns = service.importColumns();
+  const names = new Set(columns.map(column => column.name));
+  const normalizer = yep.fromJsonSchema({ type: "object", properties: Object.fromEntries(columns.map(column => [column.name, {
+    type: column.schema.type, nullable: true,
+    ...(Object.hasOwn(column.schema, "default") && { default: column.schema.default }),
+  }])) });
+  const mapping = args.body?.mapping;
+  if (mapping != null && (typeof mapping !== "object" || Array.isArray(mapping))) throw new ValidationError("mapping debe ser un objeto");
+  const targets = Object.values(mapping || {}).filter(Boolean);
+  if (targets.some(name => !names.has(name)) || new Set(targets).size !== targets.length) throw new ValidationError("mapping contiene atributos invalidos o repetidos");
+  tenantValues(service.model, {}); // A missing session tenant is a request error, not a row error.
+  const sets = uniqueSets(service.model);
+  const seen = new Set();
+  const comparable = (field, value) => value != null && value !== "" && (typeof value !== "object" || value instanceof Date)
+    && (!["INTEGER", "NUMBER", "DECIMAL"].includes(service.model.rawAttributes[field].type.key) || Number.isFinite(Number(value)));
+  const summary = { total: rows.length, created: 0, valid: 0, skipped: 0, failed: 0, rolledBack: false, preview, errors: [] };
+  if (preview) {
+    summary.columns = columns;
+    summary.headers = [...new Set(rows.flatMap(row => row && typeof row === "object" && !Array.isArray(row) ? Object.keys(row) : []))];
+    summary.rows = [];
+  }
+  const duplicate = async (values, transaction) => {
+    for (const fields of sets) {
+      if (!fields.every(field => comparable(field, values[field]))) continue;
+      const key = JSON.stringify([fields, fields.map(field => {
+        const value = values[field];
+        return ["INTEGER", "NUMBER", "DECIMAL"].includes(service.model.rawAttributes[field].type.key) ? Number(value) : value;
+      })]);
+      if (seen.has(key) || await service.model.findOne({ where: Object.fromEntries(fields.map(field => [field, values[field]])), ...(transaction && { transaction }) })) return fields;
+    }
+    return null;
+  };
+  const remember = values => {
+    for (const fields of sets) if (fields.every(field => values[field] != null && values[field] !== "")) {
+      seen.add(JSON.stringify([fields, fields.map(field => ["INTEGER", "NUMBER", "DECIMAL"].includes(service.model.rawAttributes[field].type.key) ? Number(values[field]) : values[field])]));
+    }
+  };
+  const prepare = record => Object.fromEntries(Object.entries(record || {}).map(([key, value]) => [mapping && Object.hasOwn(mapping, key) ? mapping[key] : key, value]).filter(([key]) => names.has(key)));
+  const process = async (record, transaction) => {
+    if (!record || typeof record !== "object" || Array.isArray(record)) throw new ValidationError("El registro debe ser un objeto");
+    const input = prepare(record);
+    // Empty CSV cells use defaults or required rules instead of coercing to zero/false.
+    if (args.query?.type === "csv") for (const key of Object.keys(input)) if (input[key] === "") delete input[key];
+    if (args.query?.type === "csv") for (const column of columns) {
+      if (["JSON", "OBJECT", "ARRAY"].includes(column.type) && typeof input[column.name] === "string") {
+        try { input[column.name] = JSON.parse(input[column.name]); }
+        catch { throw new ValidationError("JSON invalido en una celda CSV", { errors: { [column.name]: "JSON invalido" } }); }
+      }
+    }
+    const values = tenantValues(service.model, await normalizer.validate(input));
+    const fields = await duplicate(values, transaction);
+    if (fields) {
+      if (duplicates === "skip") return { status: "skipped", data: input };
+      throw new ValidationError("Registro duplicado", { errors: Object.fromEntries(fields.map(field => [field, "Ya existe un registro con este valor"])) });
+    }
+    const validated = await validateResourceSchema(service.schemas.create, values, transaction, service.model);
+    for (const column of columns) if (column.required && (validated[column.name] == null || validated[column.name] === "")) {
+      throw new ValidationError("Campo requerido", { errors: { [column.name]: `${column.title} es requerido` } });
+    }
+    if (!preview) {
+      try { await service.create({ body: validated, transaction }); }
+      catch (error) { if (duplicates === "skip" && duplicateError(error)) return { status: "skipped", data: validated }; throw error; }
+    }
+    return { status: preview ? "valid" : "created", data: validated };
+  };
+  const collect = async transaction => {
+    for (let index = 0; index < rows.length; index++) {
+      try {
+        const result = !preview && !atomic
+          ? await seq.transaction(tx => process(rows[index], tx))
+          : await process(rows[index], transaction);
+        if (result.status === "skipped") summary.skipped++;
+        else { remember(tenantValues(service.model, result.data)); summary.valid++; if (!preview) summary.created++; }
+        if (preview) summary.rows.push({ row: index + 1, ...result });
+      } catch (error) {
+        if (![400, 409].includes(error.status) && error.code !== "VALIDATION_ERROR") throw error;
+        const errors = error.errors || { _error: error.message };
+        summary.failed++;
+        summary.errors.push({ row: index + 1, errors });
+        if (preview) summary.rows.push({ row: index + 1, status: "error", data: prepare(rows[index]), errors });
+      }
+    }
+  };
+  if (preview || !atomic) await collect();
+  else {
+    const rollback = new Error("Importacion revertida");
+    try {
+      await seq.transaction(async transaction => {
+        await collect(transaction);
+        if (summary.failed) throw rollback;
+      });
+    } catch (error) {
+      if (error !== rollback || error.rollbackError) throw error;
+      summary.created = 0;
+      summary.rolledBack = true;
+    }
+  }
+  return { ok: summary.failed === 0, data: summary };
+}
+
 const FILTER_OPERATORS = { eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between };
 const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
 const RANGE_OPERATORS = new Set([Op.gt, Op.gte, Op.lt, Op.lte, Op.between]);
@@ -1695,6 +1998,72 @@ class BaseService {
     const methods = { json: "exportJson", csv: "exportCsv", pdf: "exportPdf" };
     if (!Object.hasOwn(methods, type)) throw new ValidationError(`Formato de exportacion "${type}" no soportado`, { errors: { type: "Use json, csv o pdf" } });
     return this[methods[type]](args);
+  }
+
+  async import(args = {}) {
+    const type = String(args.query?.type || "json").toLowerCase();
+    if (type === "json") return this.importJson(args);
+    if (type === "csv") return this.importCsv(args);
+    throw new ValidationError("Formato de importacion no soportado: use json o csv");
+  }
+
+  async importJson(args = {}) {
+    let data = Array.isArray(args.body) ? args.body : args.body?.data ?? args.body;
+    if (typeof data === "string") {
+      try { data = JSON.parse(data.replace(/^\uFEFF/, "")); }
+      catch { throw new ValidationError("JSON invalido"); }
+    }
+    return this.importRows(data, { ...args, query: { ...args.query, type: "json" } });
+  }
+
+  async importCsv(args = {}) {
+    return this.importRows(parseCsv(typeof args.body === "string" ? args.body : args.body?.data), { ...args, query: { ...args.query, type: "csv" } });
+  }
+
+  async importRows(rows, args = {}) {
+    return importRows(this, rows, args);
+  }
+
+  importColumns() {
+    const schema = this.#schemas.create.toJsonSchema();
+    const definitions = this.#config.resource?.definition || this.#model.resourceDefinition?.attributes || {};
+    return Object.entries(this.#model.rawAttributes)
+      .filter(([name, definition]) => !definition.autoIncrement && name !== tenantAttribute(this.#model) && definition.type.key !== "VIRTUAL" && Object.hasOwn(schema.properties || {}, name))
+      .map(([name, definition]) => ({ name, title: definitions[name]?.title || schema.properties[name]?.title || name,
+        type: definition.type.key, required: (schema.required || []).includes(name) || definition.primaryKey === true, schema: schema.properties[name] }));
+  }
+
+  importExamples() {
+    const columns = this.importColumns();
+    const required = columns.filter(column => column.required);
+    return [1, 2].map(index => Object.fromEntries((required.length ? required : columns).map(column => {
+      const schema = column.schema;
+      let value = schema.default !== undefined && typeof schema.default !== "function" ? schema.default : schema.oneOf?.[(index - 1) % schema.oneOf.length];
+      if (value === undefined) {
+        if (column.type === "BOOLEAN") value = index === 1;
+        else if (["INTEGER", "NUMBER", "DECIMAL"].includes(column.type)) value = Math.min(Math.max(index, schema.min ?? -Infinity), schema.max ?? Infinity);
+        else if (column.type === "DATE") value = "2026-01-01T12:00:00-03:00";
+        else if (["JSON", "OBJECT"].includes(column.type)) value = {};
+        else if (column.type === "ARRAY") value = [];
+        else {
+          const candidates = schema.format === "email" ? [`ejemplo${index}@example.com`] : [`Ejemplo ${index}`, `A${index}`, String(index).padStart(3, "0")];
+          const pattern = typeof schema.pattern === "string" ? new RegExp(schema.pattern) : null;
+          value = candidates.map(text => text.padEnd(schema.minLength || 0, "x").slice(0, schema.maxLength || undefined))
+            .find(text => !pattern || pattern.test(text)) ?? candidates[0];
+        }
+      }
+      return [column.name, value];
+    })));
+  }
+
+  async importTemplate({ query } = {}) {
+    const type = String(query?.type || "json").toLowerCase();
+    if (!["json", "csv"].includes(type)) throw new ValidationError("La plantilla admite json o csv");
+    const examples = await this.importExamples();
+    const names = Object.keys(examples[0] || {});
+    return { filename: `${this.#config.name || this.#model.modelName}-import.${type}`,
+      contentType: type === "csv" ? "text/csv; charset=utf-8" : "application/json; charset=utf-8",
+      body: type === "csv" ? encodeCsv(examples, names) : JSON.stringify(examples, null, 2) };
   }
 
   async exportData(args = {}) {
@@ -3687,7 +4056,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.6.0";
+const version = "1.6.1";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

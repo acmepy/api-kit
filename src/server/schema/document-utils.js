@@ -23,6 +23,7 @@ export function routeRequestSchemaName(route) {
 }
 
 export function jsonSchemaForRoute(modules, route, schemaName = route.serviceMethod) {
+  if (schemaName === "import") schemaName = "create";
   const schema = modules.get(route.module)?.schemas?.[schemaName];
   if (!schema || typeof schema.toJsonSchema !== "function") return null;
   return normalizeJsonSchema(schema.toJsonSchema());

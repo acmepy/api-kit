@@ -479,6 +479,77 @@ const file = await client.service("facturas").export({ type: "pdf", page: 1 });
 const csv = await useApiService("facturas").export({ type: "csv" });
 ```
 
+## Importacion
+
+Cada recurso ofrece importacion de altas en JSON y CSV:
+
+```http
+GET /api/productos/import
+GET /api/productos/import/template?type=json
+GET /api/productos/import/template?type=csv
+POST /api/productos/import?type=json&preview=true
+POST /api/productos/import?type=json&atomic=true&duplicates=error
+```
+
+La pagina HTML permite seleccionar un archivo, asociar columnas con atributos, validar, ver los errores y confirmar. Es una pagina estatica publica; las solicitudes de plantilla, vista previa y confirmacion usan el permiso `productos.import` y la autenticacion del recurso. La pagina permite proporcionar un token Bearer para esas solicitudes. Puede deshabilitarse con `endpoints: { importPage: false }`; los endpoints se deshabilitan individualmente con `import: false` e `importTemplate: false`.
+
+Se importan los atributos del recurso principal que admite el schema de creacion. Las PK autoincrementales, campos `create: false`, timestamps generados y el tenant del archivo se ignoran. El tenant procede exclusivamente de la sesion. Las claves manuales o compuestas se conservan y validan. Yep normaliza los tipos y ejecuta las reglas del schema; al confirmar se vuelve a validar y se llama a `create()` del servicio con la transaccion correspondiente.
+
+La vista previa (`preview=true`) no escribe registros ni auditoria. Incluye columnas, encabezados detectados y filas con datos y errores. La confirmacion devuelve un resumen; los errores de registros se informan mediante `ok: false` con estado HTTP 200. Errores de archivo, opciones o autorizacion usan los estados HTTP habituales.
+
+```json
+{
+  "ok": false,
+  "data": {
+    "total": 3,
+    "created": 0,
+    "valid": 2,
+    "skipped": 0,
+    "failed": 1,
+    "rolledBack": true,
+    "preview": false,
+    "errors": [{ "row": 2, "errors": { "descripcion": "Descripción es requerido" } }]
+  }
+}
+```
+
+`row` es la posicion del registro desde 1, sin contar el encabezado CSV. Una celda puede contener saltos de linea, por lo que no representa la linea fisica del archivo. La respuesta de confirmacion no repite los objetos completos.
+
+- `atomic=true` (predeterminado): un error revierte toda la importacion, incluidos sus registros de auditoria.
+- `atomic=false`: cada registro se procesa en su propia transaccion; los validos se guardan y se informan los fallidos.
+- `duplicates=error` (predeterminado): los duplicados se consideran errores.
+- `duplicates=skip`: omite duplicados por PK manual o restricciones unicas declaradas, sin actualizar existentes. Las comprobaciones respetan el tenant de sesion; otros errores no se omiten.
+
+El limite de registros por solicitud es `maxSize` del recurso (100 si no se configura). Para JSON se puede enviar un array o `{ "data": [...] }`. Para CSV se admite texto con `Content-Type: text/csv` y `type=csv`, o `{ "data": "texto CSV" }`. El texto CSV directo tiene un limite de 1 MB; los cuerpos JSON usan el limite configurado en el middleware JSON. Los archivos se leen en UTF-8. Las celdas vacias usan defaults o validaciones de campos requeridos; los atributos JSON, objeto o array se representan como JSON dentro de su celda CSV.
+
+El cuerpo puede incluir `mapping`, un objeto que asocia encabezados del archivo con atributos; el valor vacio ignora una columna. Los nombres de atributos se reconocen directamente. Los `title` se muestran en la interfaz para facilitar la asociacion.
+
+Las plantillas usan nombres de atributos y dos registros de ejemplo con los campos requeridos; si no hay campos requeridos, incluyen los atributos importables. Se pueden ajustar los ejemplos para reglas propias del proyecto:
+
+```js
+export default class Productos extends BaseService {
+  importExamples() {
+    return [{ codigo: "A1", descripcion: "Ejemplo ajustado" }];
+  }
+}
+```
+
+`import()`, `importJson()`, `importCsv()`, `importRows()`, `importColumns()` e `importTemplate()` tambien se pueden sobrescribir por servicio.
+
+En client y Vue:
+
+```js
+const productos = client.service("productos");
+const preview = await productos.import(registros, { preview: true });
+const result = await productos.import(registros, { atomic: false, duplicates: "skip" });
+const template = await productos.importTemplate({ type: "csv" }); // Blob, filename y contentType
+
+const service = useApiService("productos");
+await service.import(archivo, { type: "csv", preview: true }); // Blob/File, texto o array
+```
+
+El cliente devuelve los resumenes con errores de fila sin lanzar una excepcion; los errores HTTP y de red siguen lanzandola. El envio requiere conexion. Despues de confirmar se puede llamar a `pull()` para actualizar la cache, o recibir las altas mediante changes/SSE cuando estan habilitados.
+
 ## Filtros y Paginacion
 
 ### Claves primarias compuestas

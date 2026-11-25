@@ -39,6 +39,8 @@ export interface ApiVueService<T extends ServiceRecord = ServiceRecord> {
   list(): Promise<ApiResponse<T[]>>;
   get: BaseService<T>["get"];
   export: BaseService<T>["export"];
+  import: BaseService<T>["import"];
+  importTemplate: BaseService<T>["importTemplate"];
   pull: BaseService<T>["pull"];
   pullOne: BaseService<T>["pullOne"];
   create: BaseService<T>["create"];

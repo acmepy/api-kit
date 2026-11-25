@@ -100,7 +100,7 @@ function requestHeaders(route) {
 function acceptHeader(route) {
   if (route.serviceMethod === "sse") return "text/event-stream";
   if (route.serviceMethod === "installScript") return "application/javascript";
-  if (route.serviceMethod === "installList") return "text/html";
+  if (route.serviceMethod === "installList" || route.serviceMethod === "importPage") return "text/html";
   return "application/json";
 }
 
@@ -111,6 +111,7 @@ function requestBody(route, modules) {
 }
 
 function requestBodyExample(route, modules) {
+  if (route.serviceMethod === "import") return [];
   if (route.operationId === "auth.login") return { username: "admin", password: "1234" };
   if (route.operationId === "install.run") return { token: "" };
   if (!["create", "update"].includes(route.serviceMethod)) return null;
@@ -170,6 +171,8 @@ function postmanUrl(route) {
 }
 
 function queryParams(route) {
+  if (route.serviceMethod === "import") return [{ key: "type", value: "json" }, { key: "preview", value: "true" }, { key: "atomic", value: "true" }, { key: "duplicates", value: "error" }];
+  if (route.serviceMethod === "importTemplate") return [{ key: "type", value: "json" }];
   if (route.serviceMethod === "export") return [{ key: "type", value: "json" }, { key: "page", value: "1" }];
   if (route.serviceMethod === "list") return [{ key: "page", value: "1" }, { key: "limit", value: "20" }];
   if (route.serviceMethod === "changes") return [{ key: "since", value: new Date(0).toISOString() }];

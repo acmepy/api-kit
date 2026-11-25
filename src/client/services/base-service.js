@@ -19,7 +19,7 @@ export class BaseService {
     this.prefix = prefix;
     this.adapter = createAdapter?.({ service: name, prefix: this.prefix, keyOf: (record) => this.keyOf(record) });
     if (client.trackServiceOperation && !["pending", "session", "schema"].includes(name)) {
-      for (const method of ["save", "create", "update", "remove", "createDetail", "updateDetail", "removeDetail", "pull", "pullOne", "push", "pushOne", "applyData", "request", "export"]) {
+      for (const method of ["save", "create", "update", "remove", "createDetail", "updateDetail", "removeDetail", "pull", "pullOne", "push", "pushOne", "applyData", "request", "export", "import", "importTemplate"]) {
         const execute = this[method].bind(this);
         this[method] = (...args) => client.trackServiceOperation(this, method, () => execute(...args));
       }
@@ -373,6 +373,23 @@ export class BaseService {
 
   async export(query = {}) {
     return this.#send("export", { query, responseType: "blob" });
+  }
+
+  async import(data, options = {}) {
+    const { mapping, ...query } = options;
+    if (typeof Blob !== "undefined" && data instanceof Blob) {
+      query.type ??= data.type.includes("csv") || /\.csv$/i.test(data.name || "") ? "csv" : "json";
+      data = await data.text();
+    }
+    try { return await this.#send("import", { query, body: { data, ...(mapping && { mapping }) } }); }
+    catch (error) {
+      if (error.status === 200 && typeof error.response?.data?.total === "number") return error.response;
+      throw error;
+    }
+  }
+
+  async importTemplate(query = {}) {
+    return this.#send("importTemplate", { query, responseType: "blob" });
   }
 
   async #send(operationName, { params = {}, query = {}, body, ...options } = {}) {

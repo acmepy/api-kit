@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Importar · {{title}}</title><link rel="stylesheet" href="?asset=style"><script src="?asset=script" defer></script></head>
+<body data-import-url="{{importUrl}}" data-template-url="{{templateUrl}}">
+<main>
+  <h1>Importar · {{title}}</h1>
+  <p>Descarga una plantilla, selecciona tu archivo y revisa los datos antes de confirmar. Solo se crean registros nuevos.</p>
+  <section aria-label="Archivo y opciones">
+    <label>Token de acceso, si corresponde<input id="token" type="password" autocomplete="off" spellcheck="false"></label>
+    <div class="actions"><button data-template="json" type="button">Plantilla JSON</button><button data-template="csv" type="button">Plantilla CSV</button></div>
+    <label>Archivo JSON o CSV<input id="file" type="file" accept=".json,.csv,application/json,text/csv"></label>
+    <div class="actions"><label><input id="atomic" type="checkbox" checked> Revertir todo si hay errores</label><label>Duplicados<select id="duplicates"><option value="error">Informar como error</option><option value="skip">Omitir sin actualizar</option></select></label></div>
+    <p>La PK autoincremental y el tenant del archivo se ignoran. El tenant se toma de la sesión.</p>
+    <div id="mapping"></div>
+    <div class="actions"><button id="preview" type="button">Validar y previsualizar</button><button id="confirm" type="button" disabled>Confirmar importación</button></div>
+  </section>
+  <p id="message" role="status" aria-live="polite"></p>
+  <section id="results" hidden><h2>Resultado</h2><p id="summary"></p><div class="scroll"><table><thead id="table-head"></thead><tbody id="table-body"></tbody></table></div></section>
+</main>
+</body></html>

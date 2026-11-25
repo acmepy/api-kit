@@ -2,6 +2,8 @@ import express from "express";
 import { ok, list, lastUpdateAt } from "../http/response.js";
 import { getContext } from "../context/request-context.js";
 import { AppError } from "../errors/app-error.js";
+import { renderImportPage, importStylesheet } from "../import/page.js";
+import { importBrowser } from "../import/browser.js";
 
 export class BaseRouter {
   #service;
@@ -78,15 +80,24 @@ export class BaseRouter {
 
     const handlers = [];
     if (this.authorize) handlers.push(this.authorize({ auth: auth || this.#config.auth, permissions: permission ? [permission] : [] }));
+    if (serviceMethod === "import") handlers.push(express.text({ type: ["text/csv", "application/csv"], limit: "1mb" }));
 
     handlers.push(async (req, res, next) => {
       try {
         const {params, query, body} = req;
         const args = { params, query, body};
 
+        if (serviceMethod === "importPage") {
+          res.set("Cache-Control", "no-store");
+          if (query.asset === "script") return res.type("js").send(`(${importBrowser.toString()})();`);
+          if (query.asset === "style") return res.type("css").send(importStylesheet);
+          return res.type("html").send(renderImportPage(this.#config));
+        }
+
         const timestamp = serviceMethod === "list" ? lastUpdateAt() : null;
         const result = await this.#service[serviceMethod](args);
-        if (serviceMethod === "export") {
+        if (serviceMethod === "import") return res.json(result);
+        if (serviceMethod === "export" || serviceMethod === "importTemplate") {
           res.append("Access-Control-Expose-Headers", "Content-Disposition");
           return res.attachment(result.filename).type(result.contentType).send(result.body);
         }

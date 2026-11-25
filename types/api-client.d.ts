@@ -72,6 +72,16 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface ExportFile { blob: Blob; filename: string | null; contentType: string; }
+export interface ImportOptions { type?: "json" | "csv"; atomic?: boolean; preview?: boolean; duplicates?: "error" | "skip"; mapping?: Record<string, string>; }
+export interface ImportRowError { row: number; errors: ValidationErrors; }
+export interface ImportColumn { name: string; title: string; type: string; required: boolean; schema: Record<string, unknown>; }
+export interface ImportSummary {
+  total: number; created: number; valid: number; skipped: number; failed: number; rolledBack: boolean; preview: boolean;
+  errors: ImportRowError[];
+  columns?: ImportColumn[]; headers?: string[];
+  rows?: Array<{ row: number; status: "valid" | "skipped" | "error"; data?: Record<string, unknown>; errors?: ValidationErrors }>;
+}
+export interface ImportResponse { ok: boolean; data: ImportSummary; }
 export class ApiClientError extends Error {
   errors: ValidationErrors | null;
   status?: number;
@@ -200,6 +210,8 @@ export interface PushResponse extends ApiResponse {
 export type ServiceId = string | number | Record<string, string | number>;
 export interface ServiceRecord { id?: string | number; [key: string]: unknown; }
 export class BaseService<T extends ServiceRecord = ServiceRecord> {
+  import(data: Blob | string | Record<string, unknown>[], options?: ImportOptions): Promise<ImportResponse>;
+  importTemplate(query?: { type?: "json" | "csv" }): Promise<ExportFile>;
   export(query?: Record<string, unknown> & { type?: string }): Promise<ExportFile>;
   constructor(options: ServiceOptions);
   readonly client: ApiClient;

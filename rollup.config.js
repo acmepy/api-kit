@@ -68,6 +68,7 @@ function createBundle(input, outputName, declaration, shouldMinify = false) {
       packageVersion(),
       declarationFile(`types/${declaration}`, declaration),
       ...(["src/server/index.js", "src/log-viewer/index.js"].includes(input) ? [logViewerAssets()] : []),
+      ...(input === "src/server/index.js" ? [importAssets()] : []),
       ...(shouldMinify ? [terser()] : []),
     ],
     output: {
@@ -87,6 +88,12 @@ function logViewerAssets() {
       }
     },
   };
+}
+
+function importAssets() {
+  return { name: "import-assets", generateBundle() {
+    for (const name of readdirSync("src/server/import/assets")) this.emitFile({ type: "asset", fileName: `assets/${name}`, source: readFileSync(`src/server/import/assets/${name}`) });
+  } };
 }
 
 const clientMinBundle = createBundle("src/client/index.js", "dist/api-client", "api-client.d.ts", true);

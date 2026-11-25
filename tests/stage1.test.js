@@ -311,7 +311,7 @@ describe("Etapa 1 - Nucleo", () => {
   describe("module endpoints", () => {
     it("creates list/get/create/update/remove by default", () => {
       const mod = normalizeModule({ name: "items" });
-      assert.deepEqual(Object.keys(mod.endpoints), ["list", "schema", "export", "get", "create", "update", "remove"]);
+      assert.deepEqual(Object.keys(mod.endpoints), ["list", "schema", "export", "import", "importTemplate", "importPage", "get", "create", "update", "remove"]);
       assert.equal(mod.endpoints.list.method, "get");
       assert.equal(mod.endpoints.schema.enabled, true);
       assert.equal(mod.endpoints.schema.path, "/schema");
@@ -427,7 +427,7 @@ describe("Etapa 1 - Nucleo", () => {
 
       const clientes = root.item.find((item) => item.name === "clientes");
       assert.ok(clientes);
-      assert.deepEqual(clientes.item.map((item) => item.name), ["Listar", "Schema", "Obtener por ID", "Crear", "Actualizar", "Eliminar", "Exportar"]);
+      assert.deepEqual(clientes.item.map((item) => item.name), ["Listar", "Schema", "Obtener por ID", "Crear", "Actualizar", "Eliminar", "Plantilla de importacion", "Exportar", "Importar", "Importador"]);
 
       const getById = clientes.item.find((item) => item.name === "Obtener por ID");
       assert.equal(getById.request.method, "GET");

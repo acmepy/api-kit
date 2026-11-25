@@ -29,7 +29,7 @@ async function fixture(t) {
     await m.usersRoles.create({ userId: id, roleId: 1 });
     for (const tenantId of id === "one" ? [1, 2] : [2]) await m.usersTenants.create({ userId: id, tenantId });
   }
-  const permissions = ["claves.list", "claves.create", "claves.update", "schema.list", "facturas.list", "facturas.export", "facturas.get", "facturas.create", "facturas.update", "facturas.remove", "facturas.createDetail", "facturas.updateDetail", "facturas.removeDetail", "audit.changes", "audit.sse"];
+  const permissions = ["claves.list", "claves.create", "claves.update", "claves.import", "schema.list", "facturas.list", "facturas.export", "facturas.import", "facturas.get", "facturas.create", "facturas.update", "facturas.remove", "facturas.createDetail", "facturas.updateDetail", "facturas.removeDetail", "audit.changes", "audit.sse"];
   for (const permission of permissions) {
     const p = await m.permissions.create({ permission });
     await m.rolesPermissions.create({ roleId: 1, permissionId: p.get("id") });
@@ -85,6 +85,28 @@ it("tenant CRUD and nested details isolate data, reject forged tenant fields and
   assert.ok(descriptor, JSON.stringify(document));
   assert.equal(descriptor.schemas.create.properties.codEmpresa, undefined);
   assert.deepEqual(api.models.get("facturas").options.tenant, { attribute: "codEmpresa" });
+});
+
+it("imports ignore file IDs and tenant values, preserving session isolation and manual keys", async t => {
+  const { request, login, base } = await fixture(t);
+  const one = await login("one"), two = await login("two");
+  const preview = await request("POST", "/facturas/import?preview=true", [{ id: 999, codEmpresa: 2, nombre: "Importado" }], one.token);
+  assert.equal(preview.data.valid, 1);
+  assert.equal(preview.data.rows[0].data.id, undefined);
+  assert.equal(preview.data.rows[0].data.codEmpresa, undefined);
+  const result = await request("POST", "/facturas/import", [{ id: 999, codEmpresa: 2, nombre: "Importado" }], one.token);
+  assert.equal(result.data.created, 1);
+  const rows = await request("GET", "/facturas", undefined, one.token);
+  assert.equal(rows.data[0].codEmpresa, 1);
+  assert.notEqual(rows.data[0].id, 999);
+  assert.equal((await request("GET", "/facturas", undefined, two.token)).data.length, 0);
+  for (const session of [one, two]) {
+    const manual = await request("POST", "/claves/import", [{ codEmpresa: 999, codigo: "001", nombre: "Clave" }], session.token);
+    assert.equal(manual.data.created, 1);
+  }
+  const template = await (await fetch(`${base}/facturas/import/template`, { headers: { Authorization: `Bearer ${one.token}` } })).json();
+  assert.equal(template[0].codEmpresa, undefined);
+  assert.equal(template[0].id, undefined);
 });
 
 it("tenant endpoints update user and session independently and changes are filtered by Seq", async t => {

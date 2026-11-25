@@ -1,6 +1,6 @@
 import { ref, readonly, provide, inject, reactive, watch, onScopeDispose, computed } from 'vue';
 
-const version = "1.6.0";
+const version = "1.6.1";
 
 /** Injection key used by the ApiKit Vue plugin. */
 const ApiVueKey = Symbol("ApiKitVue");
@@ -189,6 +189,8 @@ function useApiService(name) {
     list: refresh,
     get: (...args) => service().get(...args),
     export: (...args) => service().export(...args),
+    import: run("import"),
+    importTemplate: (...args) => service().importTemplate(...args),
     pull: run("pull"),
     pullOne: run("pullOne"),
     create: run("create"),

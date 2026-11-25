@@ -279,7 +279,7 @@ describe("auth", () => {
       const schemaDocument = await request(server, "GET", "/api/schema.json", { basic: ["admin", "1234"] });
       assert.equal(schemaDocument.status, 200);
       assert.deepEqual(schemaDocument.body.services.map((service) => service.name), ["clientes"]);
-      assert.deepEqual(Object.keys(schemaDocument.body.services[0].operations).sort(), ["create", "list", "schema"]);
+      assert.deepEqual(Object.keys(schemaDocument.body.services[0].operations).sort(), ["create", "importPage", "list", "schema"]);
       assert.deepEqual(Object.keys(schemaDocument.body.services[0].schemas), ["create"]);
 
       const deniedPostman = await request(server, "GET", "/api/postman.json");

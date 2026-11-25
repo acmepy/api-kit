@@ -126,6 +126,12 @@ function parametersFor(route) {
   }
 
   if (route.serviceMethod === "export") parameters.push({ name: "type", in: "query", required: false, schema: { type: "string", default: "json" }, description: "json, csv o pdf; el servicio puede agregar formatos" });
+  if (["import", "importTemplate"].includes(route.serviceMethod)) parameters.push({ name: "type", in: "query", schema: { type: "string", enum: ["json", "csv"], default: "json" } });
+  if (route.serviceMethod === "import") parameters.push(
+    { name: "atomic", in: "query", schema: { type: "boolean", default: true } },
+    { name: "preview", in: "query", schema: { type: "boolean", default: false } },
+    { name: "duplicates", in: "query", schema: { type: "string", enum: ["error", "skip"], default: "error" } },
+  );
 
   if (route.serviceMethod === "changes") parameters.push({name: "since", in: "query", required: true, schema: { type: "string", format: "date-time" }});
 
@@ -138,13 +144,26 @@ function responsesFor(route) {
     403: { description: "Forbidden" },
   } : {};
 
-  if (route.serviceMethod === "export") return {
+  if (["export", "importTemplate"].includes(route.serviceMethod)) return {
     200: { description: "Archivo exportado", headers: { "Content-Disposition": { schema: { type: "string" } } }, content: {
       "application/json": { schema: { type: "array", items: { type: "object" } } },
       "text/csv": { schema: { type: "string", format: "binary" } },
-      "application/pdf": { schema: { type: "string", format: "binary" } },
+      ...(route.serviceMethod === "export" && { "application/pdf": { schema: { type: "string", format: "binary" } } }),
     } },
     400: { description: "Formato o filtros invalidos" }, ...authResponses,
+  };
+
+  if (route.serviceMethod === "importPage") return { 200: { description: "Importador HTML", content: { "text/html": { schema: { type: "string" } } } } };
+
+  if (route.serviceMethod === "import") return {
+    200: { description: "Resumen de importacion o vista previa", content: { "application/json": { schema: { type: "object", properties: {
+      ok: { type: "boolean" }, data: { type: "object", properties: {
+        total: { type: "integer" }, created: { type: "integer" }, valid: { type: "integer" }, skipped: { type: "integer" }, failed: { type: "integer" },
+        rolledBack: { type: "boolean" }, preview: { type: "boolean" },
+        errors: { type: "array", items: { type: "object", properties: { row: { type: "integer", minimum: 1 }, errors: { type: "object" } } } },
+      } },
+    } } } } },
+    400: { description: "Archivo u opciones invalidas" }, ...authResponses,
   };
 
   if (route.serviceMethod === "sse") {
@@ -193,6 +212,13 @@ function responsesFor(route) {
 }
 
 function requestBodyFor(route, mod) {
+  if (route.serviceMethod === "import") return { required: true, content: {
+    "application/json": { schema: { oneOf: [
+      { type: "array", items: { type: "object" } },
+      { type: "object", required: ["data"], properties: { data: { oneOf: [{ type: "string" }, { type: "array", items: { type: "object" } }] }, mapping: { type: "object", additionalProperties: { type: "string" } } } },
+    ] } },
+    "text/csv": { schema: { type: "string" } },
+  } };
   if (route.operationId === "auth.login") {
     return {
       required: true,
