@@ -12,7 +12,24 @@ export class AuthRequiredError extends AppError {}
 export class ForbiddenError extends AppError {}
 export class InternalError extends AppError {}
 export class BaseModel { static init(...args: unknown[]): unknown; }
-export class BaseService<T = Record<string, unknown>> { constructor(options?: Record<string, unknown>); list(options?: Record<string, unknown>): Promise<T[]>; get(id: string | number, options?: Record<string, unknown>): Promise<T>; create(data: Partial<T>, options?: Record<string, unknown>): Promise<T>; update(id: string | number, data: Partial<T>, options?: Record<string, unknown>): Promise<T>; remove(id: string | number, options?: Record<string, unknown>): Promise<void>; }
+export interface ExportResult { body: string | Uint8Array; contentType: string; filename: string; }
+export interface ExportColumn { name: string; title?: string; type?: string; maxLength?: number; precision?: number; scale?: number; }
+export function createExportPdfTemplate(options?: { title?: string; columns?: ExportColumn[]; data?: Record<string, unknown>[] }): Record<string, unknown>;
+export class BaseService<T = Record<string, unknown>> {
+  constructor(options?: Record<string, unknown>);
+  list(options?: Record<string, unknown>): Promise<T[]>;
+  get(id: string | number, options?: Record<string, unknown>): Promise<T>;
+  create(data: Partial<T>, options?: Record<string, unknown>): Promise<T>;
+  update(id: string | number, data: Partial<T>, options?: Record<string, unknown>): Promise<T>;
+  remove(id: string | number, options?: Record<string, unknown>): Promise<void>;
+  export(args?: Record<string, unknown>): Promise<ExportResult>;
+  exportJson(args?: Record<string, unknown>): Promise<ExportResult>;
+  exportCsv(args?: Record<string, unknown>): Promise<ExportResult>;
+  exportPdf(args?: Record<string, unknown>): Promise<ExportResult>;
+  exportData(args?: Record<string, unknown>): Promise<T[]>;
+  exportColumns(): ExportColumn[];
+  exportPdfTemplate(data: T[]): Record<string, unknown>;
+}
 export class BaseRouter { constructor(options?: Record<string, unknown>); }
 export class BaseModule { constructor(options?: Record<string, unknown>); }
 export interface ResourceDefinition { name: string; tenant?: boolean | { attribute: string }; [key: string]: unknown; }

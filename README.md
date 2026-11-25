@@ -441,6 +441,44 @@ DELETE /api/ventas/1/items/1
 
 Las rutas de detalle admiten una PK simple o una PK compuesta por la FK del maestro y un atributo adicional. En el segundo caso, `:detailId` identifica ese atributo adicional: para `{ codListaPrecio, codArticulo }`, la ruta `/api/listasPrecios/001/detalles/A1` usa ambos campos para actualizar o eliminar. La FK se toma de la ruta al crear y se valida segun el tipo declarado; un codigo de texto como `"001"` conserva sus ceros iniciales y no necesita repetirse en el body. Las rutas de escritura actuales requieren una FK simple y un unico componente identificador del detalle fuera de esa FK.
 
+## Exportacion
+
+Cada recurso tiene `GET /api/:recurso/export?type=json|csv|pdf`. El formato predeterminado es JSON. Se genera un archivo con los mismos filtros, pagina, limite y `maxSize` de `list`, sin recorrer paginas automaticamente. La ruta requiere el permiso `<recurso>.export` cuando hay autenticacion y respeta el tenant de la sesion. Puede desactivarse con `endpoints: { export: false }`.
+
+JSON devuelve un array de registros. CSV se genera en UTF-8 con BOM, comas y filas CRLF; escapa comillas y saltos de linea y protege los textos que pueden interpretarse como formulas. CSV y PDF usan `title` como encabezado, o el nombre del atributo si falta. Las columnas tabulares corresponden a los atributos del modelo; las asociaciones anidadas permanecen disponibles en JSON.
+
+PDF utiliza `pdfmake` como peer opcional (`npm install pdfmake@^0.3.15`); JSON y CSV no requieren esa dependencia. La plantilla base esta en `src/server/export/pdf-template.js`, exportada como `createExportPdfTemplate` desde `api/server`. Incluye cabecera, estilos, tabla dinamica y pie con numero de pagina.
+
+En PDF, los numeros se alinean a la derecha y usan separador de miles y coma decimal (`12.345,60`), respetando `scale`; los enteros se muestran sin decimales. Los anchos son proporcionales a `maxLength`; si falta, se usa la precision numerica o un ancho de referencia. Los booleanos se representan con simbolos vectoriales de verificacion y cruz, con el color predeterminado del PDF.
+
+Cada servicio puede sobrescribir `export()` para restringir o agregar formatos, o solamente `exportJson()`, `exportCsv()` o `exportPdf()`. Estos metodos devuelven `{ body, contentType, filename }`. `exportData(args)` obtiene los registros con los filtros y limites de `list`, y `exportColumns()` devuelve las columnas con sus titulos.
+
+Para ajustar solo la definicion de pdfmake, sobrescribe `exportPdfTemplate(data)`:
+
+```js
+import { BaseService } from "api/server";
+
+export default class Facturas extends BaseService {
+  exportPdfTemplate(data) {
+    const document = super.exportPdfTemplate(data);
+    document.header = () => ({
+      text: "Facturas", margin: [36, 22, 36, 0], bold: true,
+    });
+    document.footer = (page, pages) => ({
+      text: `${page} / ${pages}`, alignment: "right", margin: [36, 16, 36, 0],
+    });
+    return document;
+  }
+}
+```
+
+En client y Vue, `export(query)` devuelve `{ blob, filename, contentType }` para descargar o compartir el archivo. Usa la operacion publicada por `schema.json`, con la autenticacion y el tenant del cliente:
+
+```js
+const file = await client.service("facturas").export({ type: "pdf", page: 1 });
+const csv = await useApiService("facturas").export({ type: "csv" });
+```
+
 ## Filtros y Paginacion
 
 ### Claves primarias compuestas

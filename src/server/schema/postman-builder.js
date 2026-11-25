@@ -170,6 +170,7 @@ function postmanUrl(route) {
 }
 
 function queryParams(route) {
+  if (route.serviceMethod === "export") return [{ key: "type", value: "json" }, { key: "page", value: "1" }];
   if (route.serviceMethod === "list") return [{ key: "page", value: "1" }, { key: "limit", value: "20" }];
   if (route.serviceMethod === "changes") return [{ key: "since", value: new Date(0).toISOString() }];
   return [];

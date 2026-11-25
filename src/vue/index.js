@@ -186,6 +186,7 @@ export function useApiService(name) {
     refresh,
     list: refresh,
     get: (...args) => service().get(...args),
+    export: (...args) => service().export(...args),
     pull: run("pull"),
     pullOne: run("pullOne"),
     create: run("create"),

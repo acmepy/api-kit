@@ -5,6 +5,7 @@ import yep from 'yep'
 import { getContext } from "../context/request-context.js";
 import { nestedSchemaValidationOptions, validateResourceSchema } from "./nested-schema-validation.js";
 import { tenantValues, tenantAttribute } from "../context/tenant-context.js";
+import { createExportPdfTemplate, exportValue } from "../export/pdf-template.js";
 
 const FILTER_OPERATORS = { eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between };
 const FILTER_OPERATOR_NAMES = new Map(Object.entries(FILTER_OPERATORS).map(([name, op]) => [op, name]));
@@ -73,6 +74,57 @@ export class BaseService {
     const instance = await this.#model.findByPk(key, { plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName)
     return { data: instance };
+  }
+
+  async export(args = {}) {
+    const type = String(args.query?.type || "json").toLowerCase();
+    const methods = { json: "exportJson", csv: "exportCsv", pdf: "exportPdf" };
+    if (!Object.hasOwn(methods, type)) throw new ValidationError(`Formato de exportacion "${type}" no soportado`, { errors: { type: "Use json, csv o pdf" } });
+    return this[methods[type]](args);
+  }
+
+  async exportData(args = {}) {
+    const query = { ...args.query };
+    delete query.type;
+    return (await this.list({ ...args, query })).data;
+  }
+
+  exportColumns() {
+    const definitions = this.#config.resource?.definition || this.#model.resourceDefinition?.attributes || {};
+    return Object.entries(this.#model.rawAttributes).map(([name, { type }]) => ({
+      name, title: definitions[name]?.title || name, type: type.key,
+      maxLength: definitions[name]?.maxLength ?? type.options?.length,
+      precision: type.options?.precision, scale: type.options?.scale,
+    }));
+  }
+
+  async exportJson(args = {}) {
+    const data = await this.exportData(args);
+    return { body: JSON.stringify(data, null, 2), contentType: "application/json; charset=utf-8", filename: `${this.#config.name || this.#model.modelName}.json` };
+  }
+
+  async exportCsv(args = {}) {
+    const data = await this.exportData(args);
+    const columns = this.exportColumns();
+    const cell = value => {
+      let text = exportValue(value);
+      if (typeof value === "string" && /^[\s]*[=+@-]/.test(text)) text = `'${text}`;
+      return `"${text.replaceAll('"', '""')}"`;
+    };
+    const body = [columns.map(column => cell(column.title)), ...data.map(row => columns.map(column => cell(row[column.name])))].map(row => row.join(",")).join("\r\n");
+    return { body: `\uFEFF${body}\r\n`, contentType: "text/csv; charset=utf-8", filename: `${this.#config.name || this.#model.modelName}.csv` };
+  }
+
+  exportPdfTemplate(data) {
+    return createExportPdfTemplate({ title: this.#config.description || this.#config.name || this.#model.modelName, columns: this.exportColumns(), data });
+  }
+
+  async exportPdf(args = {}) {
+    const data = await this.exportData(args);
+    const [{ default: pdfmake }, { default: fonts }] = await Promise.all([import("pdfmake"), import("pdfmake/fonts/Roboto.js")]);
+    pdfmake.addFonts(fonts);
+    const body = await pdfmake.createPdf(await this.exportPdfTemplate(data)).getBuffer();
+    return { body, contentType: "application/pdf", filename: `${this.#config.name || this.#model.modelName}.pdf` };
   }
 
   async schema() {

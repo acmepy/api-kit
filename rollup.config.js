@@ -31,6 +31,8 @@ const external = (id) => (
     "iam/express",
     "idb-keyval",
     "logger",
+    "pdfmake",
+    "pdfmake/fonts/Roboto.js",
     "seq",
     "vue",
     "yep",

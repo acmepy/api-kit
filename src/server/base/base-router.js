@@ -86,6 +86,10 @@ export class BaseRouter {
 
         const timestamp = serviceMethod === "list" ? lastUpdateAt() : null;
         const result = await this.#service[serviceMethod](args);
+        if (serviceMethod === "export") {
+          res.append("Access-Control-Expose-Headers", "Content-Disposition");
+          return res.attachment(result.filename).type(result.contentType).send(result.body);
+        }
         const response = result.pagination ? list(result.data, result.pagination) : ok(result.data);
         if (timestamp) response.lastUpdateAt = timestamp;
         return res.json(response);

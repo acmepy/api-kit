@@ -639,6 +639,7 @@ function normalizeJsonSchema(schema) {
 const ENDPOINT_DEFAULTS = {
   list: { enabled: true, method: "get", path: "/", summary: "Listar" },
   schema: { enabled: true, method: "get", path: "/schema", summary: "Schema" },
+  export: { enabled: true, method: "get", path: "/export", summary: "Exportar" },
   get: { enabled: true, method: "get", path: "/:id", summary: "Obtener por ID" },
   create: { enabled: true, method: "post", path: "/", summary: "Crear" },
   update: { enabled: true, method: "put", path: "/:id", summary: "Actualizar" },
@@ -844,12 +845,14 @@ function parametersFor(route) {
 
   for (const match of matches) parameters.push({name: match[1], in: "path", required: true, schema: { type: "string" }});
 
-  if (route.serviceMethod === "list") {
+  if (route.serviceMethod === "list" || route.serviceMethod === "export") {
     parameters.push(
       { name: "page", in: "query", required: false, schema: { type: "integer", minimum: 1, default: 1 } },
       { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, default: 20 } },
     );
   }
+
+  if (route.serviceMethod === "export") parameters.push({ name: "type", in: "query", required: false, schema: { type: "string", default: "json" }, description: "json, csv o pdf; el servicio puede agregar formatos" });
 
   if (route.serviceMethod === "changes") parameters.push({name: "since", in: "query", required: true, schema: { type: "string", format: "date-time" }});
 
@@ -861,6 +864,15 @@ function responsesFor(route) {
     401: { description: "Authentication required" },
     403: { description: "Forbidden" },
   } : {};
+
+  if (route.serviceMethod === "export") return {
+    200: { description: "Archivo exportado", headers: { "Content-Disposition": { schema: { type: "string" } } }, content: {
+      "application/json": { schema: { type: "array", items: { type: "object" } } },
+      "text/csv": { schema: { type: "string", format: "binary" } },
+      "application/pdf": { schema: { type: "string", format: "binary" } },
+    } },
+    400: { description: "Formato o filtros invalidos" }, ...authResponses,
+  };
 
   if (route.serviceMethod === "sse") {
     return {
@@ -1144,6 +1156,7 @@ function postmanUrl(route) {
 }
 
 function queryParams(route) {
+  if (route.serviceMethod === "export") return [{ key: "type", value: "json" }, { key: "page", value: "1" }];
   if (route.serviceMethod === "list") return [{ key: "page", value: "1" }, { key: "limit", value: "20" }];
   if (route.serviceMethod === "changes") return [{ key: "since", value: new Date(0).toISOString() }];
   return [];
@@ -1519,6 +1532,10 @@ class BaseRouter {
 
         const timestamp = serviceMethod === "list" ? lastUpdateAt() : null;
         const result = await this.#service[serviceMethod](args);
+        if (serviceMethod === "export") {
+          res.append("Access-Control-Expose-Headers", "Content-Disposition");
+          return res.attachment(result.filename).type(result.contentType).send(result.body);
+        }
         const response = result.pagination ? list(result.data, result.pagination) : ok(result.data);
         if (timestamp) response.lastUpdateAt = timestamp;
         return res.json(response);
@@ -1548,6 +1565,60 @@ class ValidationError extends AppError {
   constructor(message = "Datos inválidos", { errors = null, cause = null } = {}) {
     super(message, { status: 400, code: "VALIDATION_ERROR", errors, cause });
   }
+}
+
+/** Default pdfmake document definition. Returns a fresh, editable template. */
+function createExportPdfTemplate({ title = "Exportación", columns = [], data = [] } = {}) {
+  const numeric = column => ["INTEGER", "NUMBER", "DECIMAL"].includes(column.type)
+    || (!column.type && data.some(row => typeof row[column.name] === "number"));
+  const weights = columns.map(column => Number(column.maxLength) > 0 ? Number(column.maxLength)
+    : Number(column.precision) > 0 ? Number(column.precision)
+      : column.type === "BOOLEAN" ? 6 : Math.max((column.title || column.name).length, 12));
+  const totalWeight = weights.reduce((total, weight) => total + weight, 0);
+  const formats = columns.map(column => {
+    const scale = column.type === "INTEGER" ? 0 : column.scale ?? (column.type === "DECIMAL" ? 2 : undefined);
+    return new Intl.NumberFormat("es-PY", scale === undefined ? {} : { minimumFractionDigits: scale, maximumFractionDigits: scale });
+  });
+  return {
+    pageSize: "A4",
+    pageOrientation: columns.length > 5 ? "landscape" : "portrait",
+    pageMargins: [36, 60, 36, 48],
+    defaultStyle: { font: "Roboto", fontSize: 9 },
+    styles: {
+      heading: { fontSize: 14, bold: true, color: "#243447" },
+      tableHeader: { bold: true, color: "#243447", fillColor: "#eef2f6" },
+    },
+    header: () => ({ text: title, style: "heading", margin: [36, 22, 36, 0] }),
+    footer: (page, pages) => ({ text: `${page} / ${pages}`, alignment: "right", fontSize: 8, color: "#666666", margin: [36, 16, 36, 0] }),
+    content: columns.length ? [{
+      layout: "lightHorizontalLines",
+      table: {
+        headerRows: 1,
+        widths: weights.map(weight => `${weight / totalWeight * 100}%`),
+        body: [
+          columns.map(column => ({ text: column.title || column.name, style: "tableHeader", alignment: numeric(column) ? "right" : "left" })),
+          ...data.map(record => columns.map((column, index) => {
+            const value = record[column.name];
+            if (typeof value === "boolean") return booleanSymbol(value);
+            if (numeric(column)) return { text: value == null || value === "" ? "" : formats[index].format(value), alignment: "right" };
+            return exportValue(value);
+          })),
+        ],
+      },
+    }] : [{ text: "Sin columnas para exportar" }],
+  };
+}
+
+function booleanSymbol(value) {
+  // Roboto lacks these glyphs. Native pdfmake paths preserve their appearance on every host.
+  return { margin: [0, 1, 0, 0], canvas: value
+    ? [{ type: "polyline", points: [{ x: 1, y: 5 }, { x: 4, y: 8 }, { x: 11, y: 1 }], lineWidth: 1.8 }]
+    : [{ type: "line", x1: 2, y1: 1, x2: 10, y2: 9, lineWidth: 1.8 }, { type: "line", x1: 2, y1: 9, x2: 10, y2: 1, lineWidth: 1.8 }] };
+}
+
+function exportValue(value) {
+  if (value == null) return "";
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
 const FILTER_OPERATORS = { eq: Op.eq, equal: Op.eq, igual: Op.eq, gt: Op.gt, greater: Op.gt, mayor: Op.gt, gte: Op.gte, greaterOrEqual: Op.gte, mayorIgual: Op.gte, lt: Op.lt, less: Op.lt, menor: Op.lt, lte: Op.lte, lessOrEqual: Op.lte, menorIgual: Op.lte, like: Op.like, notLike: Op.notLike, in: Op.in, incluido: Op.in, between: Op.between };
@@ -1617,6 +1688,57 @@ class BaseService {
     const instance = await this.#model.findByPk(key, { plain: true, ...(transaction && { transaction }) });
     if (!instance) throw new NotFoundError(this.#model.modelName)
     return { data: instance };
+  }
+
+  async export(args = {}) {
+    const type = String(args.query?.type || "json").toLowerCase();
+    const methods = { json: "exportJson", csv: "exportCsv", pdf: "exportPdf" };
+    if (!Object.hasOwn(methods, type)) throw new ValidationError(`Formato de exportacion "${type}" no soportado`, { errors: { type: "Use json, csv o pdf" } });
+    return this[methods[type]](args);
+  }
+
+  async exportData(args = {}) {
+    const query = { ...args.query };
+    delete query.type;
+    return (await this.list({ ...args, query })).data;
+  }
+
+  exportColumns() {
+    const definitions = this.#config.resource?.definition || this.#model.resourceDefinition?.attributes || {};
+    return Object.entries(this.#model.rawAttributes).map(([name, { type }]) => ({
+      name, title: definitions[name]?.title || name, type: type.key,
+      maxLength: definitions[name]?.maxLength ?? type.options?.length,
+      precision: type.options?.precision, scale: type.options?.scale,
+    }));
+  }
+
+  async exportJson(args = {}) {
+    const data = await this.exportData(args);
+    return { body: JSON.stringify(data, null, 2), contentType: "application/json; charset=utf-8", filename: `${this.#config.name || this.#model.modelName}.json` };
+  }
+
+  async exportCsv(args = {}) {
+    const data = await this.exportData(args);
+    const columns = this.exportColumns();
+    const cell = value => {
+      let text = exportValue(value);
+      if (typeof value === "string" && /^[\s]*[=+@-]/.test(text)) text = `'${text}`;
+      return `"${text.replaceAll('"', '""')}"`;
+    };
+    const body = [columns.map(column => cell(column.title)), ...data.map(row => columns.map(column => cell(row[column.name])))].map(row => row.join(",")).join("\r\n");
+    return { body: `\uFEFF${body}\r\n`, contentType: "text/csv; charset=utf-8", filename: `${this.#config.name || this.#model.modelName}.csv` };
+  }
+
+  exportPdfTemplate(data) {
+    return createExportPdfTemplate({ title: this.#config.description || this.#config.name || this.#model.modelName, columns: this.exportColumns(), data });
+  }
+
+  async exportPdf(args = {}) {
+    const data = await this.exportData(args);
+    const [{ default: pdfmake }, { default: fonts }] = await Promise.all([import('pdfmake'), import('pdfmake/fonts/Roboto.js')]);
+    pdfmake.addFonts(fonts);
+    const body = await pdfmake.createPdf(await this.exportPdfTemplate(data)).getBuffer();
+    return { body, contentType: "application/pdf", filename: `${this.#config.name || this.#model.modelName}.pdf` };
   }
 
   async schema() {
@@ -3565,7 +3687,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.5.15";
+const version = "1.6.0";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {
@@ -3636,5 +3758,5 @@ class InternalError extends AppError {
   }
 }
 
-export { AppError, AuthRequiredError, BaseModel, BaseModule, BaseRouter, BaseService, ConfigError, ConflictError, ForbiddenError, InternalError, NotFoundError, RouteRegistry, ValidationError, createApi, createLogViewer, defineResource, getContext, list, log, ok, parseLogLine, requestLogger, runWithContext, setLogging, version };
+export { AppError, AuthRequiredError, BaseModel, BaseModule, BaseRouter, BaseService, ConfigError, ConflictError, ForbiddenError, InternalError, NotFoundError, RouteRegistry, ValidationError, createApi, createExportPdfTemplate, createLogViewer, defineResource, getContext, list, log, ok, parseLogLine, requestLogger, runWithContext, setLogging, version };
 //# sourceMappingURL=api-server.js.map

@@ -29,7 +29,7 @@ async function fixture(t) {
     await m.usersRoles.create({ userId: id, roleId: 1 });
     for (const tenantId of id === "one" ? [1, 2] : [2]) await m.usersTenants.create({ userId: id, tenantId });
   }
-  const permissions = ["claves.list", "claves.create", "claves.update", "schema.list", "facturas.list", "facturas.get", "facturas.create", "facturas.update", "facturas.remove", "facturas.createDetail", "facturas.updateDetail", "facturas.removeDetail", "audit.changes", "audit.sse"];
+  const permissions = ["claves.list", "claves.create", "claves.update", "schema.list", "facturas.list", "facturas.export", "facturas.get", "facturas.create", "facturas.update", "facturas.remove", "facturas.createDetail", "facturas.updateDetail", "facturas.removeDetail", "audit.changes", "audit.sse"];
   for (const permission of permissions) {
     const p = await m.permissions.create({ permission });
     await m.rolesPermissions.create({ roleId: 1, permissionId: p.get("id") });
@@ -50,7 +50,7 @@ async function fixture(t) {
 }
 
 it("tenant CRUD and nested details isolate data, reject forged tenant fields and preserve validation", async t => {
-  const { api, request, login } = await fixture(t);
+  const { api, base, request, login } = await fixture(t);
   const one = await login("one"), two = await login("two");
   const a = await request("POST", "/facturas", { nombre: "Uno", items: [{ cantidad: "2" }] }, one.token);
   const b = await request("POST", "/facturas", { nombre: "Dos", items: [{ cantidad: 3 }] }, two.token);
@@ -59,6 +59,13 @@ it("tenant CRUD and nested details isolate data, reject forged tenant fields and
   assert.equal(a.data.items[0].cantidad, 2);
   const lists = await Promise.all([one, two].map(session => request("GET", "/facturas", undefined, session.token)));
   assert.deepEqual(lists.map(res => res.data.map(row => row.nombre)), [["Uno"], ["Dos"]]);
+  const exports = await Promise.all([one, two].map(async session => {
+    const res = await fetch(`${base}/facturas/export`, { headers: { Authorization: `Bearer ${session.token}` } });
+    assert.equal(res.status, 200);
+    return res.json();
+  }));
+  assert.deepEqual(exports.map(rows => rows.map(row => row.nombre)), [["Uno"], ["Dos"]]);
+  assert.equal((await request("GET", "/facturas/export?codEmpresa=2", undefined, one.token)).status, 403);
   for (const [method, path, body] of [["GET", `/facturas/${b.data.id}`], ["PUT", `/facturas/${b.data.id}`, { nombre: "Ajeno" }], ["DELETE", `/facturas/${b.data.id}`]]) {
     assert.equal((await request(method, path, body, one.token)).status, 404);
   }

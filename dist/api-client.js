@@ -322,7 +322,7 @@ class BaseService {
     this.prefix = prefix;
     this.adapter = createAdapter?.({ service: name, prefix: this.prefix, keyOf: (record) => this.keyOf(record) });
     if (client.trackServiceOperation && !["pending", "session", "schema"].includes(name)) {
-      for (const method of ["save", "create", "update", "remove", "createDetail", "updateDetail", "removeDetail", "pull", "pullOne", "push", "pushOne", "applyData", "request"]) {
+      for (const method of ["save", "create", "update", "remove", "createDetail", "updateDetail", "removeDetail", "pull", "pullOne", "push", "pushOne", "applyData", "request", "export"]) {
         const execute = this[method].bind(this);
         this[method] = (...args) => client.trackServiceOperation(this, method, () => execute(...args));
       }
@@ -674,7 +674,11 @@ class BaseService {
     return this.#send(operationName, { params, query, body });
   }
 
-  async #send(operationName, { params = {}, query = {}, body } = {}) {
+  async export(query = {}) {
+    return this.#send("export", { query, responseType: "blob" });
+  }
+
+  async #send(operationName, { params = {}, query = {}, body, ...options } = {}) {
     const operation = this.operations[operationName];
     if (!operation) throw new Error(`Operacion "${operationName}" no disponible en "${this.name}"`);
     const attribute = (params.detail ? this.details[params.detail]?.tenant : this.tenant)?.attribute;
@@ -685,7 +689,7 @@ class BaseService {
       query = { ...query, ...key };
       params = { ...params, id: key[this.primaryKeyAttributes[0]] };
     }
-    return this.client.request(fillPath(operation.path, params), { method: operation.method, query, body });
+    return this.client.request(fillPath(operation.path, params), { ...options, method: operation.method, query, body });
   }
 
   async clear() {
@@ -786,6 +790,15 @@ function encodeBody(body, headers) {
   if (typeof FormData !== "undefined" && body instanceof FormData) return body;
   headers["Content-Type"] = headers["Content-Type"] || "application/json";
   return JSON.stringify(body);
+}
+
+function downloadFilename(disposition = "") {
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encoded) {
+    try { return decodeURIComponent(encoded[1]); } catch { /* Use the plain filename below. */ }
+  }
+  const plain = disposition.match(/filename=(?:"((?:\\.|[^"\\])*)"|([^;]+))/i);
+  return plain ? (plain[1] ?? plain[2].trim()).replace(/\\(.)/g, "$1") : null;
 }
 
 const INTERNAL_SERVICES = new Set(["audit", "auth", "postman", "session", "schema", "pending", "system", "install"]);
@@ -1010,7 +1023,7 @@ class SessionService extends BaseService {
   }
 }
 
-const version = "1.5.15";
+const version = "1.6.0";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
@@ -1807,7 +1820,9 @@ class ApiClient {
       throw new ApiClientError(payload.message, { response: payload });
     }
     const contentType = response.headers?.get?.("content-type") || "";
-    const payload = contentType.includes("application/json") ? await response.json() : await response.text();
+    const payload = options.responseType === "blob" && response.ok
+      ? { blob: await response.blob(), filename: downloadFilename(response.headers.get("content-disposition") || ""), contentType }
+      : contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok || payload?.ok === false){
       const error = new ApiClientError(payload?.message || response.statusText, { status: response.status, response: payload });
       if (error.status === 401 && options.auth !== false) await this.#expireSession(error, sessionVersion);

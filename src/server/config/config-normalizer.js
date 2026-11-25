@@ -4,6 +4,7 @@ import { normalizeAuth } from "../utils/normalize.js";
 const ENDPOINT_DEFAULTS = {
   list: { enabled: true, method: "get", path: "/", summary: "Listar" },
   schema: { enabled: true, method: "get", path: "/schema", summary: "Schema" },
+  export: { enabled: true, method: "get", path: "/export", summary: "Exportar" },
   get: { enabled: true, method: "get", path: "/:id", summary: "Obtener por ID" },
   create: { enabled: true, method: "post", path: "/", summary: "Crear" },
   update: { enabled: true, method: "put", path: "/:id", summary: "Actualizar" },

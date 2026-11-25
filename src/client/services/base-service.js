@@ -19,7 +19,7 @@ export class BaseService {
     this.prefix = prefix;
     this.adapter = createAdapter?.({ service: name, prefix: this.prefix, keyOf: (record) => this.keyOf(record) });
     if (client.trackServiceOperation && !["pending", "session", "schema"].includes(name)) {
-      for (const method of ["save", "create", "update", "remove", "createDetail", "updateDetail", "removeDetail", "pull", "pullOne", "push", "pushOne", "applyData", "request"]) {
+      for (const method of ["save", "create", "update", "remove", "createDetail", "updateDetail", "removeDetail", "pull", "pullOne", "push", "pushOne", "applyData", "request", "export"]) {
         const execute = this[method].bind(this);
         this[method] = (...args) => client.trackServiceOperation(this, method, () => execute(...args));
       }
@@ -371,7 +371,11 @@ export class BaseService {
     return this.#send(operationName, { params, query, body });
   }
 
-  async #send(operationName, { params = {}, query = {}, body } = {}) {
+  async export(query = {}) {
+    return this.#send("export", { query, responseType: "blob" });
+  }
+
+  async #send(operationName, { params = {}, query = {}, body, ...options } = {}) {
     const operation = this.operations[operationName];
     if (!operation) throw new Error(`Operacion "${operationName}" no disponible en "${this.name}"`);
     const attribute = (params.detail ? this.details[params.detail]?.tenant : this.tenant)?.attribute;
@@ -382,7 +386,7 @@ export class BaseService {
       query = { ...query, ...key };
       params = { ...params, id: key[this.primaryKeyAttributes[0]] };
     }
-    return this.client.request(fillPath(operation.path, params), { method: operation.method, query, body });
+    return this.client.request(fillPath(operation.path, params), { ...options, method: operation.method, query, body });
   }
 
   async clear() {

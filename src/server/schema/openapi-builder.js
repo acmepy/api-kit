@@ -118,12 +118,14 @@ function parametersFor(route) {
 
   for (const match of matches) parameters.push({name: match[1], in: "path", required: true, schema: { type: "string" }});
 
-  if (route.serviceMethod === "list") {
+  if (route.serviceMethod === "list" || route.serviceMethod === "export") {
     parameters.push(
       { name: "page", in: "query", required: false, schema: { type: "integer", minimum: 1, default: 1 } },
       { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, default: 20 } },
     );
   }
+
+  if (route.serviceMethod === "export") parameters.push({ name: "type", in: "query", required: false, schema: { type: "string", default: "json" }, description: "json, csv o pdf; el servicio puede agregar formatos" });
 
   if (route.serviceMethod === "changes") parameters.push({name: "since", in: "query", required: true, schema: { type: "string", format: "date-time" }});
 
@@ -135,6 +137,15 @@ function responsesFor(route) {
     401: { description: "Authentication required" },
     403: { description: "Forbidden" },
   } : {};
+
+  if (route.serviceMethod === "export") return {
+    200: { description: "Archivo exportado", headers: { "Content-Disposition": { schema: { type: "string" } } }, content: {
+      "application/json": { schema: { type: "array", items: { type: "object" } } },
+      "text/csv": { schema: { type: "string", format: "binary" } },
+      "application/pdf": { schema: { type: "string", format: "binary" } },
+    } },
+    400: { description: "Formato o filtros invalidos" }, ...authResponses,
+  };
 
   if (route.serviceMethod === "sse") {
     return {

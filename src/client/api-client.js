@@ -2,7 +2,7 @@ import { BaseService } from "./services/base-service.js";
 import dayjs from "dayjs";
 import { defaultAdapter } from "./adapters/index.js";
 import { ApiClientError } from "./errors.js";
-import { encodeBody } from "./http.js";
+import { encodeBody, downloadFilename } from "./http.js";
 import { discoverServiceDescriptors } from "./schema-descriptors.js";
 import { PendingService } from "./services/pending-service.js";
 import { SchemaService } from "./services/schema-service.js";
@@ -805,7 +805,9 @@ export class ApiClient {
       throw new ApiClientError(payload.message, { response: payload });
     }
     const contentType = response.headers?.get?.("content-type") || "";
-    const payload = contentType.includes("application/json") ? await response.json() : await response.text();
+    const payload = options.responseType === "blob" && response.ok
+      ? { blob: await response.blob(), filename: downloadFilename(response.headers.get("content-disposition") || ""), contentType }
+      : contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok || payload?.ok === false){
       const error = new ApiClientError(payload?.message || response.statusText, { status: response.status, response: payload });
       if (error.status === 401 && options.auth !== false) await this.#expireSession(error, sessionVersion);

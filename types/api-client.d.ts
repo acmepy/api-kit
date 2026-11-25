@@ -70,6 +70,8 @@ export interface ApiResponse<T = unknown> {
   message?: string;
   [key: string]: unknown;
 }
+
+export interface ExportFile { blob: Blob; filename: string | null; contentType: string; }
 export class ApiClientError extends Error {
   errors: ValidationErrors | null;
   status?: number;
@@ -94,6 +96,7 @@ export interface ApiClientOptions {
   [key: string]: unknown;
 }
 export interface RequestOptions {
+  responseType?: "blob";
   method?: string;
   headers?: Record<string, string>;
   body?: unknown;
@@ -197,6 +200,7 @@ export interface PushResponse extends ApiResponse {
 export type ServiceId = string | number | Record<string, string | number>;
 export interface ServiceRecord { id?: string | number; [key: string]: unknown; }
 export class BaseService<T extends ServiceRecord = ServiceRecord> {
+  export(query?: Record<string, unknown> & { type?: string }): Promise<ExportFile>;
   constructor(options: ServiceOptions);
   readonly client: ApiClient;
   readonly name: string;
