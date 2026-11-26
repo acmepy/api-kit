@@ -85,6 +85,7 @@ El import raiz `api` no exporta API publica.
 const api = await createApi({
   seq,
   baseDir: process.cwd(),
+  auth: { secret: process.env.JWT_SECRET, strategies: ["bearer", "basic"] },
   updates: {
     enabled: true,
     mounts: [
@@ -97,7 +98,7 @@ const api = await createApi({
 
 `root` se resuelve respecto de `baseDir`. `mountPath` es independiente de `basePath`: por ejemplo, un APK se descarga desde `/actualizaciones/android/app.apk`. Se admiten GET, HEAD y descargas parciales. Con `index: true`, cada directorio muestra un listado de archivos y subdirectorios; por defecto no hay listado. Las rutas no tienen fallback de SPA.
 
-Estos archivos son publicos: la autenticacion de los recursos de la API no se aplica a los montajes. Para restringirlos, el proyecto debe montar su middleware de autenticacion antes del router de api-kit. Este modulo solo sirve archivos; no interpreta versiones ni protocolos de actualizacion.
+Todos los montajes requieren autenticacion mediante las estrategias configuradas en `auth` (por ejemplo, Bearer o Basic), tanto para listar como para descargar archivos. No requieren permisos adicionales de recursos. Sin credenciales validas, o sin `auth` configurado, responden `401`. Los enlaces del indice no incluyen tokens: un cliente Bearer debe enviar el encabezado `Authorization` en cada descarga; con Basic, el navegador puede reutilizar las credenciales. Este modulo solo sirve archivos; no interpreta versiones ni protocolos de actualizacion.
 
 ## Visor de logs
 

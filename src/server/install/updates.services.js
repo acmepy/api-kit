@@ -21,10 +21,10 @@ export function normalizeUpdateMounts(updates, baseDir) {
   }).sort((a, b) => b.mountPath.length - a.mountPath.length);
 }
 
-export function installUpdateRoutes(router, mounts) {
+export function installUpdateRoutes(router, mounts, authorize) {
   for (const mount of mounts) {
     const files = express.static(mount.root, { index: false, redirect: false, dotfiles: "ignore", fallthrough: false });
-    router.use(mount.mountPath, async (req, res, next) => {
+    router.use(mount.mountPath, authorize({ auth: { required: true } }), async (req, res, next) => {
       if (!["GET", "HEAD"].includes(req.method)) return res.set("Allow", "GET, HEAD").sendStatus(405);
       let decoded;
       try { decoded = decodeURIComponent(req.path); }

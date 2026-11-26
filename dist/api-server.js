@@ -3461,10 +3461,10 @@ function normalizeUpdateMounts(updates, baseDir) {
   }).sort((a, b) => b.mountPath.length - a.mountPath.length);
 }
 
-function installUpdateRoutes(router, mounts) {
+function installUpdateRoutes(router, mounts, authorize) {
   for (const mount of mounts) {
     const files = express.static(mount.root, { index: false, redirect: false, dotfiles: "ignore", fallthrough: false });
-    router.use(mount.mountPath, async (req, res, next) => {
+    router.use(mount.mountPath, authorize({ auth: { required: true } }), async (req, res, next) => {
       if (!["GET", "HEAD"].includes(req.method)) return res.set("Allow", "GET, HEAD").sendStatus(405);
       let decoded;
       try { decoded = decodeURIComponent(req.path); }
@@ -3658,7 +3658,7 @@ async function createApi(conf = {}) {
   installSchemaDocumentRoute({ mainRouter, routeRegistry, modules, config, schema: config.schema, authorize });
   installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize });
   installPostmanRoute({ mainRouter, routeRegistry, modules, packageInfo, config, postman, authorize });
-  installUpdateRoutes(mainRouter, config.updates);
+  installUpdateRoutes(mainRouter, config.updates, authorize);
   installStaticFiles(mainRouter, config);
 
   const app = conf.app || express();
@@ -4120,7 +4120,7 @@ function viewerBrowser() {
   entries();
 }
 
-const version = "1.6.4";
+const version = "1.6.5";
 
 /** Standalone Express router: the host chooses its mount point and authorization. */
 function createLogViewer(options = {}) {

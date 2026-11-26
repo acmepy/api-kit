@@ -8,12 +8,22 @@ import { createApi } from "../src/server/index.js";
 import { normalizeUpdateMounts } from "../src/server/install/updates.services.js";
 import { createTestSeq } from "./helpers/seq.js";
 
-async function fixture(t, updates) {
+const fetch = (url, options = {}) => globalThis.fetch(url, {
+  ...options, headers: { Authorization: `Basic ${Buffer.from("admin:1234").toString("base64")}`, ...options.headers },
+});
+
+async function fixture(t, updates, auth = { secret: "updates-test-secret", strategies: ["basic", "bearer"], logging: false }) {
   const baseDir = await mkdtemp(path.join(os.tmpdir(), "api-kit-updates-"));
   for (const dir of ["android/nested", "electron", "private"]) await mkdir(path.join(baseDir, dir), { recursive: true });
   for (const [name, content] of Object.entries({ "android/app.apk": "ANDROID", "android/a&b'.apk": "APK", "android/.hidden.apk": "HIDDEN", "android/nested/version.apk": "NESTED", "electron/app.exe": "ELECTRON", "electron/latest.yml": "version: 1.2.3", "private/secret.txt": "SECRET" })) await writeFile(path.join(baseDir, name), content);
   const seq = createTestSeq({ logging: false });
-  const api = await createApi({ seq, baseDir, basePath: "/api", updates });
+  const api = await createApi({ seq, baseDir, basePath: "/api", updates, auth });
+  if (api.auth) {
+    await seq.authenticate();
+    await seq.init();
+    await seq.sync({ force: true });
+    await api.auth.models.users.create({ id: "admin", password: "1234", name: "Admin", active: true });
+  }
   const server = await new Promise(resolve => { const listener = api.app.listen(0, "127.0.0.1", () => resolve(listener)); });
   t.after(async () => {
     await api.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
@@ -28,6 +38,32 @@ const mounts = [
   { mountPath: "/actualizaciones/android", root: "./android", index: true },
   { mountPath: "/actualizaciones/electron", root: "./electron", index: false },
 ];
+
+it("requires authentication for indexes, files, HEAD and ranges, including when auth is not configured", async t => {
+  const { url } = await fixture(t, { enabled: true, mounts });
+  for (const [target, options] of [
+    ["android/", {}], ["android/app.apk", {}], ["electron/latest.yml", {}],
+    ["android/app.apk", { method: "HEAD" }], ["android/app.apk", { headers: { Range: "bytes=0-2" } }],
+    ["android/app.apk", { headers: { Authorization: "Bearer invalid" } }],
+    ["android/app.apk", { headers: { Authorization: `Basic ${Buffer.from("admin:wrong").toString("base64")}` } }],
+  ]) assert.equal((await globalThis.fetch(`${url}/actualizaciones/${target}`, options)).status, 401);
+
+  const login = await globalThis.fetch(`${url}/api/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "admin", password: "1234" }),
+  });
+  assert.equal(login.status, 200);
+  const { data } = await login.json();
+  const headers = { Authorization: `Bearer ${data.token}` };
+  assert.equal((await globalThis.fetch(`${url}/actualizaciones/android/`, { headers })).status, 200);
+  assert.equal((await globalThis.fetch(`${url}/actualizaciones/android/app.apk`, { headers })).status, 200);
+  assert.equal((await globalThis.fetch(`${url}/api/logout`, { method: "POST", headers })).status, 200);
+  assert.equal((await globalThis.fetch(`${url}/actualizaciones/android/app.apk`, { headers })).status, 401);
+
+  const noAuth = await fixture(t, { enabled: true, mounts }, false);
+  assert.equal((await fetch(`${noAuth.url}/actualizaciones/android/app.apk`)).status, 401);
+  assert.equal((await fetch(`${noAuth.url}/actualizaciones/android/`)).status, 401);
+});
 
 it("does not expose updates unless enabled is explicitly true", async t => {
   for (const config of [undefined, false, { mounts }, { enabled: false, mounts }]) {

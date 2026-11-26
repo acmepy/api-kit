@@ -143,7 +143,7 @@ export async function createApi(conf = {}) {
   installSchemaDocumentRoute({ mainRouter, routeRegistry, modules, config, schema: config.schema, authorize });
   installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize });
   installPostmanRoute({ mainRouter, routeRegistry, modules, packageInfo, config, postman, authorize });
-  installUpdateRoutes(mainRouter, config.updates);
+  installUpdateRoutes(mainRouter, config.updates, authorize);
   installStaticFiles(mainRouter, config);
 
   const app = conf.app || express();
