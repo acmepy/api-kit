@@ -715,7 +715,7 @@ const pending = client.service("pending");
 Metodos publicos principales:
 
 - `login(credentials, { sync = true } = {})`: login server y guarda sesion. Por defecto sincroniza servicios, trae changes y abre SSE. Con `{ sync: false }` solo autentica y guarda la sesion: no descarga schemas ni datos, no trae changes, no abre SSE y detiene el ping y las precargas programadas. Leer `session()` o `token()` tampoco inicia una sincronizacion en ese modo.
-- `logout()`: llama `POST /logout`; tanto ante una respuesta exitosa como ante `401`, limpia sesion, token, caches y pending locales, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, y reinicia el ping. Ante `401` devuelve `{ ok: true, data: null }`, porque el cierre local se completo; otros errores del servidor o de red se propagan.
+- `logout()`: llama `POST /logout`; ante una respuesta exitosa, `401` o un error de red (incluido servidor inaccesible), limpia sesion, token, caches y pending locales, cierra SSE y su watchdog, cancela changes en curso y las precargas programadas, y reinicia el ping. Ante `401` o error de red devuelve `{ ok: true, data: null }`, porque el cierre local se completo. Sin conexion no se puede confirmar la revocacion en el servidor. Otros errores HTTP se propagan.
 - `session()`: carga sesion local.
 - `clearSession()`: limpia solo sesion local.
 - `discover()`: descubre servicios desde `schema.json`.

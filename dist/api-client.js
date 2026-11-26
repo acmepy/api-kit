@@ -1040,7 +1040,7 @@ class SessionService extends BaseService {
   }
 }
 
-const version = "1.6.5";
+const version = "1.6.6";
 
 const DEFAULT_PREFIX = "api";
 const DEFAULT_SESSION_KEY = `${DEFAULT_PREFIX}:session`;
@@ -1209,7 +1209,7 @@ class ApiClient {
     try {
       response = await this.request(this.#paths.logout, { method: "POST" });
     } catch (error) {
-      if (error.status !== 401) throw error;
+      if (error.status !== 401 && error.code !== "NETWORK_ERROR") throw error;
       await this.#resetSession("logout", null);
       return { ok: true, data: null };
     }

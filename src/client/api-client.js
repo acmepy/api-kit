@@ -177,7 +177,7 @@ export class ApiClient {
     try {
       response = await this.request(this.#paths.logout, { method: "POST" });
     } catch (error) {
-      if (error.status !== 401) throw error;
+      if (error.status !== 401 && error.code !== "NETWORK_ERROR") throw error;
       await this.#resetSession("logout", null);
       return { ok: true, data: null };
     }

@@ -789,7 +789,7 @@ describe("client public API", () => {
     client.destroy();
   });
 
-  for (const status of [200, 401]) {
+  for (const status of [200, 401, "NETWORK_ERROR"]) {
     it(`clears local data, closes SSE, cancels changes and restarts ping on logout ${status}`, async () => {
       const adapters = adapterRegistry();
       const events = [];
@@ -810,7 +810,10 @@ describe("client public API", () => {
           if (path === "/api/ping") pingCalls++;
           if (path === "/api/login") return jsonResponse({ ok: true, data: { id: "session", token: "token" } });
           if (path === "/api/schema.json") return jsonResponse(schemaDocument());
-          if (path === "/api/logout") return jsonResponse({ ok: status === 200, message: "Logout" }, status);
+          if (path === "/api/logout") {
+            if (status === "NETWORK_ERROR") throw new TypeError("fetch failed", { cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }) });
+            return jsonResponse({ ok: status === 200, message: "Logout" }, status);
+          }
           if (path === "/api/changes") {
             changesSignal = options.signal;
             return new Promise((resolve) => { releaseChanges = resolve; });
@@ -834,7 +837,14 @@ describe("client public API", () => {
         await wait(5);
         const pingsBeforeLogout = pingCalls;
 
-        const response = await client.logout();
+        const vue = status === "NETWORK_ERROR" ? createApiVue(client) : null;
+        if (vue) await vue.initialized;
+        const response = await (vue || client).logout();
+        if (vue) {
+          assert.deepEqual(vue.session.value, {});
+          assert.equal(vue.error.value, null);
+          vue.dispose();
+        }
         assert.equal(response.ok, true);
         assert.equal(sseSignal.aborted, true);
         assert.equal(cancelled, true);
