@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "api rest como middleware",
   "keywords": [
     "api",
@@ -42,9 +42,8 @@
     }
   },
   "scripts": {
-    "build": "npm run test && rollup -c",
-    "build:min": "rollup -c --environment MINIFY:true",
-    "prepack": "npm run build",
+    "compile": "npm run test && rollup -c",
+    "compile:min": "rollup -c --environment MINIFY:true",
     "test": "node --test",
     "test:mysql": "node --env-file=.env --test --test-concurrency=1",
     "dev": "node ./example/app.js",

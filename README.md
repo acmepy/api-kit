@@ -34,6 +34,14 @@ Para desarrollar este repositorio (incluye las dependencias de desarrollo):
 npm install
 ```
 
+La distribucion incluye `dist` precompilado. La instalacion como dependencia Git usa esos archivos y no ejecuta compilacion ni pruebas de api-kit. Para regenerarlos en el repositorio antes de subir o publicar una version:
+
+```bash
+npm run compile
+```
+
+`compile` ejecuta las pruebas y Rollup; `compile:min` genera el cliente minificado. `npm pack` no compila automaticamente: los archivos de `dist` deben estar actualizados y versionados.
+
 Para correr el ejemplo:
 
 ```bash
