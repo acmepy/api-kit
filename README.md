@@ -77,6 +77,28 @@ import { runApiKitCli } from "api/cli";
 
 El import raiz `api` no exporta API publica.
 
+## Archivos de actualizacion de apps
+
+`updates` esta deshabilitado por defecto. Permite servir directorios independientes para Android, Electron u otras apps:
+
+```js
+const api = await createApi({
+  seq,
+  baseDir: process.cwd(),
+  updates: {
+    enabled: true,
+    mounts: [
+      { mountPath: "/actualizaciones/android", root: "./data/actualizaciones/android", index: true },
+      { mountPath: "/actualizaciones/electron", root: "./data/actualizaciones/electron", index: true },
+    ],
+  },
+});
+```
+
+`root` se resuelve respecto de `baseDir`. `mountPath` es independiente de `basePath`: por ejemplo, un APK se descarga desde `/actualizaciones/android/app.apk`. Se admiten GET, HEAD y descargas parciales. Con `index: true`, cada directorio muestra un listado de archivos y subdirectorios; por defecto no hay listado. Las rutas no tienen fallback de SPA.
+
+Estos archivos son publicos: la autenticacion de los recursos de la API no se aplica a los montajes. Para restringirlos, el proyecto debe montar su middleware de autenticacion antes del router de api-kit. Este modulo solo sirve archivos; no interpreta versiones ni protocolos de actualizacion.
+
 ## Visor de logs
 
 El visor es un middleware independiente de IAM, seq y de la configuracion de `createApi`. La interfaz utiliza Bootstrap 5.3.8 servido localmente y conserva la paleta oscura del visor. Las paginas estan en `src/log-viewer/assets/log-index.html` y `log-view.html`, con estilos propios en `viewer.css`. El build copia estos archivos y el CSS y la licencia de Bootstrap a `dist/assets`; el visor no necesita un CDN ni instalar Bootstrap en produccion. Se puede importar desde `api/log-viewer` o `api/server`:

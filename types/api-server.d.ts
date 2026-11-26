@@ -45,7 +45,9 @@ export function defineResource(definition: ResourceDefinition): ResourceDefiniti
 export interface RouteDefinition { method: string; path: string; permission?: string; handler?: (...args: unknown[]) => unknown; [key: string]: unknown; }
 export class RouteRegistry { add(route: RouteDefinition): RouteDefinition; all(): RouteDefinition[]; find(method: string, path: string): RouteDefinition | undefined; }
 export interface TenantConfig { attribute: string; type?: string; maxLength?: number; }
-export interface CreateApiOptions { tenant?: boolean | TenantConfig; modules?: unknown[]; models?: unknown[]; services?: unknown[]; routes?: RouteDefinition[]; [key: string]: unknown; }
+export interface UpdateMount { mountPath: string; root: string; index?: boolean; }
+export interface UpdatesOptions { enabled?: boolean; mounts?: UpdateMount[]; }
+export interface CreateApiOptions { updates?: false | UpdatesOptions; tenant?: boolean | TenantConfig; modules?: unknown[]; models?: unknown[]; services?: unknown[]; routes?: RouteDefinition[]; [key: string]: unknown; }
 export interface ApiInstance { app: unknown; router: unknown; errorHandler: (...args: unknown[]) => unknown; modules: unknown; models: unknown; services: unknown; routes: RouteRegistry; schemas: unknown; events: unknown; audit: { sseClients(): unknown[] }; auth: unknown; close(): Promise<void>; }
 export function createApi(options?: CreateApiOptions): Promise<ApiInstance>;
 export function getContext(): RequestContext | undefined;

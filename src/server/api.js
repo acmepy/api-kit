@@ -16,6 +16,7 @@ import { createAuthorizer, installAuthRoutes } from "./install/auth.services.js"
 import { installHttpMiddleware } from "./install/http-middleware.services.js";
 import { installOpenApiRoute, installPostmanRoute, installSchemaDocumentRoute } from "./install/schema.services.js";
 import { installStaticFiles } from "./install/static-files.services.js";
+import { installUpdateRoutes, normalizeUpdateMounts } from "./install/updates.services.js";
 import { installPingRoute, installWelcomeRoute } from "./install/welcome.services.js";
 import { runWithContext } from "./context/request-context.js";
 import { errorHandler } from "./http/error-handler.js";
@@ -47,6 +48,7 @@ export async function createApi(conf = {}) {
     json: conf.json ?? true,
     text: conf.text ?? false,
     staticModules: [],
+    updates: normalizeUpdateMounts(conf.updates, conf.baseDir || process.cwd()),
     trustProxy: conf.trustProxy ?? false,
     audit: normalizeAuditConfig(conf.audit),
     openapi: conf.openapi ?? null,
@@ -141,6 +143,7 @@ export async function createApi(conf = {}) {
   installSchemaDocumentRoute({ mainRouter, routeRegistry, modules, config, schema: config.schema, authorize });
   installOpenApiRoute({ mainRouter, routeRegistry, modules, packageInfo, config, openapi, authorize });
   installPostmanRoute({ mainRouter, routeRegistry, modules, packageInfo, config, postman, authorize });
+  installUpdateRoutes(mainRouter, config.updates);
   installStaticFiles(mainRouter, config);
 
   const app = conf.app || express();
